@@ -276,7 +276,10 @@ const loginUser = asyncHandler(async (req, res) => {
     });
 
     // Find user
-    const user = await User.findOne({ phone_number });
+    let user = await User.findOne({ phone_number });
+    if (!user) {
+        user = await User.findOne({ email: phone_number });
+    }
     if (!user) {
         throw new ApiError(404, 'User not found');
     }

@@ -48,7 +48,7 @@ const GAMES = [
   { slug: "bgmi", name: "BGMI", color: "from-primary to-primary/40" },
   { slug: "callofduty", name: "Call of Duty", color: "from-secondary to-secondary/40" },
   { slug: "valorant", name: "Valorant", color: "from-destructive to-destructive/40" },
-  { slug: "clashroyale", name: "Clash Royale", color: "from-primary to-secondary" },
+  // { slug: "clashroyale", name: "Clash Royale", color: "from-primary to-secondary" },
 ];
 
 const EMPTY_FORM: GameAccountPayload = { game: "freefire", inGameName: "", gameId: "", level: "" };
@@ -205,7 +205,7 @@ const AccountFormModal = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 sm:p-4"
+        className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center sm:items-center justify-center p-3 sm:p-4"
         onClick={() => !loading && onClose()}
       >
         <motion.div
@@ -598,6 +598,7 @@ const GameAccountsScreen = () => {
         ))}
       </div>
 
+      <div className="">
       <AccountFormModal
         open={open}
         isEditing={editingId !== null}
@@ -607,6 +608,7 @@ const GameAccountsScreen = () => {
         onClose={() => setOpen(false)}
         onSubmit={handleSubmit}
       />
+      </div>
 
       <BottomNav />
     </div>

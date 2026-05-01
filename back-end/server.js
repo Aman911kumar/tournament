@@ -6,6 +6,10 @@ import routes from './src/routes/all.routes.js';
 import cookieParser from 'cookie-parser';
 import errorHandler from './src/middlewares/errorHandler.middleware.js';
 import ApiError from './src/utils/ApiError.js';
+import path from "path";
+
+const __dirname = path.resolve();
+const distPath = path.join(__dirname, "dist");
 
 // App configuration
 const app = express();
@@ -16,11 +20,14 @@ const configuredOrigins = CORS_ORIGIN
     : [];
 
 const allowedOrigins = [
-    "http://192.168.29.138:8080",
+    "http://localhost:3000",
+    // "http://192.168.29.138:8080",
     "http://localhost:8080",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://192.168.29.1:8080",
+    // "http://localhost:5173",
+    // "http://127.0.0.1:5173",
+    // "http://192.168.29.1:8080",
+    // 'https://tournament-uedb.onrender.com',
+    // "*",
     ...configuredOrigins,
 ];
 const localDevOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
@@ -49,15 +56,21 @@ app.use((req, res, next) => {
     next();
 });
 
-// Serve static files
-app.use(express.static("public"));
+// // Serve static files
+// app.use(express.static("public"));
+// app.use(express.static(distPath))
+// // 🔥 SPA fallback (IMPORTANT)
+// app.use( (req, res) => {
+//     res.sendFile(path.resolve("dist/index.html"));
+// });
 
 // All routes
 app.use('/api/v1', routes);
 
-app.use("/", (req, res) => {
-    res.json("server is live")
-})
+// app.use("/", (req, res) => {
+//     res.json("server is live")
+// })
+
 
 app.use((req, res, next) => {
     next(new ApiError(404, `API endpoint doesn’t exist`));
