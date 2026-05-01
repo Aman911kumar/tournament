@@ -1,0 +1,31 @@
+import express from "express";
+import {
+    createChannel,
+    getMyChannel,
+    listChannels,
+    getChannelByIdentifier,
+    updateChannel,
+    joinChannel,
+    leaveChannel,
+    getJoinedChannels,
+    getJoinedChannelTournaments,
+    getChannelTournaments
+} from "../controllers/channel.controller.js";
+import { protect } from "../middlewares/auth.middleware.js";
+
+const router = express.Router();
+
+router.get("/", listChannels);
+router.post("/", protect, createChannel);
+
+router.get("/me", protect, getMyChannel);
+router.get("/joined", protect, getJoinedChannels);
+router.get("/feed/tournaments", protect, getJoinedChannelTournaments);
+
+router.get("/:identifier", getChannelByIdentifier);
+router.patch("/:channelId", protect, updateChannel);
+router.post("/:channelId/join", protect, joinChannel);
+router.delete("/:channelId/join", protect, leaveChannel);
+router.get("/:channelId/tournaments", getChannelTournaments);
+
+export default router;

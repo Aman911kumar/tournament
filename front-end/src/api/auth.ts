@@ -1,0 +1,134 @@
+// LoginScreen — auth endpoints
+// TODO: replace mocks with real apiFetch calls.
+import { apiFetch } from "./client";
+
+export interface LoginPayload { phone_number: string; password: string }
+export interface SignupPayload { email: string; password: string; username: string; phone_number: string }
+export interface GoogleLoginPayload {
+  access_token?: string;
+  credential?: string;
+  token_type?: string;
+  expires_in?: number;
+  scope?: string;
+}
+
+export interface FacebookLoginPayload {
+  accessToken: string;
+  userID?: string;
+  expiresIn?: number;
+  signedRequest?: string;
+}
+
+export interface AuthResponse {
+  statusCode: number;
+  data: {
+    user: User;
+    accessToken: string;
+    refreshToken: string;
+  };
+  message: string;
+  success: boolean;
+}
+
+export interface GoogleUserPayload {
+  sub: string;          // unique Google user ID
+  email: string;
+  name: string;
+  picture: string;
+  email_verified: boolean;
+}
+
+export interface User {
+  _id: string;
+  username: string;
+  email: string;
+  phone_number: string;
+  dateOfBirth: string | null;
+  gender: string | null;
+  gamename: string;
+  gameid: string;
+  walletBalance: number;
+  role: string[];
+  lastLoginAt: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  __v: number;
+
+  stats: Stats;
+  preferences: Preferences;
+}
+
+export interface Stats {
+  matchesPlayed: number;
+  kills: number;
+  amount_won: number;
+}
+
+export interface Preferences {
+  notifications: boolean;
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export const ENDPOINTS = {
+  google: "/auth/google",
+  facebook: "/auth/facebook",
+  login: "/auth/login",
+  logout: "/auth/logout",
+  signup: "/auth/register",
+  changePassword: "/auth/change-password",
+  forgotPassword: "/auth/forgot-password",
+  socialLogin: (provider: "google" | "facebook") => `/auth/${provider}`,
+};
+
+
+
+export async function google(payload: GoogleLoginPayload): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>(ENDPOINTS.google, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+}
+
+export async function facebook(payload: FacebookLoginPayload): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>(ENDPOINTS.facebook, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+}
+export async function login(payload: LoginPayload): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>(ENDPOINTS.login, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+}
+
+export async function logout(): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>(ENDPOINTS.logout, {
+    method: "GET",
+    credentials: "include",
+  });
+}
+
+export async function signup(payload: SignupPayload): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>(ENDPOINTS.signup, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+}
+
+export async function changePassword(payload: ChangePasswordPayload):Promise<AuthResponse> {
+  return apiFetch(ENDPOINTS.changePassword, { method: "PATCH", body: JSON.stringify(payload) , credentials:"include" });
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  // return apiFetch(ENDPOINTS.forgotPassword, { method: "POST", body: JSON.stringify({ email }) });
+}
