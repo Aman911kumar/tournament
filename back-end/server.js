@@ -55,6 +55,10 @@ app.use(express.static("public"));
 // All routes
 app.use('/api/v1', routes);
 
+app.use("/", (req, res) => {
+    res.json("server is live")
+})
+
 app.use((req, res, next) => {
     next(new ApiError(404, `API endpoint doesn’t exist`));
     // next(new ApiError(404, `Route ${req.originalUrl} not found`));
