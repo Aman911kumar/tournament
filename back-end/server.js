@@ -21,6 +21,7 @@ const allowedOrigins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://192.168.29.1:8080",
+    "*",
     ...configuredOrigins,
 ];
 const localDevOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
