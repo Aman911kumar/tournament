@@ -1,5 +1,5 @@
 // NotificationsScreen
-import { apiFetch } from "./client";
+import { apiFetch,ApiResponse } from "./client";
 
 export const ENDPOINTS = {
   list: "/notifications",
@@ -14,12 +14,6 @@ export interface NotificationItem {
   type: "match_update" | "payment" | "system";
   read: boolean;
   createdAt: string;
-}
-
-interface ApiResponse<T> {
-  data: T;
-  message: string;
-  success: boolean;
 }
 
 export async function getNotifications() {

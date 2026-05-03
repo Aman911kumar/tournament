@@ -1,5 +1,5 @@
 // Game accounts API
-import { apiFetch } from "./client";
+import { apiFetch,ApiResponse } from "./client";
 
 // ---- Endpoints ----
 export const ENDPOINTS = {
@@ -9,14 +9,6 @@ export const ENDPOINTS = {
   remove: (id: string) => `/game-account/${id}`,
   verify: (id: string) => `/game-account/${id}/verify`,
 };
-
-// ---- Types ----
-export interface ApiResponse<T = unknown> {
-  success: boolean;
-  message: string;
-  data: T;
-  errors?: unknown[];
-}
 
 export interface GameAccount {
   _id: string;

@@ -2,7 +2,8 @@ import asyncHandler from '../utils/AsyncHandler.js'
 import ApiError from '../utils/ApiError.js'
 import ApiResponse from '../utils/ApiResponse.js'
 import { User } from '../models/user.model.js'
-import { WalletTransaction } from '../models/transaction.model.js'
+import { WalletTransaction } from '../models/walletTransaction.model.js'
+import { Wallet } from '../models/wallet.model.js'
 import { Notification } from '../models/notification.model.js'
 import { hasRole } from '../middlewares/auth.middleware.js'
 import mongoose from 'mongoose'
@@ -84,6 +85,7 @@ const findOrCreateSocialUser = async ({ provider, providerId, email, name, pictu
     const normalizedEmail = email?.trim().toLowerCase();
     const accountEmail = normalizedEmail || `${provider}_${providerId}@${provider}.local`;
     const socialPhoneNumber = `${provider}:${providerId}`;
+
     const existingUser = await User.findOne({
         $or: [
             { email: accountEmail },
@@ -91,28 +93,70 @@ const findOrCreateSocialUser = async ({ provider, providerId, email, name, pictu
         ]
     });
 
+    // 🔁 EXISTING USER FLOW
     if (existingUser) {
+        let isUpdated = false;
+
         if (!existingUser.email && normalizedEmail) {
             existingUser.email = normalizedEmail;
+            isUpdated = true;
         }
 
         if (!existingUser.avatar?.url && picture) {
             existingUser.avatar = { ...existingUser.avatar, url: picture };
+            isUpdated = true;
+        }
+
+        if (isUpdated) {
+            await existingUser.save();
         }
 
         return existingUser;
     }
 
-    const username = await createUniqueUsername(name, accountEmail, providerId);
-    const password = crypto.randomBytes(32).toString("hex");
+    // 🆕 NEW USER FLOW (WITH TRANSACTION)
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    return User.create({
-        username,
-        email: accountEmail,
-        phone_number: socialPhoneNumber,
-        password,
-        avatar: picture ? { url: picture } : undefined,
-    });
+    try {
+        const username = await createUniqueUsername(name, accountEmail, providerId);
+        const password = crypto.randomBytes(32).toString("hex");
+
+        const userArr = await User.create(
+            [
+                {
+                    username,
+                    email: accountEmail,
+                    phone_number: socialPhoneNumber,
+                    password,
+                    avatar: picture ? { url: picture } : undefined,
+                }
+            ],
+            { session }
+        );
+
+        const user = userArr[0];
+
+        await Wallet.create(
+            [
+                {
+                    user: user._id,
+                    balance: 0,
+                    lockedBalance: 0
+                }
+            ],
+            { session }
+        );
+
+        await session.commitTransaction();
+        return user;
+
+    } catch (error) {
+        await session.abortTransaction();
+        throw new ApiError(500, "Social login failed");
+    } finally {
+        session.endSession();
+    }
 };
 
 const getGoogleProfile = async ({ access_token, credential }) => {
@@ -223,15 +267,17 @@ const registerUser = asyncHandler(async (req, res) => {
     const { username, phone_number, password, email } = req.body;
 
     // Validate required fields
-    [{ field: username, name: "username" },
-    { field: phone_number, name: "phone number" },
-    { field: password, name: "password" }].forEach(item => {
+    [
+        { field: username, name: "username" },
+        { field: phone_number, name: "phone number" },
+        { field: password, name: "password" }
+    ].forEach(item => {
         if (!item.field || item.field.trim() === '') {
             throw new ApiError(400, `${item.name} is required`);
         }
     });
 
-    // Check if user already exists (case-insensitive for username)
+    // Check if user already exists
     const existedUser = await User.findOne({
         $or: [
             { username: { $regex: `^${username}$`, $options: "i" } },
@@ -243,26 +289,63 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'Username or phone number already exists');
     }
 
-    // Create user
-    const user = await User.create({ username, phone_number, password, email });
+    // 🔥 START TRANSACTION
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    if (!user) {
-        throw new ApiError(500, 'Something went wrong while registering the user');
+    let user;
+
+    try {
+        // 1️⃣ Create user
+        const createdUserArr = await User.create(
+            [{ username, phone_number, password, email }],
+            { session }
+        );
+
+        user = createdUserArr[0];
+
+        // 2️⃣ Create wallet (IMPORTANT: match your schema field)
+        await Wallet.create(
+            [
+                {
+                    user: user._id,
+                    balance: 0,
+                    lockedBalance: 0
+                }
+            ],
+            { session }
+        );
+
+        // ✅ Commit both together
+        await session.commitTransaction();
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        throw new ApiError(500, 'Failed to register user',error);
+    } finally {
+        session.endSession();
     }
 
-    // Generate JWT tokens
-    const { accessToken, refreshToken } = await generateAccessTokenAndRefreshToken(user._id);
+    // 🔐 Generate tokens AFTER success
+    const { accessToken, refreshToken } =
+        await generateAccessTokenAndRefreshToken(user._id);
 
     // Exclude sensitive fields
-    const createdUser = await User.findById(user._id).select("-password -refreshToken");
+    const createdUser = await User.findById(user._id)
+        .select("-password -refreshToken");
 
     return res.status(201)
         .cookie('accessToken', accessToken, options)
         .cookie('refreshToken', refreshToken, options)
         .json(
-            new ApiResponse(201, { user: createdUser, accessToken, refreshToken }, "User registered successfully")
+            new ApiResponse(
+                201,
+                { user: createdUser, accessToken, refreshToken },
+                "User registered successfully"
+            )
         );
 });
+
 const loginUser = asyncHandler(async (req, res) => {
     const { phone_number, password } = req.body;
 
@@ -572,108 +655,17 @@ const deleteUser = asyncHandler(async (req, res) => {
 //wallet & transactions_____________________________________________________________________________________________
 
 const getWalletBalance = asyncHandler(async (req, res) => {
-    const balance = req.user.walletBalance || 0;
+    const wallet = await Wallet.findOne({
+        user: req.user._id
+    })
+    
+    const balance = wallet.balance || 0;
 
     return res.status(200).json(
         new ApiResponse(200, { balance }, "Wallet balance fetched successfully")
     );
 });
-const addFundsToWallet = asyncHandler(async (req, res) => {
-    const userId = req.user._id;
-    const { amount, method, referenceId = null } = req.body;
 
-    // Validate amount
-    if (!amount || typeof amount !== 'number' || amount <= 0) {
-        throw new ApiError(400, "Valid amount is required");
-    }
-
-    if (!["upi", "card", "bank"].includes(method)) {
-        throw new ApiError(400, "Valid payment method is required");
-    }
-
-    // Client-created top-ups are never trusted as paid. They stay pending until
-    // a server-side payment verification/admin settlement marks them successful.
-    const transaction = await WalletTransaction.create({
-        user: userId,
-        type: "credit",
-        amount,
-        source: "added",
-        referenceId,
-        status: "pending",
-        balanceApplied: false,
-        meta: {
-            method,
-            requestedBy: "client",
-            requiresServerVerification: true
-        }
-    });
-
-    const user = await User.findById(userId).select("walletBalance");
-
-    return res.status(200).json(
-        new ApiResponse(
-            200,
-            {
-                balance: user?.walletBalance || 0,
-                walletBalance: user?.walletBalance || 0,
-                transaction,
-                credited: false,
-                pending: true
-            },
-            "Payment request created. Balance will update after server verification."
-        )
-    );
-});
-const withdrawFunds = asyncHandler(async (req, res) => {
-    const userId = req.user._id;
-    const { amount, password, method, destination, referenceId = null } = req.body;
-    const withdrawalDestination = destination || method;
-
-    // Validate input
-    if (!amount || typeof amount !== 'number' || amount <= 0) {
-        throw new ApiError(400, "Valid withdrawal amount is required");
-    }
-    if (!password || password.trim() === "") {
-        throw new ApiError(400, "Password is required");
-    }
-    if (!withdrawalDestination || withdrawalDestination.trim() === "") {
-        throw new ApiError(400, "Withdrawal destination is required");
-    }
-
-    // Verify password
-    const isCorrect = await req.user.isPasswordCorrect(password);
-    if (!isCorrect) {
-        throw new ApiError(400, "Incorrect password");
-    }
-
-    // Deduct funds atomically. The balance condition prevents concurrent
-    // withdrawal requests from spending the same wallet balance twice.
-    const updatedUser = await User.findOneAndUpdate(
-        { _id: userId, walletBalance: { $gte: amount } },
-        { $inc: { walletBalance: -amount } },
-        { new: true }
-    ).select("walletBalance");
-
-    if (!updatedUser) {
-        throw new ApiError(400, "Insufficient wallet balance");
-    }
-
-    // Log transaction
-    await WalletTransaction.create({
-        user: userId,
-        type: "debit",
-        amount,
-        source: "withdrawal",
-        referenceId,
-        status: "pending",
-        balanceApplied: true,
-        meta: { destination: withdrawalDestination, method }
-    });
-
-    return res.status(200).json(
-        new ApiResponse(200, { walletBalance: updatedUser.walletBalance, balance: updatedUser.walletBalance }, "Funds withdrawn successfully")
-    );
-});
 const getWalletTransaction = asyncHandler(async (req, res) => {
     const userId = req.user._id;
     const { limit = 20, skip = 0, type, filter } = req.query;
@@ -696,6 +688,15 @@ const getWalletTransaction = asyncHandler(async (req, res) => {
 
     return res.status(200).json(
         new ApiResponse(200, transactions, "Wallet transactions fetched successfully")
+    );
+});
+const getTransactionDetails = asyncHandler(async (req, res) => {
+    const transactionId = req.params.id
+
+    const transaction = await WalletTransaction.findById(transactionId)
+
+    return res.status(200).json(
+        new ApiResponse(200, transaction, "Wallet transactions fetched successfully")
     );
 });
 
@@ -907,9 +908,8 @@ export {
     deleteUser,
     updateUser,
     getWalletBalance,
-    addFundsToWallet,
-    withdrawFunds,
     getWalletTransaction,
+    getTransactionDetails,
     getCreatorEarnings,
     getUserNotifications,
     markNotificationAsRead,

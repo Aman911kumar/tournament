@@ -28,6 +28,7 @@
     "passport": "^0.7.0",
     "passport-google-oauth2": "^0.2.0",
     "prettier": "^3.6.2",
-    "twilio": "^5.10.2"
+    "twilio": "^5.10.2",
+    "uuid": "^14.0.0"
   }
 }

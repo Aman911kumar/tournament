@@ -23,6 +23,7 @@ const parseDate = (value, fieldName) => {
 const normalizeStatus = (status) => {
     const statusMap = {
         upcoming: "open",
+        delay:"delay",
         ongoing: "running",
         finished: "completed"
     };

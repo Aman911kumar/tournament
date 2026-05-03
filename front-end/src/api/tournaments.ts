@@ -1,5 +1,4 @@
-// TournamentsScreen, TournamentDetailScreen, CreateTournamentScreen, TournamentCommentsScreen
-import { apiFetch } from "./client";
+import { apiFetch,ApiResponse } from "./client";
 
 export interface TournamentFilters {
   game?: string;
@@ -55,12 +54,6 @@ export interface Tournament {
     handle?: string;
     avatar?: { url?: string };
   };
-}
-
-interface ApiResponse<T> {
-  data: T;
-  message: string;
-  success: boolean;
 }
 
 interface TournamentListData {

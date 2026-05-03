@@ -7,6 +7,13 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 export type ApiErrorDetail = Record<string, unknown>;
 
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  message: string;
+  data: T;
+  errors?: unknown[];
+}
+
 export class ApiError extends Error {
   status: number;
   success: boolean;

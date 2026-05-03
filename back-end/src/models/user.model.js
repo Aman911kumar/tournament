@@ -56,11 +56,6 @@ const userSchema = new mongoose.Schema({
         enum: ['user', 'creator', 'admin', 'banned'],
         default: ['user']
     },
-    stats: {
-        matchesPlayed: { type: Number, default: 0 },
-        kills: { type: Number, default: 0 },
-        amount_won: { type: Number, default: 0 }
-    },
     lastLoginAt: {
         type: Date,
         default: null

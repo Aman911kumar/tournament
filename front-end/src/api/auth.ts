@@ -1,6 +1,4 @@
-// LoginScreen — auth endpoints
-// TODO: replace mocks with real apiFetch calls.
-import { apiFetch } from "./client";
+import { apiFetch ,ApiResponse} from "./client";
 
 export interface LoginPayload { phone_number: string; password: string }
 export interface SignupPayload { email: string; password: string; username: string; phone_number: string }
@@ -17,17 +15,6 @@ export interface FacebookLoginPayload {
   userID?: string;
   expiresIn?: number;
   signedRequest?: string;
-}
-
-export interface AuthResponse {
-  statusCode: number;
-  data: {
-    user: User;
-    accessToken: string;
-    refreshToken: string;
-  };
-  message: string;
-  success: boolean;
 }
 
 export interface GoogleUserPayload {
@@ -87,45 +74,45 @@ export const ENDPOINTS = {
 
 
 
-export async function google(payload: GoogleLoginPayload): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>(ENDPOINTS.google, {
+export async function google(payload: GoogleLoginPayload): Promise<ApiResponse> {
+  return apiFetch<ApiResponse>(ENDPOINTS.google, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
   });
 }
 
-export async function facebook(payload: FacebookLoginPayload): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>(ENDPOINTS.facebook, {
+export async function facebook(payload: FacebookLoginPayload): Promise<ApiResponse> {
+  return apiFetch<ApiResponse>(ENDPOINTS.facebook, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
   });
 }
-export async function login(payload: LoginPayload): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>(ENDPOINTS.login, {
+export async function login(payload: LoginPayload): Promise<ApiResponse> {
+  return apiFetch<ApiResponse>(ENDPOINTS.login, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
   });
 }
 
-export async function logout(): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>(ENDPOINTS.logout, {
+export async function logout(): Promise<ApiResponse> {
+  return apiFetch<ApiResponse>(ENDPOINTS.logout, {
     method: "GET",
     credentials: "include",
   });
 }
 
-export async function signup(payload: SignupPayload): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>(ENDPOINTS.signup, {
+export async function signup(payload: SignupPayload): Promise<ApiResponse> {
+  return apiFetch<ApiResponse>(ENDPOINTS.signup, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
   });
 }
 
-export async function changePassword(payload: ChangePasswordPayload):Promise<AuthResponse> {
+export async function changePassword(payload: ChangePasswordPayload):Promise<ApiResponse> {
   return apiFetch(ENDPOINTS.changePassword, { method: "PATCH", body: JSON.stringify(payload) , credentials:"include" });
 }
 

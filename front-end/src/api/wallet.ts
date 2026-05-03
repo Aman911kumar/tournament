@@ -1,9 +1,10 @@
 // WalletScreen, AddMoneyScreen, WithdrawScreen
-import { apiFetch } from "./client";
+import { apiFetch,ApiResponse } from "./client";
 
 export const ENDPOINTS = {
   balance: "/wallet/balance",
   transactions: "/wallet/transactions",
+  transactionDetail: (id: string) => `/wallet/transaction/${id}`,
   addMoney: "/wallet/add",
   withdraw: "/wallet/withdraw",
   creatorEarnings: "/wallet/creator-earnings",
@@ -14,7 +15,7 @@ export interface WithdrawPayload { amount: number; method: "upi" | "bank"; desti
 
 export interface WalletTransaction {
   id: string | number;
-  type: "credit" | "debit";
+  type: "CREDIT" | "DEBIT";
   label: string;
   amount: number;
   date: string;
@@ -25,12 +26,29 @@ interface ApiData<T> {
   data?: T;
 }
 
+export interface TransactionDetail {
+  _id: string;
+  transactionId: string;
+  idempotencyKey: string;
+  user: string;
+  walletId: string;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  currency: string;
+  category: string;
+  type: "CREDIT" | "DEBIT";
+  status: "SUCCESS" | "PENDING" | "FAILED";
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface WalletTransactionDto {
   _id?: string;
   id?: string | number;
-  type: "credit" | "debit";
+  type: "CREDIT" | "DEBIT";
   amount: number;
-  source?: string;
+  category?: string;
   createdAt?: string;
   status?: string;
   balanceApplied?: boolean;
@@ -52,8 +70,8 @@ const sourceLabels: Record<string, string> = {
 const mapTransaction = (transaction: WalletTransactionDto): WalletTransaction => ({
   id: transaction._id ?? transaction.id ?? `${transaction.type}-${transaction.createdAt ?? Date.now()}`,
   type: transaction.type,
-  label: sourceLabels[transaction.source ?? ""] ?? transaction.source ?? "Wallet Transaction",
-  amount: transaction.type === "debit" ? -Math.abs(transaction.amount) : Math.abs(transaction.amount),
+  label: sourceLabels[transaction.category ?? ""] ?? transaction.category ?? "Wallet Transaction",
+  amount: transaction.type === "DEBIT" ? -Math.abs(transaction.amount) : Math.abs(transaction.amount),
   date: transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Just now",
   status: transaction.status ?? (transaction.balanceApplied ? "successful" : "pending"),
 });
@@ -91,6 +109,10 @@ export async function getTransactions(filter: "all" | "player" | "creator" = "al
 
   const transactions = Array.isArray(res) ? res : res.data ?? [];
   return transactions.map(mapTransaction);
+}
+
+export async function getTransactionDetail(id: string): Promise<ApiResponse<TransactionDetail>> {
+  return apiFetch(ENDPOINTS.transactionDetail(id), { method:"GET",credentials: "include" });
 }
 
 export async function addMoney(payload: AddMoneyPayload): Promise<WalletMutationResponse> {

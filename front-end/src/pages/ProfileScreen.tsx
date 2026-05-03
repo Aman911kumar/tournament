@@ -69,9 +69,9 @@ const ProfileScreen = () => {
   const [logoutLoading, setLogoutLoading] = useState(false);
 
   const stats = [
-    { label: "Matches", value: profile?.stats.matchesPlayed ?? 0 },
-    { label: "Balance", value: formatCurrency(profile?.walletBalance ?? 0) },
-    { label: "Won", value: formatCurrency(profile?.stats.amount_won ?? 0) },
+    // { label: "Matches", value: profile?.stats.matchesPlayed ?? 0 },
+    // { label: "Balance", value: formatCurrency(profile?.walletBalance ?? 0) },
+    // { label: "Won", value: formatCurrency(profile?.stats.amount_won ?? 0) },
   ];
 
   const fetchProfile = useCallback(async () => {

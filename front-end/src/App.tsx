@@ -11,6 +11,7 @@ import TournamentDetailScreen from "./pages/TournamentDetailScreen.tsx";
 import WalletScreen from "./pages/WalletScreen.tsx";
 import AddMoneyScreen from "./pages/AddMoneyScreen.tsx";
 import WithdrawScreen from "./pages/WithdrawScreen.tsx";
+import TransactionDetailScreen from "./pages/TransactionDetailScreen.tsx";
 import ProfileScreen from "./pages/ProfileScreen.tsx";
 import EditProfileScreen from "./pages/EditProfileScreen.tsx";
 import ChangePasswordScreen from "./pages/ChangePasswordScreen.tsx";
@@ -52,6 +53,7 @@ const App = () => (
             <Route path="/tournament/:id" element={<ProtectedRoute><TournamentDetailScreen /></ProtectedRoute>} />
             <Route path="/tournament/:id/comments" element={<ProtectedRoute><TournamentCommentsScreen /></ProtectedRoute>} />
             <Route path="/wallet" element={<ProtectedRoute><WalletScreen /></ProtectedRoute>} />
+            <Route path="/wallet/transaction/:id" element={<ProtectedRoute><TransactionDetailScreen /></ProtectedRoute>} />
             <Route path="/wallet/add" element={<ProtectedRoute><AddMoneyScreen /></ProtectedRoute>} />
             <Route path="/wallet/withdraw" element={<ProtectedRoute><WithdrawScreen /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />

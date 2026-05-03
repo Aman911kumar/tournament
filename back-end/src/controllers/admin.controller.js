@@ -8,7 +8,7 @@ import { Team } from "../models/team.model.js";
 import { Match } from "../models/match.model.js";
 import { Registration } from "../models/registration.model.js";
 import { Payment } from "../models/payment.model.js";
-import { WalletTransaction } from "../models/transaction.model.js";
+import { WalletTransaction } from "../models/walletTransaction.model.js";
 import { SupportTicket } from "../models/SupportTicket.model.js";
 import { GameAccount } from "../models/gameAccount.model.js";
 

@@ -194,9 +194,8 @@ const WalletScreen = () => {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-3 py-1.5 rounded-full text-[10px] font-heading font-medium capitalize transition-colors ${
-              activeTab === tab ? "bg-primary text-primary-foreground neon-glow-purple" : "glass text-muted-foreground"
-            }`}
+            className={`px-3 py-1.5 rounded-full text-[10px] font-heading font-medium capitalize transition-colors ${activeTab === tab ? "bg-primary text-primary-foreground neon-glow-purple" : "glass text-muted-foreground"
+              }`}
           >
             {tab}
           </button>
@@ -220,14 +219,18 @@ const WalletScreen = () => {
             </GlassCard>
           ) : (
             filtered.map((t, i) => (
-              <GlassCard key={t.id} delay={i * 0.05} className="flex items-center justify-between gap-3">
+              <GlassCard
+                key={t.id}
+                delay={i * 0.05}
+                className="flex items-center justify-between cursor-pointer hover:neon-border transition-all"
+                onClick={() => { console.log(t); navigate(`/wallet/transaction/${t.id}`) }}
+              >
                 <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                      t.type === "credit" ? "bg-accent/10" : "bg-destructive/10"
-                    }`}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${t.type === "CREDIT" ? "bg-accent/10" : "bg-destructive/10"
+                      }`}
                   >
-                    {t.type === "credit" ? (
+                    {t.type === "CREDIT" ? (
                       <ArrowDownLeft className="w-4 h-4 text-accent" />
                     ) : (
                       <ArrowUpRight className="w-4 h-4 text-destructive" />
@@ -239,7 +242,7 @@ const WalletScreen = () => {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className={`text-xs font-heading font-bold ${t.type === "credit" ? "text-accent" : "text-foreground"}`}>
+                  <p className={`text-xs font-heading font-bold ${t.type === "CREDIT" ? "text-accent" : "text-foreground"}`}>
                     {t.amount > 0 ? "+" : ""}
                     {formatCurrency(t.amount)}
                   </p>
