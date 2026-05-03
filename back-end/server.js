@@ -23,11 +23,18 @@ const allowedOrigins = [
     "http://localhost:3000",
     // "http://192.168.29.138:8080",
     "http://localhost:8080",
+<<<<<<< HEAD
     // "http://localhost:5173",
     // "http://127.0.0.1:5173",
     // "http://192.168.29.1:8080",
     // 'https://tournament-uedb.onrender.com',
     // "*",
+=======
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://192.168.29.1:8080",
+    "*",
+>>>>>>> f58d14d253b5f6d54644ec1ece04d2e17cbb4ffb
     ...configuredOrigins,
 ];
 const localDevOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
