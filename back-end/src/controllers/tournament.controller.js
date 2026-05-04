@@ -5,8 +5,13 @@ import { Tournament } from '../models/tournament.model.js';
 import { Team } from '../models/team.model.js';
 import { Match } from '../models/match.model.js';
 import { Channel } from '../models/channel.model.js';
+import { Registration } from '../models/registration.model.js';
+import { Wallet } from '../models/wallet.model.js';
+import { WalletTransaction } from '../models/walletTransaction.model.js';
+import { GameAccount } from '../models/gameAccount.model.js';
 import { hasRole } from '../middlewares/auth.middleware.js';
 import mongoose from 'mongoose';
+import { v4 as uuidv4 } from "uuid";
 
 const getParamId = (req, key) => req.params[key] || req.params.id;
 
@@ -20,10 +25,14 @@ const parseDate = (value, fieldName) => {
     return date;
 };
 
+const parseOptionalDate = (value, fieldName) => {
+    if (value === undefined || value === null || value === "") return undefined;
+    return parseDate(value, fieldName);
+};
+
 const normalizeStatus = (status) => {
     const statusMap = {
         upcoming: "open",
-        delay:"delay",
         ongoing: "running",
         finished: "completed"
     };
@@ -31,18 +40,134 @@ const normalizeStatus = (status) => {
     return statusMap[status] || status;
 };
 
+const formatDateTime = (date) =>
+    new Intl.DateTimeFormat("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: "Asia/Kolkata"
+    }).format(date);
+
+const isTerminalStatus = (status) => status === "completed" || status === "cancelled";
+
+const resolveLifecycleStatus = (tournament, now = new Date()) => {
+    if (isTerminalStatus(tournament.status)) return tournament.status;
+
+    const startAt = tournament.startAt ? new Date(tournament.startAt) : null;
+    const endAt = tournament.endAt ? new Date(tournament.endAt) : null;
+    const registrationStart = tournament.registrationStart ? new Date(tournament.registrationStart) : null;
+
+    if (endAt && now >= endAt) return "completed";
+    if (tournament.status === "running") return "running";
+    if (startAt && now >= startAt) return "running";
+    if (tournament.status === "draft" && registrationStart && now >= registrationStart) return "open";
+
+    return tournament.status;
+};
+
+const syncTournamentLifecycle = async (tournament, options = {}) => {
+    const nextStatus = resolveLifecycleStatus(tournament);
+    if (nextStatus !== tournament.status) {
+        tournament.status = nextStatus;
+        if (options.save) await tournament.save();
+    }
+    return tournament;
+};
+
+const getRegistrationWindow = (tournament, now = new Date()) => {
+    const registrationStart = new Date(tournament.registrationStart);
+    const registrationEnd = new Date(tournament.registrationEnd);
+
+    if (Number.isNaN(registrationStart.getTime()) || Number.isNaN(registrationEnd.getTime())) {
+        throw new ApiError(400, "Tournament registration schedule is invalid");
+    }
+
+    if (now < registrationStart) {
+        return {
+            isOpen: false,
+            message: `Tournament registration opens at ${formatDateTime(registrationStart)}`
+        };
+    }
+
+    if (now > registrationEnd) {
+        return {
+            isOpen: false,
+            message: `Tournament registration window is closed. It closed at ${formatDateTime(registrationEnd)}`
+        };
+    }
+
+    return { isOpen: true };
+};
+
+const validateTournamentSchedule = ({ startAt, endAt, registrationStart, registrationEnd }) => {
+    if (registrationEnd <= registrationStart) {
+        throw new ApiError(400, "Registration close time must be after registration open time");
+    }
+
+    if (startAt <= registrationEnd) {
+        throw new ApiError(400, "Start date must be after registration end date");
+    }
+
+    if (endAt && endAt <= startAt) {
+        throw new ApiError(400, "End date must be after start date");
+    }
+};
+
+const GAME_ALIASES = {
+    freefire: "freefire",
+    ff: "freefire",
+    "free-fire": "freefire",
+    bgmi: "bgmi",
+    pubg: "bgmi",
+    callofduty: "callofduty",
+    cod: "callofduty",
+    codm: "callofduty",
+    "call-of-duty": "callofduty",
+    valorant: "valorant"
+};
+
+const GAME_PRESETS = {
+    freefire: { gameMode: "battle_royale", type: "squad", teamSize: 4, defaultTeams: 12, platform: "mobile", perspective: "tpp" },
+    bgmi: { gameMode: "classic", type: "squad", teamSize: 4, defaultTeams: 16, platform: "mobile", perspective: "tpp" },
+    callofduty: { gameMode: "battle_royale", type: "squad", teamSize: 4, defaultTeams: 16, platform: "mobile", perspective: "tpp" },
+    valorant: { gameMode: "competitive", type: "team", teamSize: 5, defaultTeams: 8, platform: "pc", perspective: "na" }
+};
+
 const normalizeGame = (game) => {
-    if (!game) return "freefire";
-    return String(game).toLowerCase().replace(/\s+/g, "");
+    const key = String(game || "freefire").toLowerCase().trim().replace(/\s+/g, "").replace(/_/g, "-");
+    const normalized = GAME_ALIASES[key];
+    if (!normalized) {
+        throw new ApiError(400, "Game must be Free Fire, BGMI, Call of Duty, or Valorant");
+    }
+    return normalized;
+};
+
+const normalizeType = (type, teamSize) => {
+    if (type) return type;
+    if (teamSize === 1) return "solo";
+    if (teamSize === 2) return "duo";
+    if (teamSize === 4) return "squad";
+    return "team";
 };
 
 const userCanManageTournament = (user, tournament) => {
     return hasRole(user, "admin") || tournament.organizer?.toString() === user._id.toString();
 };
 
+const getGameAccountKey = (game) => game === "callofduty" ? "cod" : game;
+
+const buildGameAccountSnapshot = (account) => ({
+    user: account.user,
+    game: account.game,
+    inGameName: account.inGameName,
+    gameId: account.gameId,
+    level: account.level,
+    verified: account.verified
+});
+
 const buildTournamentPayload = (body, organizerId, channelId = null) => {
     const startAt = parseDate(body.startAt || body.startDate, "startAt");
-    const endAt = body.endAt || body.endDate ? parseDate(body.endAt || body.endDate, "endAt") : undefined;
+    const endAt = parseOptionalDate(body.endAt || body.endDate, "endAt");
+    const now = new Date();
 
     let registrationEnd = body.registrationEnd
         ? parseDate(body.registrationEnd, "registrationEnd")
@@ -50,37 +175,48 @@ const buildTournamentPayload = (body, organizerId, channelId = null) => {
 
     let registrationStart = body.registrationStart
         ? parseDate(body.registrationStart, "registrationStart")
-        : new Date();
+        : now;
 
-    if (registrationEnd <= registrationStart) {
-        registrationStart = new Date(registrationEnd.getTime() - 10 * 60 * 1000);
-    }
-
-    if (startAt <= registrationEnd) {
-        throw new ApiError(400, "Start date must be after registration end date");
+    validateTournamentSchedule({ startAt, endAt, registrationStart, registrationEnd });
+    if (registrationEnd <= now) {
+        throw new ApiError(400, "Registration close time must be in the future");
     }
 
     if (!body.title || body.title.trim() === "") {
         throw new ApiError(400, "Tournament title is required");
     }
 
+    const game = normalizeGame(body.game);
+    const preset = GAME_PRESETS[game];
+    const teamSize = Number(body.teamSize || preset.teamSize);
+    const maxPlayersInput = body.maxPlayers ? Number(body.maxPlayers) : null;
+    const maxTeams = Number(body.maxTeams || (maxPlayersInput ? Math.ceil(maxPlayersInput / teamSize) : preset.defaultTeams || 2));
+    const maxPlayers = Number(maxPlayersInput || maxTeams * teamSize);
+
     return {
         title: body.title.trim(),
         description: body.description,
-        game: normalizeGame(body.game),
+        game,
+        gameMode: body.gameMode || preset.gameMode,
+        mapName: body.mapName || "",
+        platform: body.platform || preset.platform,
+        perspective: body.perspective || preset.perspective,
         organizer: organizerId,
         channel: channelId,
-        type: body.type || "solo",
+        type: normalizeType(body.type, teamSize),
         format: body.format || "single_elim",
         startAt,
         endAt,
         registrationStart,
         registrationEnd,
-        maxPlayers: Number(body.maxPlayers || 2),
+        maxPlayers,
+        maxTeams,
+        teamSize,
         entryFee: Number(body.entryFee || 0),
+        platformFeePercent: Number(body.platformFeePercent ?? 10),
         prizePool: body.prizePool,
         rules: body.rules,
-        status: normalizeStatus(body.status) || "open",
+        status: normalizeStatus(body.status) || (registrationStart > now ? "draft" : "open"),
         room_details: body.room_details
     };
 };
@@ -97,21 +233,25 @@ const getAllTournaments = asyncHandler(async (req, res) => {
     }
 
     if (status) query.status = normalizeStatus(status);
-    if (game) query.game = game.toLowerCase();
+    if (game) query.game = normalizeGame(game);
+    if (req.query.entryFee === "0") query.entryFee = 0;
     if (organizer && mongoose.Types.ObjectId.isValid(organizer)) query.organizer = organizer;
     if (channel && mongoose.Types.ObjectId.isValid(channel)) query.channel = channel;
 
     const tournaments = await Tournament.find(query)
         .populate("organizer", "username avatar stats")
         .populate("channel", "name handle avatar")
-        .sort({ startAt: 1, createdAt: -1 })
+        .sort({ createdAt: -1, startAt: -1 })
         .skip(Number(skip))
         .limit(Number(limit));
+    const syncedTournaments = await Promise.all(
+        tournaments.map((tournament) => syncTournamentLifecycle(tournament, { save: true }))
+    );
 
     const total = await Tournament.countDocuments(query);
 
     return res.status(200).json(
-        new ApiResponse(200, { tournaments, total }, "Tournaments fetched successfully")
+        new ApiResponse(200, { tournaments: syncedTournaments, total }, "Tournaments fetched successfully")
     );
 });
 
@@ -130,6 +270,7 @@ const getTournamentById = asyncHandler(async (req, res) => {
         .populate("channel", "name handle avatar");
 
     if (!tournament) throw new ApiError(404, "Tournament not found");
+    await syncTournamentLifecycle(tournament, { save: true });
 
     return res.status(200).json(
         new ApiResponse(200, tournament, "Tournament fetched successfully")
@@ -172,11 +313,32 @@ const updateTournament = asyncHandler(async (req, res) => {
     if (updates.endDate && !updates.endAt) updates.endAt = updates.endDate;
     if (updates.status) updates.status = normalizeStatus(updates.status);
     if (updates.game) updates.game = normalizeGame(updates.game);
+    if (Object.prototype.hasOwnProperty.call(updates, "startAt")) updates.startAt = parseDate(updates.startAt, "startAt");
+    if (Object.prototype.hasOwnProperty.call(updates, "registrationStart")) updates.registrationStart = parseDate(updates.registrationStart, "registrationStart");
+    if (Object.prototype.hasOwnProperty.call(updates, "registrationEnd")) updates.registrationEnd = parseDate(updates.registrationEnd, "registrationEnd");
+    if (Object.prototype.hasOwnProperty.call(updates, "endAt")) updates.endAt = parseOptionalDate(updates.endAt, "endAt");
+    if (updates.teamSize) updates.teamSize = Number(updates.teamSize);
+    if (updates.maxTeams) updates.maxTeams = Number(updates.maxTeams);
+    if (updates.maxPlayers) updates.maxPlayers = Number(updates.maxPlayers);
+    if (!updates.maxPlayers && (updates.teamSize || updates.maxTeams)) {
+        updates.maxPlayers = Number(updates.maxTeams || tournament.maxTeams || 1) * Number(updates.teamSize || tournament.teamSize || 1);
+    }
+
+    validateTournamentSchedule({
+        startAt: updates.startAt || tournament.startAt,
+        endAt: Object.prototype.hasOwnProperty.call(updates, "endAt") ? updates.endAt : tournament.endAt,
+        registrationStart: updates.registrationStart || tournament.registrationStart,
+        registrationEnd: updates.registrationEnd || tournament.registrationEnd
+    });
 
     const allowedFields = [
         "title",
         "description",
         "game",
+        "gameMode",
+        "mapName",
+        "platform",
+        "perspective",
         "type",
         "format",
         "startAt",
@@ -184,7 +346,10 @@ const updateTournament = asyncHandler(async (req, res) => {
         "registrationStart",
         "registrationEnd",
         "maxPlayers",
+        "maxTeams",
+        "teamSize",
         "entryFee",
+        "platformFeePercent",
         "prizePool",
         "rules",
         "status",
@@ -198,6 +363,7 @@ const updateTournament = asyncHandler(async (req, res) => {
     });
 
     await tournament.save();
+    await syncTournamentLifecycle(tournament, { save: true });
 
     return res.status(200).json(
         new ApiResponse(200, tournament, "Tournament updated successfully")
@@ -223,11 +389,442 @@ const deleteTournament = asyncHandler(async (req, res) => {
 
     await Match.deleteMany({ tournament: tournamentId });
     await Team.deleteMany({ tournament: tournamentId });
+    await Registration.deleteMany({ tournament: tournamentId });
     await tournament.deleteOne();
 
     return res.status(200).json(
         new ApiResponse(200, {}, "Tournament deleted successfully")
     );
+});
+
+// ---------------------------------
+// REGISTER USER TO TOURNAMENT
+// ---------------------------------
+const joinTournament = asyncHandler(async (req, res) => {
+    const tournamentId = getParamId(req, "tournamentId");
+    const { slotNumber, teamName, players = [] } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
+        throw new ApiError(400, "Invalid tournament ID");
+    }
+
+    const tournament = await Tournament.findById(tournamentId);
+    if (!tournament) throw new ApiError(404, "Tournament not found");
+    await syncTournamentLifecycle(tournament, { save: true });
+    if (tournament.status !== "open") throw new ApiError(400, "Tournament registration is not open");
+
+    const registrationWindow = getRegistrationWindow(tournament);
+    if (!registrationWindow.isOpen) {
+        throw new ApiError(400, registrationWindow.message);
+    }
+    // if (tournament.organizer.toString() === req.user._id.toString()) {
+    //     throw new ApiError(400, "Organizers cannot join their own tournament");
+    // }
+
+    const existing = await Registration.findOne({
+        tournament: tournamentId,
+        $or: [
+            { user: req.user._id, status: { $ne: "cancelled" } },
+            { team: req.user._id, status: { $ne: "cancelled" } }
+        ]
+    });
+    if (existing) throw new ApiError(400, "You are already registered for this tournament");
+
+    const activeRegistrations = await Registration.countDocuments({
+        tournament: tournamentId,
+        status: { $in: ["paid", "confirmed"] }
+    });
+    if (activeRegistrations >= tournament.maxPlayers) {
+        throw new ApiError(400, "Tournament has reached max player limit");
+    }
+
+    const requestedSlot = Number(slotNumber || 0);
+    if (requestedSlot > 0) {
+        if (requestedSlot > tournament.maxPlayers) throw new ApiError(400, "Selected slot is outside tournament capacity");
+        const slotTaken = await Registration.exists({
+            tournament: tournamentId,
+            slotNumber: requestedSlot,
+            status: { $in: ["paid", "confirmed"] }
+        });
+        if (slotTaken) throw new ApiError(400, "Selected slot is already taken");
+    }
+
+    const memberIds = Array.isArray(players) && players.length > 0 ? players : [req.user._id];
+    const accountGame = getGameAccountKey(tournament.game);
+    const gameAccounts = await GameAccount.find({
+        user: { $in: memberIds },
+        game: accountGame
+    });
+    const accountByUser = new Map(gameAccounts.map((account) => [account.user.toString(), account]));
+    const missingGameAccount = memberIds.find((userId) => !accountByUser.has(userId.toString()));
+    if (missingGameAccount) {
+        throw new ApiError(400, `Required ${tournament.game} game account is not linked`);
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const entryFee = Number(tournament.entryFee || 0);
+        const platformFee = Math.round(entryFee * Number(tournament.platformFeePercent || 10)) / 100;
+        const organizerAmount = entryFee - platformFee;
+        let paymentRef = null;
+
+        if (entryFee > 0) {
+            const wallet = await Wallet.findOne({ user: req.user._id }).session(session);
+            if (!wallet) throw new ApiError(404, "Wallet not found");
+            if (wallet.balance < entryFee) throw new ApiError(400, "Insufficient wallet balance");
+
+            const before = wallet.balance;
+            wallet.balance = before - entryFee;
+            wallet.lastTransactionAt = new Date();
+            await wallet.save({ session });
+
+            const debitTx = await WalletTransaction.create([{
+                transactionId: uuidv4(),
+                user: req.user._id,
+                walletId: wallet._id,
+                type: "DEBIT",
+                category: "TOURNAMENT_ENTRY",
+                amount: entryFee,
+                grossAmount: entryFee,
+                platformFee,
+                netAmount: organizerAmount,
+                balanceBefore: before,
+                balanceAfter: wallet.balance,
+                status: "SUCCESS",
+                referenceId: tournamentId,
+                fromUser: req.user._id,
+                toUser: tournament.organizer,
+                description: `Entry fee for ${tournament.title}`,
+                metadata: { tournament: tournamentId, platformFee, organizerAmount }
+            }], { session });
+
+            paymentRef = debitTx[0].transactionId;
+
+            if (organizerAmount > 0) {
+                const organizerWallet = await Wallet.findOne({ user: tournament.organizer }).session(session);
+                if (organizerWallet) {
+                    const organizerBefore = organizerWallet.balance;
+                    organizerWallet.balance = organizerBefore + organizerAmount;
+                    organizerWallet.lastTransactionAt = new Date();
+                    await organizerWallet.save({ session });
+
+                    await WalletTransaction.create([{
+                        transactionId: uuidv4(),
+                        user: tournament.organizer,
+                        walletId: organizerWallet._id,
+                        type: "CREDIT",
+                        category: "ORGANIZER_EARNING",
+                        amount: organizerAmount,
+                        grossAmount: entryFee,
+                        platformFee,
+                        netAmount: organizerAmount,
+                        balanceBefore: organizerBefore,
+                        balanceAfter: organizerWallet.balance,
+                        status: "SUCCESS",
+                        referenceId: tournamentId,
+                        fromUser: req.user._id,
+                        toUser: tournament.organizer,
+                        description: `Organizer earning from ${tournament.title}`,
+                        metadata: { tournament: tournamentId, player: req.user._id, platformFee }
+                    }], { session });
+                }
+            }
+
+            tournament.platformFeeAmount = Number(tournament.platformFeeAmount || 0) + platformFee;
+            tournament.organizerEarnings = Number(tournament.organizerEarnings || 0) + organizerAmount;
+            await tournament.save({ session });
+        }
+
+        const registrationArr = await Registration.create([{
+            tournament: tournamentId,
+            user: tournament.type === "solo" ? req.user._id : undefined,
+            team: tournament.type === "solo" ? [] : memberIds,
+            slotNumber: requestedSlot > 0 ? requestedSlot : null,
+            status: entryFee > 0 ? "paid" : "confirmed",
+            paidAmount: entryFee,
+            platformFee,
+            organizerAmount,
+            paymentRef,
+            gameAccounts: memberIds.map((userId) => buildGameAccountSnapshot(accountByUser.get(userId.toString())))
+        }], { session });
+
+        if (tournament.type !== "solo") {
+            await Team.create([{
+                name: teamName?.trim() || `${req.user.username}-${tournament._id}-${Date.now()}`,
+                tournament: tournamentId,
+                players: memberIds,
+                createdBy: req.user._id
+            }], { session });
+        }
+
+        await session.commitTransaction();
+
+        return res.status(201).json(
+            new ApiResponse(201, registrationArr[0], "Tournament registered successfully")
+        );
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
+
+const getTournamentParticipants = asyncHandler(async (req, res) => {
+    const tournamentId = getParamId(req, "tournamentId");
+
+    if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
+        throw new ApiError(400, "Invalid tournament ID");
+    }
+
+    const tournament = await Tournament.findById(tournamentId).select("game");
+    if (!tournament) throw new ApiError(404, "Tournament not found");
+
+    const registrations = await Registration.find({
+        tournament: tournamentId,
+        status: { $ne: "cancelled" }
+    })
+        .populate("user", "username avatar")
+        .populate("team", "username avatar")
+        .sort({ slotNumber: 1, createdAt: 1 });
+
+    const userIds = new Set();
+    registrations.forEach((registration) => {
+        if (registration.user?._id) userIds.add(registration.user._id.toString());
+        registration.team?.forEach((member) => {
+            if (member?._id) userIds.add(member._id.toString());
+        });
+    });
+
+    const accountGame = getGameAccountKey(tournament.game);
+    const gameAccounts = await GameAccount.find({
+        user: { $in: Array.from(userIds) },
+        game: accountGame
+    }).select("user game inGameName gameId level verified");
+    const gameAccountByUser = new Map(gameAccounts.map((account) => [account.user.toString(), account]));
+
+    const registrationsWithGameAccounts = registrations.map((registration) => {
+        const plain = registration.toObject();
+        if (plain.user?._id) {
+            plain.user.gameAccount = plain.gameAccounts?.find((account) => account.user?.toString?.() === plain.user._id.toString()) || gameAccountByUser.get(plain.user._id.toString()) || null;
+        }
+        if (Array.isArray(plain.team)) {
+            plain.team = plain.team.map((member) => ({
+                ...member,
+                gameAccount: plain.gameAccounts?.find((account) => account.user?.toString?.() === member._id.toString()) || gameAccountByUser.get(member._id.toString()) || null
+            }));
+            plain.gameAccount = plain.team[0]?.gameAccount || null;
+        } else {
+            plain.gameAccount = plain.user?.gameAccount || null;
+        }
+        return plain;
+    });
+
+    return res.status(200).json(
+        new ApiResponse(200, registrationsWithGameAccounts, "Participants fetched successfully")
+    );
+});
+
+const getMyTournamentRegistrations = asyncHandler(async (req, res) => {
+    const registrations = await Registration.find({
+        status: { $ne: "cancelled" },
+        $or: [
+            { user: req.user._id },
+            { team: req.user._id }
+        ]
+    })
+        .populate({
+            path: "tournament",
+            populate: [
+                { path: "organizer", select: "username avatar stats" },
+                { path: "channel", select: "name handle avatar" }
+            ]
+        })
+        .sort({ createdAt: -1 });
+
+    return res.status(200).json(
+        new ApiResponse(200, registrations, "Registered tournaments fetched successfully")
+    );
+});
+
+const getRegistrationRecipient = (registration) => {
+    if (registration.user?._id) return registration.user._id;
+    if (registration.user) return registration.user;
+    if (Array.isArray(registration.team) && registration.team[0]?._id) return registration.team[0]._id;
+    if (Array.isArray(registration.team) && registration.team[0]) return registration.team[0];
+    return null;
+};
+
+// ---------------------------------
+// DISTRIBUTE PRIZE MONEY
+// ---------------------------------
+const distributeTournamentPrizes = asyncHandler(async (req, res) => {
+    const tournamentId = getParamId(req, "tournamentId");
+    const payouts = Array.isArray(req.body?.payouts) ? req.body.payouts : [];
+
+    if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
+        throw new ApiError(400, "Invalid tournament ID");
+    }
+
+    if (payouts.length === 0) {
+        throw new ApiError(400, "Add at least one prize payout");
+    }
+
+    const tournament = await Tournament.findById(tournamentId);
+    if (!tournament) throw new ApiError(404, "Tournament not found");
+    await syncTournamentLifecycle(tournament, { save: true });
+
+    if (!userCanManageTournament(req.user, tournament)) {
+        throw new ApiError(403, "Not authorized to distribute prizes for this tournament");
+    }
+    if (tournament.status !== "completed") {
+        throw new ApiError(400, "Mark the tournament as completed before distributing prizes");
+    }
+
+    const previousPayout = await WalletTransaction.exists({
+        referenceId: tournamentId,
+        category: "WINNING",
+        "metadata.prizePayout": true
+    });
+    if (previousPayout) {
+        throw new ApiError(400, "Prize money has already been distributed for this tournament");
+    }
+
+    const normalizedPayouts = payouts.map((payout) => ({
+        registrationId: String(payout.registrationId || ""),
+        place: Number(payout.place),
+        amount: Number(payout.amount)
+    }));
+
+    const registrationIds = normalizedPayouts.map((payout) => payout.registrationId);
+    const duplicateRegistration = registrationIds.find((id, index) => id && registrationIds.indexOf(id) !== index);
+    if (duplicateRegistration) {
+        throw new ApiError(400, "A participant can only receive one prize payout");
+    }
+
+    normalizedPayouts.forEach((payout) => {
+        if (!mongoose.Types.ObjectId.isValid(payout.registrationId)) {
+            throw new ApiError(400, "Every payout must include a valid participant");
+        }
+        if (!Number.isFinite(payout.place) || payout.place < 1) {
+            throw new ApiError(400, "Every payout must include a valid position");
+        }
+        if (!Number.isFinite(payout.amount) || payout.amount <= 0) {
+            throw new ApiError(400, "Every payout amount must be greater than zero");
+        }
+    });
+
+    const prizeTotal = Number(tournament.prizePool?.total || 0);
+    const payoutTotal = normalizedPayouts.reduce((sum, payout) => sum + payout.amount, 0);
+    if (prizeTotal > 0 && payoutTotal > prizeTotal) {
+        throw new ApiError(400, "Prize payouts cannot exceed the tournament prize pool");
+    }
+
+    const registrations = await Registration.find({
+        _id: { $in: registrationIds },
+        tournament: tournamentId,
+        status: { $in: ["paid", "confirmed"] }
+    })
+        .populate("user", "username")
+        .populate("team", "username");
+
+    if (registrations.length !== normalizedPayouts.length) {
+        throw new ApiError(400, "One or more selected participants are not registered for this tournament");
+    }
+
+    const registrationMap = new Map(registrations.map((registration) => [registration._id.toString(), registration]));
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const organizerWallet = await Wallet.findOne({ user: tournament.organizer }).session(session);
+        if (!organizerWallet) throw new ApiError(404, "Organizer wallet not found");
+        if (organizerWallet.balance < payoutTotal) throw new ApiError(400, "Organizer wallet does not have enough balance for prize payouts");
+
+        const organizerBefore = organizerWallet.balance;
+        organizerWallet.balance = organizerBefore - payoutTotal;
+        organizerWallet.lastTransactionAt = new Date();
+        await organizerWallet.save({ session });
+
+        await WalletTransaction.create([{
+            transactionId: uuidv4(),
+            user: tournament.organizer,
+            walletId: organizerWallet._id,
+            type: "DEBIT",
+            category: "TRANSFER",
+            amount: payoutTotal,
+            grossAmount: payoutTotal,
+            netAmount: payoutTotal,
+            balanceBefore: organizerBefore,
+            balanceAfter: organizerWallet.balance,
+            status: "SUCCESS",
+            referenceId: tournamentId,
+            fromUser: tournament.organizer,
+            description: `Prize distribution for ${tournament.title}`,
+            metadata: { tournament: tournamentId, prizePayout: true, payoutCount: normalizedPayouts.length }
+        }], { session });
+
+        const transactions = [];
+        for (const payout of normalizedPayouts) {
+            const registration = registrationMap.get(payout.registrationId);
+            const recipient = getRegistrationRecipient(registration);
+            if (!recipient) throw new ApiError(400, "Selected participant does not have a payout receiver");
+
+            const winnerWallet = await Wallet.findOne({ user: recipient }).session(session);
+            if (!winnerWallet) throw new ApiError(404, "Winner wallet not found");
+
+            const before = winnerWallet.balance;
+            winnerWallet.balance = before + payout.amount;
+            winnerWallet.lastTransactionAt = new Date();
+            await winnerWallet.save({ session });
+
+            const tx = await WalletTransaction.create([{
+                transactionId: uuidv4(),
+                user: recipient,
+                walletId: winnerWallet._id,
+                type: "CREDIT",
+                category: "WINNING",
+                amount: payout.amount,
+                grossAmount: payout.amount,
+                netAmount: payout.amount,
+                balanceBefore: before,
+                balanceAfter: winnerWallet.balance,
+                status: "SUCCESS",
+                referenceId: tournamentId,
+                fromUser: tournament.organizer,
+                toUser: recipient,
+                description: `Place #${payout.place} prize for ${tournament.title}`,
+                metadata: {
+                    tournament: tournamentId,
+                    registration: payout.registrationId,
+                    place: payout.place,
+                    prizePayout: true
+                }
+            }], { session });
+            transactions.push(tx[0]);
+        }
+
+        tournament.status = "completed";
+        tournament.prizePool = {
+            ...(tournament.prizePool?.toObject?.() || tournament.prizePool || {}),
+            total: prizeTotal,
+            distribution: normalizedPayouts.map((payout) => ({ place: payout.place, amount: payout.amount }))
+        };
+        await tournament.save({ session });
+
+        await session.commitTransaction();
+
+        return res.status(200).json(
+            new ApiResponse(200, { tournament, transactions }, "Prize money distributed successfully")
+        );
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
 });
 
 // ---------------------------------
@@ -286,6 +883,10 @@ export {
     createTournament,
     updateTournament,
     deleteTournament,
+    joinTournament,
+    getTournamentParticipants,
+    getMyTournamentRegistrations,
+    distributeTournamentPrizes,
     registerTeam,
     unregisterTeam
 };

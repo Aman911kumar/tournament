@@ -22,6 +22,7 @@ const TournamentDetailScreen = () => {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const loadTournament = async () => {
     if (!id) return;
@@ -40,6 +41,11 @@ const TournamentDetailScreen = () => {
     loadTournament();
   }, [id]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const creator = {
     id: tournament?.channel?._id ?? tournament?.organizer?._id ?? "",
     name: tournament?.channel?.name ?? tournament?.organizer?.username ?? "Creator",
@@ -52,6 +58,26 @@ const TournamentDetailScreen = () => {
     : ["Match starts at scheduled time.", "Disputes are resolved by admin decision."];
   const prize = Number(tournament?.prizePool?.total || 0);
   const entryFee = Number(tournament?.entryFee || 0);
+  const registrationStartMs = tournament?.registrationStart ? new Date(tournament.registrationStart).getTime() : 0;
+  const registrationEndMs = tournament?.registrationEnd ? new Date(tournament.registrationEnd).getTime() : 0;
+  const registrationIsOpen =
+    Boolean(tournament) &&
+    tournament?.status === "open" &&
+    Number.isFinite(registrationStartMs) &&
+    Number.isFinite(registrationEndMs) &&
+    now >= registrationStartMs &&
+    now <= registrationEndMs;
+  const registerButtonText = !tournament
+    ? "REGISTER NOW"
+    : tournament.status === "completed"
+      ? "TOURNAMENT COMPLETED"
+      : tournament.status === "running"
+        ? "TOURNAMENT LIVE"
+        : now < registrationStartMs
+          ? "REGISTRATION OPENS SOON"
+          : now > registrationEndMs
+            ? "REGISTRATION CLOSED"
+            : `REGISTER NOW - ${entryFee === 0 ? "FREE" : formatCurrency(entryFee)}`;
 
   return (
     <div className="min-h-screen bg-background pb-10">
@@ -90,99 +116,123 @@ const TournamentDetailScreen = () => {
         )}
 
         {!loading && !error && tournament && (
-        <>
-        <GlassCard neon>
-          <h2 className="font-heading text-xl font-bold mb-1">{tournament.title}</h2>
-          <p className="text-xs text-muted-foreground mb-2">{gameLabels[tournament.game] ?? tournament.game}</p>
+          <>
+            <GlassCard neon>
+              <h2 className="font-heading text-xl font-bold mb-1">{tournament.title}</h2>
+              <p className="text-xs text-muted-foreground mb-2">{gameLabels[tournament.game] ?? tournament.game}</p>
 
-          {/* Creator Info */}
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => creator.id && navigate(`/creator/${creator.id}`)}
-            className="w-full glass rounded-lg p-2.5 flex items-center gap-3 mb-4"
-          >
-            <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center">
-              <span className="font-display text-xs font-bold text-primary-foreground">{creator.name[0]}</span>
-            </div>
-            <div className="text-left flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-heading font-bold">{creator.name}</span>
-                {creator.verified && (
-                  <Shield className="w-3 h-3 text-secondary fill-secondary" />
-                )}
+              {/* Creator Info */}
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => creator.id && navigate(`/creator/${creator.id}`)}
+                className="w-full glass rounded-lg p-2.5 flex items-center gap-3 mb-4"
+              >
+                <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center">
+                  <span className="font-display text-xs font-bold text-primary-foreground">{creator.name[0]}</span>
+                </div>
+                <div className="text-left flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-heading font-bold">{creator.name}</span>
+                    {creator.verified && (
+                      <Shield className="w-3 h-3 text-secondary fill-secondary" />
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Star className="w-2.5 h-2.5 text-accent fill-accent" />
+                    <span className="text-[10px] text-muted-foreground">{creator.rating} rating</span>
+                  </div>
+                </div>
+                <span className="text-[10px] text-primary font-heading">View Profile</span>
+              </motion.button>
+
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { icon: Calendar, label: "Date & Time", value: "Apr 15, 2026, 8 PM" },
+                  { icon: Users, label: "Slots", value: String(tournament.maxPlayers) },
+                  { icon: DollarSign, label: "Entry Fee", value: entryFee === 0 ? "FREE" : formatCurrency(entryFee) },
+                  { icon: Trophy, label: "Prize Pool", value: formatCurrency(prize) },
+                ].map((item) => (
+                  <div key={item.label} className="glass rounded-lg p-3">
+                    <item.icon className="w-4 h-4 text-primary mb-1" />
+                    <p className="text-[10px] text-muted-foreground">{item.label}</p>
+                    <p className="text-sm font-heading font-bold">
+                      {item.label === "Date & Time" ? new Date(tournament.startAt).toLocaleString() : item.value}
+                    </p>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center gap-1">
-                <Star className="w-2.5 h-2.5 text-accent fill-accent" />
-                <span className="text-[10px] text-muted-foreground">{creator.rating} rating</span>
+            </GlassCard>
+
+            {/* Rules */}
+            <GlassCard delay={0.1}>
+              <div className="flex items-center gap-2 mb-3">
+                <Shield className="w-4 h-4 text-primary" />
+                <h3 className="font-heading font-bold text-sm">Rules & Regulations</h3>
               </div>
-            </div>
-            <span className="text-[10px] text-primary font-heading">View Profile</span>
-          </motion.button>
+              <ul className="space-y-2">
+                {rules.map((rule, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground font-body">
+                    <span className="text-primary mt-0.5">-</span>
+                    {rule}
+                  </li>
+                ))}
+              </ul>
+            </GlassCard>
 
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { icon: Calendar, label: "Date & Time", value: "Apr 15, 2026, 8 PM" },
-              { icon: Users, label: "Slots", value: String(tournament.maxPlayers) },
-              { icon: DollarSign, label: "Entry Fee", value: entryFee === 0 ? "FREE" : formatCurrency(entryFee) },
-              { icon: Trophy, label: "Prize Pool", value: formatCurrency(prize) },
-            ].map((item) => (
-              <div key={item.label} className="glass rounded-lg p-3">
-                <item.icon className="w-4 h-4 text-primary mb-1" />
-                <p className="text-[10px] text-muted-foreground">{item.label}</p>
-                <p className="text-sm font-heading font-bold">
-                  {item.label === "Date & Time" ? new Date(tournament.startAt).toLocaleString() : item.value}
-                </p>
+            <GlassCard delay={0.12}>
+              <div className="flex items-center gap-2 mb-3">
+                <Calendar className="w-4 h-4 text-secondary" />
+                <h3 className="font-heading font-bold text-sm">Registration Window</h3>
               </div>
-            ))}
-          </div>
-        </GlassCard>
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2 text-xs">
+                <div className="glass rounded-lg p-3">
+                  <p className="text-[10px] text-muted-foreground">Opens</p>
+                  <p className="font-heading font-bold">{new Date(tournament.registrationStart).toLocaleString()}</p>
+                </div>
+                <div className="glass rounded-lg p-3">
+                  <p className="text-[10px] text-muted-foreground">Closes</p>
+                  <p className="font-heading font-bold">{new Date(tournament.registrationEnd).toLocaleString()}</p>
+                </div>
+              </div>
+            </GlassCard>
 
-        {/* Rules */}
-        <GlassCard delay={0.1}>
-          <div className="flex items-center gap-2 mb-3">
-            <Shield className="w-4 h-4 text-primary" />
-            <h3 className="font-heading font-bold text-sm">Rules & Regulations</h3>
-          </div>
-          <ul className="space-y-2">
-            {rules.map((rule, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground font-body">
-                <span className="text-primary mt-0.5">-</span>
-                {rule}
-              </li>
-            ))}
-          </ul>
-        </GlassCard>
+            {/* Participants */}
+            <GlassCard delay={0.15}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-heading font-bold text-sm flex items-center gap-2">
+                  <Users className="w-4 h-4 text-secondary" />
+                  Participants
+                </h3>
+              </div>
+              <p className="text-xs text-muted-foreground">Participant registration will appear here after teams join.</p>
+            </GlassCard>
 
-        {/* Participants */}
-        <GlassCard delay={0.15}>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-heading font-bold text-sm flex items-center gap-2">
-              <Users className="w-4 h-4 text-secondary" />
-              Participants
-            </h3>
-          </div>
-          <p className="text-xs text-muted-foreground">Participant registration will appear here after teams join.</p>
-        </GlassCard>
+            {/* Comments Link */}
+            <GlassCard delay={0.2} onClick={() => navigate(`/tournament/${tournament._id}/comments`)} className="cursor-pointer">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="w-4 h-4 text-primary" />
+                  <span className="font-heading font-bold text-sm">Comments & Chat</span>
+                </div>
+                <span className="text-[10px] text-primary font-heading">5 messages</span>
+              </div>
+            </GlassCard>
 
-        {/* Comments Link */}
-        <GlassCard delay={0.2} onClick={() => navigate(`/tournament/${tournament._id}/comments`)} className="cursor-pointer">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MessageCircle className="w-4 h-4 text-primary" />
-              <span className="font-heading font-bold text-sm">Comments & Chat</span>
-            </div>
-            <span className="text-[10px] text-primary font-heading">5 messages</span>
-          </div>
-        </GlassCard>
-
-        <NeonButton
-          full
-          variant={registered ? "green" : "purple"}
-          onClick={() => !registered && setShowConfirm(true)}
-        >
-          {registered ? "REGISTERED" : `REGISTER NOW - ${entryFee === 0 ? "FREE" : formatCurrency(entryFee)}`}
-        </NeonButton>
-        </>
+            <NeonButton
+              full
+              variant={registered ? "green" : registrationIsOpen ? "purple" : "blue"}
+              disabled={!registrationIsOpen || registered}
+              onClick={() =>
+                !registered &&
+                registrationIsOpen &&
+                navigate(
+                  `/tournament/${id}/slots?type=${tournament.type}&slots=${tournament.maxPlayers}&teamSize=${tournament.teamSize || ""}&fee=${entryFee}&game=${tournament.game}&title=${encodeURIComponent(tournament.title)}`
+                )
+              }
+            >
+              {registered ? "REGISTERED" : registerButtonText}
+            </NeonButton>
+          </>
         )}
       </div>
 
@@ -199,7 +249,7 @@ const TournamentDetailScreen = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-            className="glass rounded-2xl p-6 w-full max-w-sm neon-border text-center"
+              className="glass rounded-2xl p-6 w-full max-w-sm neon-border text-center"
             >
               <CheckCircle className="w-12 h-12 text-accent mx-auto mb-3" />
               <h3 className="font-heading text-lg font-bold mb-1">Confirm Registration</h3>

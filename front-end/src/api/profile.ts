@@ -5,6 +5,8 @@ export const ENDPOINTS = {
   me: "/user/profile",
   update: "/user/profile",
   stats: "/profile/stats",
+  becomeCreator: "/user/creator",
+  leaveCreator: "/user/creator",
 };
 
 export interface ProfileUpdatePayload {
@@ -47,7 +49,7 @@ export interface Preferences {
   notifications: boolean;
 }
 
-export async function getMyProfile():Promise<ApiResponse> {
+export async function getMyProfile(): Promise<ApiResponse<{ user: User }>> {
   return apiFetch(ENDPOINTS.me,{method:"GET",credentials: "include",});
   // return null;
 }
@@ -55,6 +57,14 @@ export async function getMyProfile():Promise<ApiResponse> {
 export async function updateProfile(payload: ProfileUpdatePayload):Promise<ApiResponse> {
   return apiFetch(ENDPOINTS.update, { method: "PATCH", body: JSON.stringify(payload) , credentials:"include"});
   // return { success: true };
+}
+
+export async function becomeCreator(): Promise<ApiResponse<{ user: User }>> {
+  return apiFetch(ENDPOINTS.becomeCreator, { method: "POST", credentials: "include" });
+}
+
+export async function leaveCreator(): Promise<ApiResponse<{ user: User }>> {
+  return apiFetch(ENDPOINTS.leaveCreator, { method: "DELETE", credentials: "include" });
 }
 
 export async function getMyStats() {

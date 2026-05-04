@@ -2,6 +2,8 @@ import express from "express";
 import {
   getUserProfile,
   updateUserProfile,
+  becomeCreator,
+  leaveCreator,
   getAllUsers,
   getUserById,
   updateUser,
@@ -14,6 +16,8 @@ const router = express.Router();
 // Protected routes
 router.get("/profile", protect, getUserProfile);
 router.patch("/profile", protect, updateUserProfile);
+router.post("/creator", protect, becomeCreator);
+router.delete("/creator", protect, leaveCreator);
 
 // Admin-only routes
 router.get("/", protect, admin, getAllUsers);

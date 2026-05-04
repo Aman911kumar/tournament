@@ -26,11 +26,19 @@ const sortMap: Record<string, "trending" | "latest" | "prize_asc" | "prize_desc"
   "Prize Down": "prize_desc",
 };
 
+const statusStyle = (status: Tournament["status"]) => {
+  if (status === "running") return "bg-destructive/20 text-destructive";
+  if (status === "completed") return "bg-muted text-muted-foreground";
+  if (status === "open") return "bg-secondary/20 text-secondary";
+  if (status === "cancelled") return "bg-destructive/10 text-destructive";
+  return "bg-primary/10 text-primary";
+};
+
 const TournamentsScreen = () => {
   const navigate = useNavigate();
   const [activeGame, setActiveGame] = useState("All");
   const [activeFee, setActiveFee] = useState("All Fees");
-  const [activeSort, setActiveSort] = useState("Trending");
+  const [activeSort, setActiveSort] = useState("Latest");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -82,7 +90,7 @@ const TournamentsScreen = () => {
 
     if (activeSort === "Prize Up") return [...list].sort((a, b) => Number(a.prizePool?.total || 0) - Number(b.prizePool?.total || 0));
     if (activeSort === "Prize Down") return [...list].sort((a, b) => Number(b.prizePool?.total || 0) - Number(a.prizePool?.total || 0));
-    return list;
+    return [...list].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
   }, [activeFee, activeGame, activeSort, searchQuery, tournaments]);
 
   return (
@@ -206,9 +214,7 @@ const TournamentsScreen = () => {
                   <p className="text-[10px] text-muted-foreground">{gameName}</p>
                 </div>
                 <span
-                  className={`text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full shrink-0 ${
-                    t.status === "running" ? "bg-destructive/20 text-destructive" : "bg-accent/20 text-accent"
-                  }`}
+                  className={`text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full shrink-0 ${statusStyle(t.status)}`}
                 >
                   {t.status === "running" ? "Live" : t.status}
                 </span>

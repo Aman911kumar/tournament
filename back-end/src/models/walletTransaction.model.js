@@ -33,6 +33,8 @@ const walletTransactionSchema = new mongoose.Schema(
         "DEPOSIT",
         "WITHDRAW",
         "TRANSFER",
+        "WALLET_TRANSFER",
+        "ORGANIZER_EARNING",
         "REFUND",
         "TOURNAMENT_ENTRY",
         "WINNING",
@@ -44,6 +46,21 @@ const walletTransactionSchema = new mongoose.Schema(
     amount: {
       type: Number,
       required: true,
+    },
+
+    grossAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    platformFee: {
+      type: Number,
+      default: 0,
+    },
+
+    netAmount: {
+      type: Number,
+      default: 0,
     },
 
     currency: {
@@ -62,6 +79,20 @@ const walletTransactionSchema = new mongoose.Schema(
 
     paymentMethod: String,
     referenceId: String,
+
+    fromUser: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
+
+    toUser: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
 
     description: String,
 

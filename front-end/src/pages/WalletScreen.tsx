@@ -9,6 +9,7 @@ import {
   History,
   Plus,
   RefreshCcw,
+  Send,
   TrendingUp,
   Wallet,
 } from "lucide-react";
@@ -154,9 +155,12 @@ const WalletScreen = () => {
               {formatCurrency(balance)}
             </motion.p>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             <NeonButton variant="green" className="text-xs py-2 flex items-center justify-center gap-1.5" onClick={() => navigate("/wallet/add")}>
               <Plus className="w-3.5 h-3.5" /> Add Money
+            </NeonButton>
+            <NeonButton variant="purple" className="text-xs py-2 flex items-center justify-center gap-1.5" onClick={() => navigate("/wallet/transfer")}>
+              <Send className="w-3.5 h-3.5" /> Transfer
             </NeonButton>
             <NeonButton variant="blue" className="text-xs py-2 flex items-center justify-center gap-1.5" onClick={() => navigate("/wallet/withdraw")}>
               <ArrowUpRight className="w-3.5 h-3.5" /> Withdraw

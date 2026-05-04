@@ -177,12 +177,66 @@ const getChannelByIdentifier = asyncHandler(async (req, res) => {
         .limit(Number(tournamentLimit));
 
     const tournamentCount = await Tournament.countDocuments(tournamentQuery);
+    const prizeTotals = await Tournament.aggregate([
+        { $match: tournamentQuery },
+        { $group: { _id: null, totalPrize: { $sum: "$prizePool.total" } } }
+    ]);
 
     return res.status(200).json(
         new ApiResponse(
             200,
-            { channel, tournaments, tournamentCount },
+            { channel, creator: channel.owner, tournaments, tournamentCount, totalPrize: Number(prizeTotals[0]?.totalPrize || 0) },
             "Channel fetched successfully"
+        )
+    );
+});
+
+const getCreatorByUserId = asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+    const { tournamentLimit = 6, status } = req.query;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+        throw new ApiError(400, "Invalid creator user ID");
+    }
+
+    const user = await User.findById(userId).select("username avatar role stats createdAt");
+    if (!user || !user.role?.includes("creator")) {
+        throw new ApiError(404, "Creator not found");
+    }
+
+    const channel = await Channel.findOne({ owner: userId, isActive: true }).populate("owner", "username avatar stats");
+    const extra = {};
+    if (status) extra.status = status;
+
+    const tournamentQuery = channel
+        ? buildChannelTournamentQuery(channel, extra)
+        : { organizer: userId, ...extra };
+
+    const tournaments = await Tournament.find(tournamentQuery)
+        .populate("organizer", "username avatar stats")
+        .populate("channel", "name handle avatar")
+        .sort({ startAt: 1, createdAt: -1 })
+        .limit(Number(tournamentLimit));
+
+    const [tournamentCount, prizeTotals] = await Promise.all([
+        Tournament.countDocuments(tournamentQuery),
+        Tournament.aggregate([
+            { $match: tournamentQuery },
+            { $group: { _id: null, totalPrize: { $sum: "$prizePool.total" } } }
+        ])
+    ]);
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                channel,
+                creator: user,
+                tournaments,
+                tournamentCount,
+                totalPrize: Number(prizeTotals[0]?.totalPrize || 0)
+            },
+            "Creator fetched successfully"
         )
     );
 });
@@ -385,6 +439,7 @@ export {
     getMyChannel,
     listChannels,
     getChannelByIdentifier,
+    getCreatorByUserId,
     updateChannel,
     joinChannel,
     leaveChannel,

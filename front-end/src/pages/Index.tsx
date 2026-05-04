@@ -1,9 +1,13 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Bell, Search, ChevronRight, Flame, Zap, Star, Users, Crown } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import BottomNav from "@/components/BottomNav";
+import { getTournaments, Tournament } from "@/api/tournaments";
+import { getCreators, CreatorChannel } from "@/api/creators";
+import { formatCurrency } from "@/lib/page-utils";
 
 import gameFreefire from "@/assets/game-freefire.jpg";
 import gameBgmi from "@/assets/game-bgmi.jpg";
@@ -17,21 +21,45 @@ const games = [
   { name: "Valorant", image: gameValorant, players: "2.9M" },
 ];
 
-const trendingTournaments = [
-  { id: 1, name: "Pro League S4", game: "Free Fire", prize: "Rs. 50,000", slots: "12/100", creator: "GamingGuru", verified: true },
-  { id: 2, name: "Battle Royale Cup", game: "BGMI", prize: "Rs. 25,000", slots: "45/64", creator: "ESportsKing", verified: true },
-  { id: 3, name: "Tactical Masters", game: "Valorant", prize: "Rs. 15,000", slots: "20/32", creator: "ProHostX", verified: false },
-];
-
-const recommendedCreators = [
-  { id: "c1", name: "GamingGuru", followers: "12.5K", tournaments: 48, rating: 4.8, verified: true },
-  { id: "c2", name: "ESportsKing", followers: "8.2K", tournaments: 32, rating: 4.6, verified: true },
-  { id: "c3", name: "ProHostX", followers: "5.1K", tournaments: 21, rating: 4.3, verified: false },
-  { id: "c4", name: "ArenaQueen", followers: "15K", tournaments: 56, rating: 4.9, verified: true },
-];
+const gameLabels: Record<string, string> = {
+  freefire: "Free Fire",
+  bgmi: "BGMI",
+  callofduty: "Call of Duty",
+  valorant: "Valorant",
+};
 
 const Index = () => {
   const navigate = useNavigate();
+  const [trendingTournaments, setTrendingTournaments] = useState<Tournament[]>([]);
+  const [recommendedCreators, setRecommendedCreators] = useState<(CreatorChannel & { tournamentCount?: number })[]>([]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadHome = async () => {
+      try {
+        const [tournaments, creators] = await Promise.all([
+          getTournaments({ sort: "trending" }),
+          getCreators(),
+        ]);
+        if (!active) return;
+        setTrendingTournaments(tournaments.slice(0, 3));
+        setRecommendedCreators(creators.slice(0, 4));
+      } catch {
+        if (!active) return;
+        setTrendingTournaments([]);
+        setRecommendedCreators([]);
+      }
+    };
+
+    loadHome();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const liveTournament = trendingTournaments.find((tournament) => tournament.status === "running") ?? trendingTournaments[0];
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -67,14 +95,14 @@ const Index = () => {
               Live Now
             </span>
           </div>
-          <h2 className="font-heading text-lg font-bold">Grand Championship</h2>
+          <h2 className="font-heading text-lg font-bold">{liveTournament?.title ?? "Grand Championship"}</h2>
           <p className="text-xs text-muted-foreground font-body mb-1">
-            by <span className="text-primary">GamingGuru</span> - Verified Creator
+            by <span className="text-primary">{liveTournament?.channel?.name ?? liveTournament?.organizer?.username ?? "Creator"}</span> - Verified Creator
           </p>
           <p className="text-xs text-muted-foreground font-body mb-3">
-            Prize Pool: Rs. 1,00,000 - 256 Players
+            Prize Pool: {formatCurrency(Number(liveTournament?.prizePool?.total || 0))} - {liveTournament?.maxPlayers ?? 0} Players
           </p>
-          <NeonButton variant="green" className="text-xs py-2 px-4">
+          <NeonButton variant="green" className="text-xs py-2 px-4" onClick={() => liveTournament?._id && navigate(`/tournament/${liveTournament._id}`)}>
             Watch Live
           </NeonButton>
         </GlassCard>
@@ -97,12 +125,12 @@ const Index = () => {
         <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
           {recommendedCreators.map((creator, i) => (
             <motion.button
-              key={creator.id}
+              key={creator._id}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.08 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => navigate(`/creator/${creator.id}`)}
+              onClick={() => navigate(`/creator/${creator._id}`)}
               className="glass rounded-xl p-3 min-w-[120px] flex flex-col items-center gap-2 shrink-0"
             >
               <div className="relative">
@@ -111,7 +139,7 @@ const Index = () => {
                     {creator.name[0]}
                   </span>
                 </div>
-                {creator.verified && (
+                {creator.isActive && (
                   <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-secondary flex items-center justify-center">
                     <Star className="w-3 h-3 text-secondary-foreground fill-secondary-foreground" />
                   </div>
@@ -120,9 +148,9 @@ const Index = () => {
               <p className="font-heading font-bold text-xs text-foreground truncate w-full text-center">
                 {creator.name}
               </p>
-              <p className="text-[10px] text-muted-foreground">{creator.followers} followers</p>
+              <p className="text-[10px] text-muted-foreground">{creator.memberCount.toLocaleString("en-IN")} followers</p>
               <div className="flex items-center gap-1 text-[10px] text-accent">
-                <Star className="w-2.5 h-2.5 fill-accent" /> {creator.rating}
+                <Star className="w-2.5 h-2.5 fill-accent" /> {creator.owner?.stats?.rating ?? 4.5}
               </div>
             </motion.button>
           ))}
@@ -188,25 +216,25 @@ const Index = () => {
         </div>
         {trendingTournaments.map((t, i) => (
           <GlassCard
-            key={t.id}
+            key={t._id}
             neon
             className="mb-3"
             delay={i * 0.12}
-            onClick={() => navigate(`/tournament/${t.id}`)}
+            onClick={() => navigate(`/tournament/${t._id}`)}
           >
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="font-heading font-bold text-sm">{t.name}</p>
+                <p className="font-heading font-bold text-sm">{t.title}</p>
                 <p className="text-[10px] text-muted-foreground">
-                  {t.game} - {t.slots} slots
+                  {gameLabels[t.game] ?? t.game} - {t.maxPlayers} slots
                 </p>
                 <div className="flex items-center gap-1 mt-1">
-                  <span className="text-[10px] text-primary font-heading">by {t.creator}</span>
-                  {t.verified && <Star className="w-2.5 h-2.5 text-secondary fill-secondary" />}
+                  <span className="text-[10px] text-primary font-heading">by {t.channel?.name ?? t.organizer?.username ?? "Creator"}</span>
+                  <Star className="w-2.5 h-2.5 text-secondary fill-secondary" />
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-xs font-heading font-bold text-accent neon-text-green">{t.prize}</p>
+                <p className="text-xs font-heading font-bold text-accent neon-text-green">{formatCurrency(Number(t.prizePool?.total || 0))}</p>
                 <NeonButton variant="purple" className="text-[10px] py-1 px-3 mt-1">
                   Join
                 </NeonButton>

@@ -1,5 +1,19 @@
 import mongoose from "mongoose";
 
+const SUPPORTED_GAMES = ["freefire", "bgmi", "callofduty", "valorant"];
+const SUPPORTED_GAME_MODES = [
+    "battle_royale",
+    "clash_squad",
+    "lone_wolf",
+    "classic",
+    "tdm",
+    "arena",
+    "multiplayer",
+    "search_destroy",
+    "competitive",
+    "custom"
+];
+
 const TournamentSchema = new mongoose.Schema({
     title: {
         type: String,
@@ -13,10 +27,32 @@ const TournamentSchema = new mongoose.Schema({
     },
     game: {
         type: String,
+        enum: SUPPORTED_GAMES,
         trim: true,
         lowercase: true,
         default: 'freefire',
         index: true
+    },
+    gameMode: {
+        type: String,
+        enum: SUPPORTED_GAME_MODES,
+        default: "battle_royale",
+        index: true
+    },
+    mapName: {
+        type: String,
+        trim: true,
+        default: ""
+    },
+    platform: {
+        type: String,
+        enum: ["mobile", "pc", "console", "crossplay"],
+        default: "mobile"
+    },
+    perspective: {
+        type: String,
+        enum: ["tpp", "fpp", "both", "na"],
+        default: "tpp"
     },
     organizer: {
         type: mongoose.Schema.Types.ObjectId,
@@ -31,7 +67,7 @@ const TournamentSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['solo', 'duo', 'squad'],
+        enum: ['solo', 'duo', 'squad', 'team'],
         required: true
     },
     format: {
@@ -68,11 +104,39 @@ const TournamentSchema = new mongoose.Schema({
     },
     maxPlayers: {
         type: Number,
-        default: 2
+        default: 2,
+        min: 1
+    },
+    maxTeams: {
+        type: Number,
+        default: 2,
+        min: 1
+    },
+    teamSize: {
+        type: Number,
+        default: 1,
+        min: 1,
+        max: 5
     },
     entryFee: {
         type: Number,
         default: 0
+    },
+    platformFeePercent: {
+        type: Number,
+        default: 10,
+        min: 0,
+        max: 100
+    },
+    platformFeeAmount: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    organizerEarnings: {
+        type: Number,
+        default: 0,
+        min: 0
     },
     prizePool: {
         total: {

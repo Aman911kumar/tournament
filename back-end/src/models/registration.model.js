@@ -28,23 +28,56 @@ const RegistrationSchema = new mongoose.Schema({
         default: 'pending'
     },
 
+    slotNumber: {
+        type: Number,
+        min: 1,
+        default: null
+    },
+
     paidAmount: {
         type: Number,
         default: 0,
         min: [0, 'Paid amount cannot be negative']
     },
 
+    platformFee: {
+        type: Number,
+        default: 0,
+        min: [0, 'Platform fee cannot be negative']
+    },
+
+    organizerAmount: {
+        type: Number,
+        default: 0,
+        min: [0, 'Organizer amount cannot be negative']
+    },
+
     paymentRef: {
         type: String,
         trim: true,
         default: null
-    }
+    },
+
+    gameAccounts: [
+        {
+            user: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User",
+            },
+            game: { type: String, trim: true },
+            inGameName: { type: String, trim: true },
+            gameId: { type: String, trim: true },
+            level: { type: String, default: null },
+            verified: { type: Boolean, default: false },
+        }
+    ]
 
 }, { timestamps: true });
 
 // Indexes
 RegistrationSchema.index({ tournament: 1, user: 1 });
 RegistrationSchema.index({ tournament: 1, status: 1 });
+RegistrationSchema.index({ tournament: 1, slotNumber: 1 });
 
 // Validate based on tournament type
 RegistrationSchema.pre("validate", function (next) {

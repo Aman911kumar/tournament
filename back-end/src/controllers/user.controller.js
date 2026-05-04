@@ -5,6 +5,7 @@ import { User } from '../models/user.model.js'
 import { WalletTransaction } from '../models/walletTransaction.model.js'
 import { Wallet } from '../models/wallet.model.js'
 import { Notification } from '../models/notification.model.js'
+import { Tournament } from '../models/tournament.model.js'
 import { hasRole } from '../middlewares/auth.middleware.js'
 import mongoose from 'mongoose'
 import jwt from 'jsonwebtoken'
@@ -610,6 +611,44 @@ const updateUserProfile = asyncHandler(async (req, res) => {
         new ApiResponse(200, updatedUser, "User profile updated successfully")
     );
 });
+const becomeCreator = asyncHandler(async (req, res) => {
+    const user = req.user;
+    const roles = Array.isArray(user.role) ? user.role : [user.role].filter(Boolean);
+
+    if (!roles.includes("creator")) {
+        user.role = [...new Set([...roles, "user", "creator"])];
+        await user.save({ validateBeforeSave: false });
+    }
+
+    const updatedUser = await User.findById(user._id).select("-password -refreshToken");
+
+    return res.status(200).json(
+        new ApiResponse(200, { user: updatedUser }, "Creator mode enabled")
+    );
+});
+
+const leaveCreator = asyncHandler(async (req, res) => {
+    const user = req.user;
+    const activeTournament = await Tournament.exists({
+        organizer: user._id,
+        status: { $in: ["draft", "open", "running"] }
+    });
+
+    if (activeTournament) {
+        throw new ApiError(400, "Complete, cancel, or delete your active tournaments before leaving creator mode");
+    }
+
+    const roles = (Array.isArray(user.role) ? user.role : [user.role].filter(Boolean))
+        .filter((role) => role !== "creator");
+    user.role = roles.length > 0 ? roles : ["user"];
+    await user.save({ validateBeforeSave: false });
+
+    const updatedUser = await User.findById(user._id).select("-password -refreshToken");
+
+    return res.status(200).json(
+        new ApiResponse(200, { user: updatedUser }, "Creator mode disabled")
+    );
+});
 const uploadAvatar = asyncHandler(async (req, res) => {
 
 })
@@ -672,16 +711,22 @@ const getWalletTransaction = asyncHandler(async (req, res) => {
 
     const query = { user: userId };
     if (type && ['credit', 'debit'].includes(type)) {
-        query.type = type;
+        query.type = type.toUpperCase();
     }
     if (filter === "creator") {
-        query.source = "tournament_prize";
+        query.type = "CREDIT";
+        query.category = { $in: ["ORGANIZER_EARNING", "TRANSFER"] };
     }
     if (filter === "player") {
-        query.source = { $ne: "tournament_prize" };
+        query.$or = [
+            { type: { $ne: "CREDIT" } },
+            { category: { $nin: ["ORGANIZER_EARNING", "TRANSFER"] } }
+        ];
     }
 
     const transactions = await WalletTransaction.find(query)
+        .populate("fromUser", "username phone_number avatar role")
+        .populate("toUser", "username phone_number avatar role")
         .sort({ createdAt: -1 })
         .skip(Number(skip))
         .limit(Number(limit));
@@ -694,6 +739,8 @@ const getTransactionDetails = asyncHandler(async (req, res) => {
     const transactionId = req.params.id
 
     const transaction = await WalletTransaction.findById(transactionId)
+        .populate("fromUser", "username phone_number avatar role")
+        .populate("toUser", "username phone_number avatar role")
 
     return res.status(200).json(
         new ApiResponse(200, transaction, "Wallet transactions fetched successfully")
@@ -708,11 +755,11 @@ const getCreatorEarnings = asyncHandler(async (req, res) => {
 
     const [allTimeTotals, monthlyTotals] = await Promise.all([
         WalletTransaction.aggregate([
-            { $match: { user: userId, type: "credit", source: "tournament_prize" } },
+            { $match: { user: userId, type: "CREDIT", category: { $in: ["ORGANIZER_EARNING", "TRANSFER"] } } },
             { $group: { _id: null, total: { $sum: "$amount" } } }
         ]),
         WalletTransaction.aggregate([
-            { $match: { user: userId, type: "credit", source: "tournament_prize", createdAt: { $gte: startOfMonth } } },
+            { $match: { user: userId, type: "CREDIT", category: { $in: ["ORGANIZER_EARNING", "TRANSFER"] }, createdAt: { $gte: startOfMonth } } },
             { $group: { _id: null, total: { $sum: "$amount" } } }
         ])
     ]);
@@ -904,6 +951,8 @@ export {
     getUserProfile,
     getUserById,
     updateUserProfile,
+    becomeCreator,
+    leaveCreator,
     uploadAvatar,
     deleteUser,
     updateUser,

@@ -16,13 +16,15 @@ import {
   ShieldCheck,
   Trophy,
   User,
+  UserMinus,
+  UserPlus,
   Users,
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "@/components/ui/sonner";
 import { logout } from "@/api/auth";
-import { getMyProfile, User as ProfileUser } from "@/api/profile";
+import { becomeCreator, getMyProfile, leaveCreator, User as ProfileUser } from "@/api/profile";
 import {
   CACHE_KEYS,
   getSavedDataLabel,
@@ -36,7 +38,7 @@ import { formatCurrency, getErrorMessage, getErrorToast } from "@/lib/page-utils
 const menuItems = [
   { icon: Edit, label: "Edit Profile", route: "/edit-profile" },
   { icon: Lock, label: "Change Password", route: "/change-password" },
-  { icon: Trophy, label: "My Tournaments", route: "/tournaments" },
+  { icon: Trophy, label: "My Tournaments", route: "/my-tournaments" },
   { icon: Gamepad2, label: "Game Accounts", route: "/game-accounts" },
 ];
 
@@ -67,6 +69,7 @@ const ProfileScreen = () => {
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [creatorLoading, setCreatorLoading] = useState(false);
 
   const stats = [
     // { label: "Matches", value: profile?.stats.matchesPlayed ?? 0 },
@@ -134,6 +137,25 @@ const ProfileScreen = () => {
   const adminMenu = profile?.role?.includes("admin")
     ? [{ icon: ShieldCheck, label: "Admin Panel", route: "/admin" }]
     : [];
+  const isCreator = Boolean(profile?.role?.includes("creator"));
+
+  const handleCreatorToggle = async () => {
+    try {
+      setCreatorLoading(true);
+      const res = isCreator ? await leaveCreator() : await becomeCreator();
+      setProfile(res.data.user);
+      writeAuthenticatedCache(CACHE_KEYS.profile, res.data.user, res);
+      toast.success(res.message);
+    } catch (error) {
+      const errorToast = getErrorToast(error, {
+        action: isCreator ? "Leave creator mode" : "Become creator",
+        fallback: isCreator ? "Could not leave creator mode." : "Could not enable creator mode.",
+      });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setCreatorLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -205,22 +227,38 @@ const ProfileScreen = () => {
           Creator Tools
         </h2>
         <div className="space-y-2">
-          {creatorMenu.map((item, i) => (
-            <GlassCard
-              key={item.label}
-              delay={i * 0.06}
-              className="flex items-center justify-between cursor-pointer"
-              onClick={() => navigate(item.route)}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
-                  <item.icon className="w-4 h-4 text-secondary" />
-                </div>
-                <span className="text-sm font-heading font-medium truncate">{item.label}</span>
+          <GlassCard className="flex items-center justify-between cursor-pointer" onClick={handleCreatorToggle}>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
+                {isCreator ? <UserMinus className="w-4 h-4 text-secondary" /> : <UserPlus className="w-4 h-4 text-secondary" />}
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-            </GlassCard>
-          ))}
+              <div className="min-w-0 text-left">
+                <span className="text-sm font-heading font-medium truncate block">
+                  {creatorLoading ? "Updating..." : isCreator ? "Leave Creator" : "Become a Creator"}
+                </span>
+                <span className="text-[10px] text-muted-foreground">Platform keeps 10% from paid entries</span>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+          </GlassCard>
+
+          {isCreator &&
+            creatorMenu.map((item, i) => (
+              <GlassCard
+                key={item.label}
+                delay={i * 0.06}
+                className="flex items-center justify-between cursor-pointer"
+                onClick={() => navigate(item.route)}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
+                    <item.icon className="w-4 h-4 text-secondary" />
+                  </div>
+                  <span className="text-sm font-heading font-medium truncate">{item.label}</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </GlassCard>
+            ))}
         </div>
       </div>
 

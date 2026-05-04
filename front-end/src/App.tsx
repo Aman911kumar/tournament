@@ -8,9 +8,12 @@ import LoginScreen from "./pages/LoginScreen.tsx";
 import Test from "./pages/test.tsx"
 import TournamentsScreen from "./pages/TournamentsScreen.tsx";
 import TournamentDetailScreen from "./pages/TournamentDetailScreen.tsx";
+import MyTournamentsScreen from "./pages/MyTournamentsScreen.tsx";
+import SlotSelectionScreen from "./pages/SlotSelectionScreen.tsx";
 import WalletScreen from "./pages/WalletScreen.tsx";
 import AddMoneyScreen from "./pages/AddMoneyScreen.tsx";
 import WithdrawScreen from "./pages/WithdrawScreen.tsx";
+import TransferMoneyScreen from "./pages/TransferMoneyScreen.tsx";
 import TransactionDetailScreen from "./pages/TransactionDetailScreen.tsx";
 import ProfileScreen from "./pages/ProfileScreen.tsx";
 import EditProfileScreen from "./pages/EditProfileScreen.tsx";
@@ -19,13 +22,14 @@ import GameAccountsScreen from "./pages/GameAccountsScreen.tsx";
 import CreatorProfileScreen from "./pages/CreatorProfileScreen.tsx";
 import CreateTournamentScreen from "./pages/CreateTournamentScreen.tsx";
 import CreatorDashboardScreen from "./pages/CreatorDashboardScreen.tsx";
+import PrizeDistributionScreen from "./pages/PrizeDistributionScreen.tsx";
 import AdminDashboardScreen from "./pages/AdminDashboardScreen.tsx";
 import NotificationsScreen from "./pages/NotificationsScreen.tsx";
 import SubscriptionsScreen from "./pages/SubscriptionsScreen.tsx";
 import TournamentCommentsScreen from "./pages/TournamentCommentsScreen.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 const VITE_GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 const queryClient = new QueryClient();
@@ -50,12 +54,16 @@ const App = () => (
             <Route path="/test" element={<Test />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/tournaments" element={<ProtectedRoute><TournamentsScreen /></ProtectedRoute>} />
+            <Route path="/my-tournaments" element={<ProtectedRoute><MyTournamentsScreen /></ProtectedRoute>} />
             <Route path="/tournament/:id" element={<ProtectedRoute><TournamentDetailScreen /></ProtectedRoute>} />
+            <Route path="/tournament/:id/slots" element={<ProtectedRoute><SlotSelectionScreen /></ProtectedRoute>} />
             <Route path="/tournament/:id/comments" element={<ProtectedRoute><TournamentCommentsScreen /></ProtectedRoute>} />
+            <Route path="/tournament/:id/distribute-prizes" element={<ProtectedRoute><PrizeDistributionScreen /></ProtectedRoute>} />
             <Route path="/wallet" element={<ProtectedRoute><WalletScreen /></ProtectedRoute>} />
             <Route path="/wallet/transaction/:id" element={<ProtectedRoute><TransactionDetailScreen /></ProtectedRoute>} />
             <Route path="/wallet/add" element={<ProtectedRoute><AddMoneyScreen /></ProtectedRoute>} />
             <Route path="/wallet/withdraw" element={<ProtectedRoute><WithdrawScreen /></ProtectedRoute>} />
+            <Route path="/wallet/transfer" element={<ProtectedRoute><TransferMoneyScreen /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
             <Route path="/edit-profile" element={<ProtectedRoute><EditProfileScreen /></ProtectedRoute>} />
             <Route path="/change-password" element={<ProtectedRoute><ChangePasswordScreen /></ProtectedRoute>} />

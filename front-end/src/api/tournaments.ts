@@ -5,6 +5,7 @@ export interface TournamentFilters {
   type?: "free" | "paid" | "all";
   sort?: "trending" | "latest" | "prize_asc" | "prize_desc";
   search?: string;
+  organizer?: string;
 }
 
 export const ENDPOINTS = {
@@ -15,6 +16,8 @@ export const ENDPOINTS = {
   remove: (id: string) => `/tournaments/${id}`,
   join: (id: string) => `/tournaments/${id}/join`,
   participants: (id: string) => `/tournaments/${id}/participants`,
+  distributePrizes: (id: string) => `/tournaments/${id}/distribute-prizes`,
+  myRegistrations: "/tournaments/me/registrations",
   comments: (id: string) => `/tournaments/${id}/comments`,
   postComment: (id: string) => `/tournaments/${id}/comments`,
 };
@@ -23,15 +26,24 @@ export interface Tournament {
   _id: string;
   title: string;
   description?: string;
-  game: string;
-  type: "solo" | "duo" | "squad";
+  game: "freefire" | "bgmi" | "callofduty" | "valorant";
+  gameMode?: string;
+  mapName?: string;
+  platform?: "mobile" | "pc" | "console" | "crossplay";
+  perspective?: "tpp" | "fpp" | "both" | "na";
+  type: "solo" | "duo" | "squad" | "team";
   format: "single_elim" | "double_elim" | "round_robin" | "swiss";
   startAt: string;
   endAt?: string;
   registrationStart: string;
   registrationEnd: string;
   maxPlayers: number;
+  maxTeams?: number;
+  teamSize?: number;
   entryFee: number;
+  platformFeePercent?: number;
+  platformFeeAmount?: number;
+  organizerEarnings?: number;
   prizePool?: {
     total?: number;
     distribution?: { place: number; amount: number }[];
@@ -56,6 +68,35 @@ export interface Tournament {
   };
 }
 
+export interface TournamentRegistration {
+  _id: string;
+  tournament: string | Tournament;
+  user?: { _id?: string; username?: string; avatar?: { url?: string }; gameAccount?: GameAccountSummary | null };
+  team?: { _id?: string; username?: string; avatar?: { url?: string }; gameAccount?: GameAccountSummary | null }[];
+  gameAccount?: GameAccountSummary | null;
+  status: "pending" | "paid" | "confirmed" | "rejected" | "cancelled";
+  slotNumber?: number | null;
+  paidAmount: number;
+  platformFee?: number;
+  organizerAmount?: number;
+  gameAccounts?: GameAccountSummary[];
+}
+
+export interface GameAccountSummary {
+  _id?: string;
+  game?: string;
+  inGameName?: string;
+  gameId?: string;
+  level?: string;
+  verified?: boolean;
+}
+
+export interface PrizePayoutInput {
+  registrationId: string;
+  place: number;
+  amount: number;
+}
+
 interface TournamentListData {
   tournaments: Tournament[];
   total: number;
@@ -71,6 +112,7 @@ export async function getTournaments(filters: TournamentFilters = {}) {
   if (filters.search) params.set("search", filters.search);
   const game = toBackendGame(filters.game);
   if (game) params.set("game", game);
+  if (filters.organizer) params.set("organizer", filters.organizer);
   if (filters.type === "free") params.set("entryFee", "0");
   const qs = params.toString();
   const res = await apiFetch<ApiResponse<TournamentListData>>(`${ENDPOINTS.list}${qs ? `?${qs}` : ""}`);
@@ -83,6 +125,9 @@ export async function getTournaments(filters: TournamentFilters = {}) {
   }
   if (filters.sort === "prize_desc") {
     tournaments = [...tournaments].sort((a, b) => Number(b.prizePool?.total || 0) - Number(a.prizePool?.total || 0));
+  }
+  if (filters.sort === "latest") {
+    tournaments = [...tournaments].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
   }
 
   return tournaments;
@@ -101,18 +146,38 @@ export async function updateTournament(id: string, payload: Record<string, unkno
   return apiFetch<ApiResponse<Tournament>>(ENDPOINTS.update(id), { method: "PUT", body: JSON.stringify(payload) });
 }
 
+export async function updateTournamentStatus(id: string, status: Tournament["status"]) {
+  const res = await updateTournament(id, { status });
+  return res.data;
+}
+
 export async function deleteTournament(id: string) {
   return apiFetch(ENDPOINTS.remove(id), { method: "DELETE" });
 }
 
-export async function joinTournament(id: string) {
-  // return apiFetch(ENDPOINTS.join(id), { method: "POST" });
-  return { success: true };
+export async function joinTournament(id: string, payload: { slotNumber?: number; teamName?: string; players?: string[] } = {}) {
+  return apiFetch<ApiResponse<TournamentRegistration>>(ENDPOINTS.join(id), {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getParticipants(id: string) {
-  // return apiFetch(ENDPOINTS.participants(id));
-  return [];
+  const res = await apiFetch<ApiResponse<TournamentRegistration[]>>(ENDPOINTS.participants(id));
+  return res.data ?? [];
+}
+
+export async function getMyTournamentRegistrations() {
+  const res = await apiFetch<ApiResponse<TournamentRegistration[]>>(ENDPOINTS.myRegistrations);
+  return res.data ?? [];
+}
+
+export async function distributeTournamentPrizes(id: string, payouts: PrizePayoutInput[]) {
+  const res = await apiFetch<ApiResponse<{ tournament: Tournament; transactions: unknown[] }>>(ENDPOINTS.distributePrizes(id), {
+    method: "POST",
+    body: JSON.stringify({ payouts }),
+  });
+  return res.data;
 }
 
 export async function getComments(id: string) {

@@ -1,51 +1,66 @@
-// CreatorProfileScreen, CreatorDashboardScreen, SubscriptionsScreen
-import { apiFetch } from "./client";
+import { apiFetch, ApiResponse } from "./client";
+import { Tournament } from "./tournaments";
+
+export interface CreatorUser {
+  _id: string;
+  username: string;
+  avatar?: { url?: string };
+  role?: string[];
+  stats?: { rating?: number };
+}
+
+export interface CreatorChannel {
+  _id: string;
+  owner: CreatorUser;
+  name: string;
+  handle: string;
+  description?: string;
+  avatar?: { url?: string };
+  banner?: { url?: string };
+  socialLinks?: {
+    youtube?: string;
+    instagram?: string;
+    discord?: string;
+    website?: string;
+  };
+  memberCount: number;
+  isActive: boolean;
+}
+
+export interface CreatorProfileData {
+  channel?: CreatorChannel | null;
+  creator?: CreatorUser;
+  tournaments: Tournament[];
+  tournamentCount: number;
+  totalPrize?: number;
+}
 
 export const ENDPOINTS = {
-  profile: (id: string) => `/api/creators/${id}`,
-  tournaments: (id: string) => `/api/creators/${id}/tournaments`,
-  reviews: (id: string) => `/api/creators/${id}/reviews`,
-  follow: (id: string) => `/api/creators/${id}/follow`,
-  unfollow: (id: string) => `/api/creators/${id}/unfollow`,
-  dashboard: "/api/creators/me/dashboard",
-  analytics: "/api/creators/me/analytics",
-  subscriptions: "/api/creators/me/subscriptions",
-  suggestions: "/api/creators/suggestions",
+  list: "/channels",
+  channelProfile: (id: string) => `/channels/${id}`,
+  userProfile: (id: string) => `/channels/creator/${id}`,
+  follow: (id: string) => `/channels/${id}/join`,
 };
 
+export async function getCreators() {
+  const res = await apiFetch<ApiResponse<{ channels: (CreatorChannel & { tournamentCount?: number })[]; total: number }>>(ENDPOINTS.list);
+  return res.data?.channels ?? [];
+}
+
 export async function getCreatorProfile(id: string) {
-  // return apiFetch(ENDPOINTS.profile(id));
-  return null;
+  try {
+    const res = await apiFetch<ApiResponse<CreatorProfileData>>(ENDPOINTS.channelProfile(id));
+    return res.data;
+  } catch (error) {
+    const res = await apiFetch<ApiResponse<CreatorProfileData>>(ENDPOINTS.userProfile(id));
+    return res.data;
+  }
 }
-export async function getCreatorTournaments(id: string) {
-  // return apiFetch(ENDPOINTS.tournaments(id));
-  return [];
+
+export async function followCreator(channelId: string) {
+  return apiFetch<ApiResponse>(ENDPOINTS.follow(channelId), { method: "POST" });
 }
-export async function getCreatorReviews(id: string) {
-  // return apiFetch(ENDPOINTS.reviews(id));
-  return [];
-}
-export async function followCreator(id: string) {
-  // return apiFetch(ENDPOINTS.follow(id), { method: "POST" });
-  return { success: true };
-}
-export async function unfollowCreator(id: string) {
-  // return apiFetch(ENDPOINTS.unfollow(id), { method: "POST" });
-  return { success: true };
-}
-export async function getCreatorDashboard() {
-  // return apiFetch(ENDPOINTS.dashboard);
-  return null;
-}
-export async function getCreatorAnalytics() {
-  // return apiFetch(ENDPOINTS.analytics);
-  return null;
-}
-export async function getMySubscriptions() {
-  // return apiFetch(ENDPOINTS.subscriptions);
-  return [];
-}
-export async function getCreatorSuggestions() {
-  // return apiFetch(ENDPOINTS.suggestions);
-  return [];
+
+export async function unfollowCreator(channelId: string) {
+  return apiFetch<ApiResponse>(ENDPOINTS.follow(channelId), { method: "DELETE" });
 }

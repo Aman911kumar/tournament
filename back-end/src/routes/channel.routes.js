@@ -4,6 +4,7 @@ import {
     getMyChannel,
     listChannels,
     getChannelByIdentifier,
+    getCreatorByUserId,
     updateChannel,
     joinChannel,
     leaveChannel,
@@ -21,6 +22,7 @@ router.post("/", protect, createChannel);
 router.get("/me", protect, getMyChannel);
 router.get("/joined", protect, getJoinedChannels);
 router.get("/feed/tournaments", protect, getJoinedChannelTournaments);
+router.get("/creator/:userId", getCreatorByUserId);
 
 router.get("/:identifier", getChannelByIdentifier);
 router.patch("/:channelId", protect, updateChannel);
