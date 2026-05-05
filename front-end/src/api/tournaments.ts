@@ -53,7 +53,15 @@ export interface Tournament {
   prizeMode?: "position" | "kill" | "both";
   killPrizeAmount?: number;
   prizeDistribution?: { position: number; prizeAmount: number }[];
-  results?: { position: number; player: string | { _id?: string; username?: string; avatar?: { url?: string } }; prizeWon: number }[];
+  results?: {
+    position: number;
+    player: string | { _id?: string; username?: string; avatar?: { url?: string } };
+    kills?: number;
+    positionPrizeWon?: number;
+    killPrizeWon?: number;
+    prizeMode?: "position" | "kill" | "both";
+    prizeWon: number;
+  }[];
   rules?: string;
   status: "draft" | "open" | "running" | "completed" | "cancelled";
   room_details?: {
@@ -99,7 +107,8 @@ export interface GameAccountSummary {
 
 export interface PrizePayoutInput {
   registrationId: string;
-  position: number;
+  position?: number;
+  kills?: number;
 }
 
 interface TournamentListData {
@@ -177,10 +186,14 @@ export async function getMyTournamentRegistrations() {
   return res.data ?? [];
 }
 
-export async function distributeTournamentPrizes(id: string, payouts: PrizePayoutInput[]) {
+export async function distributeTournamentPrizes(
+  id: string,
+  payouts: PrizePayoutInput[],
+  options: { payoutMode?: "position" | "kill" | "both"; killPrizeAmount?: number } = {},
+) {
   const res = await apiFetch<ApiResponse<{ tournament: Tournament; payoutTotal: number; transactions: unknown[]; organizerTransaction?: unknown }>>(ENDPOINTS.distributePrizes(id), {
     method: "POST",
-    body: JSON.stringify({ results: payouts }),
+    body: JSON.stringify({ results: payouts, ...options }),
   });
   return res.data;
 }

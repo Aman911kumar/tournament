@@ -82,26 +82,50 @@ export const calculatePrizeDistribution = (tournament, distributionInput = []) =
     return tournament.prizeDistribution;
 };
 
-export const assignTournamentResults = (tournament, resultInput = []) => {
+const normalizePrizeMode = (mode) =>
+    ["position", "kill", "both"].includes(mode) ? mode : "position";
+
+export const assignTournamentResults = (tournament, resultInput = [], options = {}) => {
     if (!Array.isArray(resultInput) || resultInput.length === 0) {
         throw new ApiError(400, "At least one result is required");
     }
 
+    const mode = normalizePrizeMode(options.prizeMode || tournament.prizeMode);
+    const usesPositions = mode === "position" || mode === "both";
+    const usesKills = mode === "kill" || mode === "both";
+    const killPrizeAmount = roundCurrency(options.killPrizeAmount ?? tournament.killPrizeAmount ?? 0);
+
+    if (usesKills && (!Number.isFinite(killPrizeAmount) || killPrizeAmount <= 0)) {
+        throw new ApiError(400, "Kill based prize amount must be greater than zero");
+    }
+
     const normalized = resultInput.map((row) => ({
-        position: Number(row.position ?? row.place),
+        position: row.position === undefined || row.position === null || row.position === ""
+            ? null
+            : Number(row.position ?? row.place),
         player: String(row.playerId || row.player || ""),
+        kills: Number(row.kills || 0),
     }));
 
     normalized.forEach((row) => {
-        if (!Number.isInteger(row.position) || row.position < 1) {
+        if (usesPositions && row.position !== null && (!Number.isInteger(row.position) || row.position < 1)) {
             throw new ApiError(400, "Every result position must be a positive number");
+        }
+        if (mode === "position" && row.position === null) {
+            throw new ApiError(400, "Every position based result must include a position");
+        }
+        if (usesKills && (!Number.isInteger(row.kills) || row.kills < 0)) {
+            throw new ApiError(400, "Kills must be zero or a positive whole number");
         }
         if (!mongoose.Types.ObjectId.isValid(row.player)) {
             throw new ApiError(400, "Every result must include a valid player");
         }
     });
 
-    ensureUnique(normalized, "position", "Duplicate result positions are not allowed");
+    const positionRows = normalized.filter((row) => row.position !== null);
+    if (usesPositions) {
+        ensureUnique(positionRows, "position", "Duplicate result positions are not allowed");
+    }
     ensureUnique(normalized, "player", "One player cannot have multiple positions");
 
     const joinedPlayers = new Set((tournament.joinedPlayers || []).map((id) => id.toString()));
@@ -109,18 +133,35 @@ export const assignTournamentResults = (tournament, resultInput = []) => {
         (tournament.prizeDistribution || []).map((row) => [Number(row.position), Number(row.prizeAmount || 0)])
     );
 
+    tournament.prizeMode = mode;
+    tournament.killPrizeAmount = usesKills ? killPrizeAmount : Number(tournament.killPrizeAmount || 0);
     tournament.results = normalized.map((row) => {
         if (!joinedPlayers.has(row.player)) {
             throw new ApiError(400, "Selected player has not joined this tournament");
         }
-        if (!distributionByPosition.has(row.position)) {
+        if (usesPositions && row.position !== null && !distributionByPosition.has(row.position)) {
             throw new ApiError(400, "Result position must exist in prize distribution");
         }
 
+        const positionPrizeWon = usesPositions && row.position !== null
+            ? roundCurrency(distributionByPosition.get(row.position) || 0)
+            : 0;
+        const kills = usesKills ? row.kills : 0;
+        const killPrizeWon = usesKills ? roundCurrency(kills * killPrizeAmount) : 0;
+        const prizeWon = roundCurrency(positionPrizeWon + killPrizeWon);
+
+        if (prizeWon <= 0) {
+            throw new ApiError(400, "Every selected winner must have a prize amount greater than zero");
+        }
+
         return {
-            position: row.position,
+            position: row.position ?? 0,
             player: row.player,
-            prizeWon: distributionByPosition.get(row.position),
+            kills,
+            positionPrizeWon,
+            killPrizeWon,
+            prizeMode: mode,
+            prizeWon,
         };
     });
 

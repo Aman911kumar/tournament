@@ -805,6 +805,9 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
         : Array.isArray(req.body?.payouts)
             ? req.body.payouts
             : [];
+    const requestedPrizeMode = ["position", "kill", "both"].includes(req.body?.payoutMode)
+        ? req.body.payoutMode
+        : undefined;
 
     if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
         throw new ApiError(400, "Invalid tournament ID");
@@ -836,13 +839,16 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
         );
     }
 
+    const payoutMode = requestedPrizeMode || tournament.prizeMode || "position";
+    const killPrizeAmount = req.body?.killPrizeAmount ?? tournament.killPrizeAmount;
     const normalizedResults = resultRows.map((row) => ({
         registrationId: row.registrationId ? String(row.registrationId) : "",
-        position: Number(row.position ?? row.place),
+        position: row.position ?? row.place ?? null,
+        kills: row.kills ?? 0,
         playerId: row.playerId || row.player ? String(row.playerId || row.player) : "",
     }));
 
-    const registrationIds = normalizedResults.map((row) => row.registrationId).filter(Boolean);
+    const registrationIds = Array.from(new Set(normalizedResults.map((row) => row.registrationId).filter(Boolean)));
     const registrationMap = new Map();
     if (registrationIds.length > 0) {
         const registrations = await Registration.find({
@@ -863,14 +869,18 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
     const resultInput = normalizedResults.map((row) => {
         const registration = row.registrationId ? registrationMap.get(row.registrationId) : null;
         const player = row.playerId || (registration ? getRegistrationRecipient(registration)?.toString() : "");
-        return { position: row.position, playerId: player };
+        return { position: row.position, playerId: player, kills: row.kills };
     });
 
-    assignTournamentResults(tournament, resultInput);
+    assignTournamentResults(tournament, resultInput, { prizeMode: payoutMode, killPrizeAmount });
     const normalizedPayouts = tournament.results.map((result) => ({
         place: Number(result.position),
         recipient: result.player,
         amount: Number(result.prizeWon || 0),
+        kills: Number(result.kills || 0),
+        positionPrizeWon: Number(result.positionPrizeWon || 0),
+        killPrizeWon: Number(result.killPrizeWon || 0),
+        prizeMode: result.prizeMode || payoutMode,
     }));
     const payoutTotal = normalizedPayouts.reduce((sum, payout) => sum + payout.amount, 0);
     const transferFeePercent = getPlatformFeePercent("TRANSFER");
@@ -910,7 +920,7 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
             referenceId: tournamentId,
             fromUser: tournament.organizer,
             description: `Prize distribution for ${tournament.title}`,
-            metadata: { tournament: tournamentId, prizePayout: true, payoutRef, payoutCount: normalizedPayouts.length, feePercent: transferFeePercent }
+            metadata: { tournament: tournamentId, prizePayout: true, payoutRef, payoutCount: normalizedPayouts.length, payoutMode, feePercent: transferFeePercent }
         }], { session, ordered: true });
 
         const transactions = [];
@@ -929,7 +939,7 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
                 platformFee: transferPlatformFee,
                 netAmount: 0,
                 status: "SUCCESS",
-                metadata: { tournament: tournamentId, prizePayout: true, payoutRef, feePercent: transferFeePercent }
+                metadata: { tournament: tournamentId, prizePayout: true, payoutRef, payoutMode, feePercent: transferFeePercent }
             });
         }
 
@@ -959,8 +969,22 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
                 referenceId: tournamentId,
                 fromUser: tournament.organizer,
                 toUser: payout.recipient,
-                description: `Place #${payout.place} prize for ${tournament.title}`,
-                metadata: { tournament: tournamentId, place: payout.place, prizePayout: true, payoutRef, feePercent: winningFeePercent }
+                description: payout.prizeMode === "kill"
+                    ? `${payout.kills} kill prize for ${tournament.title}`
+                    : payout.prizeMode === "both"
+                        ? `Position and kill prize for ${tournament.title}`
+                        : `Place #${payout.place} prize for ${tournament.title}`,
+                metadata: {
+                    tournament: tournamentId,
+                    place: payout.place,
+                    kills: payout.kills,
+                    payoutMode: payout.prizeMode,
+                    positionPrizeWon: payout.positionPrizeWon,
+                    killPrizeWon: payout.killPrizeWon,
+                    prizePayout: true,
+                    payoutRef,
+                    feePercent: winningFeePercent
+                }
             }], { session, ordered: true });
 
             transactions.push(tx[0]);
@@ -980,6 +1004,10 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
                 metadata: {
                     tournament: tournamentId,
                     place: payout.place,
+                    kills: payout.kills,
+                    payoutMode: payout.prizeMode,
+                    positionPrizeWon: payout.positionPrizeWon,
+                    killPrizeWon: payout.killPrizeWon,
                     prizePayout: true,
                     payoutRef,
                     feePercent: winningFeePercent,
@@ -1003,6 +1031,10 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
                     metadata: {
                         tournament: tournamentId,
                         place: payout.place,
+                        kills: payout.kills,
+                        payoutMode: payout.prizeMode,
+                        positionPrizeWon: payout.positionPrizeWon,
+                        killPrizeWon: payout.killPrizeWon,
                         prizePayout: true,
                         payoutRef,
                         feePercent: winningFeePercent,

@@ -14,6 +14,7 @@ import {
   Sparkles,
   CheckCircle2,
   AlertCircle,
+  Crosshair,
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
@@ -28,7 +29,9 @@ import { toast } from "sonner";
 import { formatCurrency, getErrorMessage, getErrorToast } from "@/lib/page-utils";
 import { cn } from "@/lib/utils";
 
+type PrizeMode = "position" | "kill" | "both";
 type PrizeRow = { registrationId: string; place: string; amount: string; resultPlayerName?: string };
+type KillRow = { registrationId: string; kills: string; resultPlayerName?: string; resultPrizeWon?: number };
 
 const inputClass =
   "w-full bg-background/40 border border-glass-border rounded-lg px-3 py-2.5 text-sm font-heading text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all";
@@ -114,12 +117,47 @@ const buildPrizeRows = (
   return Array.from(rowsByPosition.values()).sort((a, b) => Number(a.place) - Number(b.place));
 };
 
+const buildKillRows = (
+  tournament: Tournament,
+  activeParticipants: TournamentRegistration[],
+): KillRow[] => {
+  if (tournament.results?.length) {
+    return tournament.results
+      .filter((result) => Number(result.kills || 0) > 0 || Number(result.killPrizeWon || 0) > 0)
+      .map((result) => {
+        const resultPlayerId = getResultPlayerId(result.player);
+        const selectedParticipant = activeParticipants.find((participant) => getRegistrationPlayerId(participant) === resultPlayerId);
+        return {
+          registrationId: selectedParticipant?._id ?? "",
+          kills: String(result.kills || 0),
+          resultPlayerName: selectedParticipant ? getParticipantName(selectedParticipant) : getResultPlayerName(result.player),
+          resultPrizeWon: Number(result.killPrizeWon || 0),
+        };
+      })
+      .sort((a, b) => Number(b.kills || 0) - Number(a.kills || 0));
+  }
+
+  return activeParticipants.map((participant) => ({
+    registrationId: participant._id,
+    kills: "",
+  }));
+};
+
+const getResultPrizeMode = (tournament: Tournament): PrizeMode => (
+  tournament.results?.find((result) => result.prizeMode)?.prizeMode
+  ?? tournament.prizeMode
+  ?? "position"
+);
+
 const PrizeDistributionScreen = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [participants, setParticipants] = useState<TournamentRegistration[]>([]);
   const [rows, setRows] = useState<PrizeRow[]>([]);
+  const [killRows, setKillRows] = useState<KillRow[]>([]);
+  const [payoutMode, setPayoutMode] = useState<PrizeMode>("position");
+  const [killPrizeAmount, setKillPrizeAmount] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +180,9 @@ const PrizeDistributionScreen = () => {
         setTournament(tournamentRes);
         setParticipants(activeParticipants);
         setRows(buildPrizeRows(tournamentRes, activeParticipants));
+        setKillRows(buildKillRows(tournamentRes, activeParticipants));
+        setPayoutMode(getResultPrizeMode(tournamentRes));
+        setKillPrizeAmount(tournamentRes.killPrizeAmount ? String(tournamentRes.killPrizeAmount) : "");
       } catch (err) {
         setError(getErrorMessage(err, "Could not load prize distribution."));
         const t = getErrorToast(err, { action: "Load prize distribution", fallback: "Could not load prize distribution." });
@@ -158,18 +199,36 @@ const PrizeDistributionScreen = () => {
 
   const prizePool = Number(tournament?.prizePool || 0);
   const prizesPaid = Boolean(tournament?.results?.length);
+  const usesPositionPrize = payoutMode === "position" || payoutMode === "both";
+  const usesKillPrize = payoutMode === "kill" || payoutMode === "both";
+  const parsedKillPrize = Number(killPrizeAmount || 0);
+  const perKillPrize = Number.isFinite(parsedKillPrize) ? parsedKillPrize : 0;
+  const positionTransferTotal = useMemo(
+    () => usesPositionPrize
+      ? rows
+        .filter((row) => row.registrationId)
+        .reduce((sum, row) => sum + Number(row.amount || 0), 0)
+      : 0,
+    [rows, usesPositionPrize],
+  );
+  const killTransferTotal = useMemo(
+    () => usesKillPrize
+      ? killRows.reduce((sum, row) => sum + Math.max(0, Number(row.kills || 0)) * Math.max(0, perKillPrize), 0)
+      : 0,
+    [killRows, perKillPrize, usesKillPrize],
+  );
   const transferTotal = useMemo(
-    () => rows.reduce((sum, row) => sum + Number(row.amount || 0), 0),
-    [rows],
+    () => Math.round((positionTransferTotal + killTransferTotal) * 100) / 100,
+    [killTransferTotal, positionTransferTotal],
   );
   const paidTotal = useMemo(
     () => (tournament?.results ?? []).reduce((sum, result) => sum + Number(result.prizeWon || 0), 0),
     [tournament?.results],
   );
   const displayTotal = prizesPaid ? paidTotal : transferTotal;
-  const remaining = prizePool - transferTotal;
-  const overBudget = prizePool > 0 && transferTotal > prizePool;
-  const usedPct = prizePool > 0 ? Math.min(100, (transferTotal / prizePool) * 100) : 0;
+  const remaining = prizePool - positionTransferTotal;
+  const overBudget = usesPositionPrize && prizePool > 0 && positionTransferTotal > prizePool;
+  const usedPct = prizePool > 0 ? Math.min(100, (positionTransferTotal / prizePool) * 100) : 0;
   const selectedRegistrationIds = useMemo(
     () => new Set(rows.map((row) => row.registrationId).filter(Boolean)),
     [rows],
@@ -186,24 +245,52 @@ const PrizeDistributionScreen = () => {
       toast.info("Prizes already paid", { description: "Tournament results are saved and prize money has already been transferred." });
       return;
     }
-    const payouts = rows
-      .map((r) => ({ registrationId: r.registrationId, position: Number(r.place) }))
-      .filter((r) => r.registrationId && r.position > 0);
 
+    if (usesKillPrize && (!Number.isFinite(perKillPrize) || perKillPrize <= 0)) {
+      toast.error("Invalid kill prize", { description: "Add a per-kill prize amount greater than zero." });
+      return;
+    }
+
+    const payoutMap = new Map<string, { registrationId: string; position?: number; kills?: number }>();
+    const positionPayouts = usesPositionPrize
+      ? rows
+        .map((r) => ({ registrationId: r.registrationId, position: Number(r.place) }))
+        .filter((r) => r.registrationId && r.position > 0)
+      : [];
+
+    if (usesPositionPrize) {
+      const duplicateWinner = positionPayouts.find((payout, index) => positionPayouts.findIndex((item) => item.registrationId === payout.registrationId) !== index);
+      if (duplicateWinner) {
+        toast.error("Duplicate winner", { description: "One player cannot be assigned to multiple positions." });
+        return;
+      }
+      const duplicatePosition = positionPayouts.find((payout, index) => positionPayouts.findIndex((item) => item.position === payout.position) !== index);
+      if (duplicatePosition) {
+        toast.error("Duplicate position", { description: "Each prize position can only be assigned once." });
+        return;
+      }
+      positionPayouts.forEach((payout) => payoutMap.set(payout.registrationId, payout));
+    }
+
+    if (usesKillPrize) {
+      for (const row of killRows) {
+        const kills = Number(row.kills || 0);
+        if (!Number.isInteger(kills) || kills < 0) {
+          toast.error("Invalid kills", { description: "Kills must be zero or a positive whole number." });
+          return;
+        }
+        if (row.registrationId && kills > 0) {
+          payoutMap.set(row.registrationId, { ...payoutMap.get(row.registrationId), registrationId: row.registrationId, kills });
+        }
+      }
+    }
+
+    const payouts = Array.from(payoutMap.values());
     if (payouts.length === 0) {
-      toast.error("No winners selected", { description: "Select a joined player for at least one prize position." });
+      toast.error("No winners selected", { description: usesKillPrize ? "Add kills or select a position winner before transferring." : "Select a joined player for at least one prize position." });
       return;
     }
-    const duplicateWinner = payouts.find((payout, index) => payouts.findIndex((item) => item.registrationId === payout.registrationId) !== index);
-    if (duplicateWinner) {
-      toast.error("Duplicate winner", { description: "One player cannot be assigned to multiple positions." });
-      return;
-    }
-    const duplicatePosition = payouts.find((payout, index) => payouts.findIndex((item) => item.position === payout.position) !== index);
-    if (duplicatePosition) {
-      toast.error("Duplicate position", { description: "Each prize position can only be assigned once." });
-      return;
-    }
+
     if (overBudget) {
       toast.error("Prize total too high", { description: "Prize payouts cannot be more than the prize pool." });
       return;
@@ -211,13 +298,19 @@ const PrizeDistributionScreen = () => {
 
     try {
       setSubmitting(true);
-      const result = await distributeTournamentPrizes(id, payouts);
+      const result = await distributeTournamentPrizes(id, payouts, {
+        payoutMode,
+        killPrizeAmount: usesKillPrize ? perKillPrize : 0,
+      });
       toast.success("Prize money transferred", {
         description: `${formatCurrency(result?.payoutTotal || transferTotal)} paid to ${payouts.length} winner${payouts.length === 1 ? "" : "s"}.`,
       });
       if (result?.tournament) {
         setTournament(result.tournament);
         setRows(buildPrizeRows(result.tournament, participants));
+        setKillRows(buildKillRows(result.tournament, participants));
+        setPayoutMode(getResultPrizeMode(result.tournament));
+        setKillPrizeAmount(result.tournament.killPrizeAmount ? String(result.tournament.killPrizeAmount) : "");
       }
     } catch (err) {
       const t = getErrorToast(err, { action: "Distribute prizes", fallback: "Prize transfer failed." });
@@ -256,7 +349,7 @@ const PrizeDistributionScreen = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
           <GlassCard neon className="p-3">
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-heading">
-              <Trophy className="h-3 w-3 text-primary" /> Pool
+              <Trophy className="h-3 w-3 text-primary" /> Position Pool
             </div>
             <p className="font-display text-base sm:text-lg font-bold neon-text-purple mt-1 truncate">{formatCurrency(prizePool)}</p>
           </GlassCard>
@@ -274,8 +367,63 @@ const PrizeDistributionScreen = () => {
           </GlassCard>
         </div>
 
+        {!loading && !error && (
+          <GlassCard delay={0.12} className="p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-heading uppercase tracking-wider text-muted-foreground">Distribution Basis</p>
+                <p className="text-[11px] text-muted-foreground">Choose how this payout will be calculated.</p>
+              </div>
+              {usesKillPrize && (
+                <div className="w-28 shrink-0">
+                  <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-heading">
+                    Per kill
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={killPrizeAmount}
+                    disabled={prizesPaid}
+                    onChange={(event) => setKillPrizeAmount(event.target.value)}
+                    className={cn(inputClass, "mt-1 h-9 px-2 text-right font-bold text-accent")}
+                    placeholder="0"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { value: "position" as PrizeMode, label: "Position", icon: Trophy },
+                { value: "kill" as PrizeMode, label: "Kill", icon: Crosshair },
+                { value: "both" as PrizeMode, label: "Both", icon: Award },
+              ].map((option) => {
+                const Icon = option.icon;
+                const active = payoutMode === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    disabled={prizesPaid}
+                    onClick={() => setPayoutMode(option.value)}
+                    className={cn(
+                      "rounded-lg border px-2.5 py-2 text-left transition-all",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground neon-glow-purple"
+                        : "border-glass-border bg-background/35 text-muted-foreground hover:text-foreground",
+                      prizesPaid && "opacity-75",
+                    )}
+                  >
+                    <Icon className="mb-1 h-4 w-4" />
+                    <span className="block text-xs font-heading font-bold">{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </GlassCard>
+        )}
+
         {/* Pool Progress */}
-        {prizePool > 0 && (
+        {usesPositionPrize && prizePool > 0 && (
           <GlassCard delay={0.15} className="p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-heading uppercase tracking-wider text-muted-foreground">Pool Used</span>
@@ -340,7 +488,7 @@ const PrizeDistributionScreen = () => {
         )}
 
         {/* Payout rows */}
-        {!loading && !error && rows.length === 0 && (
+        {!loading && !error && usesPositionPrize && rows.length === 0 && (
           <GlassCard className="p-8 text-center">
             <Trophy className="h-10 w-10 mx-auto text-muted-foreground/60" />
             <h3 className="mt-3 font-heading font-bold">No prize positions</h3>
@@ -350,7 +498,7 @@ const PrizeDistributionScreen = () => {
           </GlassCard>
         )}
 
-        {!loading && !error && rows.length > 0 && (
+        {!loading && !error && usesPositionPrize && rows.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between px-1">
               <h2 className="font-heading font-bold tracking-wide flex items-center gap-2">
@@ -514,6 +662,71 @@ const PrizeDistributionScreen = () => {
             </AnimatePresence>
           </div>
         )}
+
+        {!loading && !error && usesKillPrize && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="font-heading font-bold tracking-wide flex items-center gap-2">
+                <Crosshair className="h-4 w-4 text-secondary" /> Kill Payouts
+              </h2>
+              <span className="text-xs text-muted-foreground font-heading">
+                {formatCurrency(perKillPrize)}/kill
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {killRows.map((row, index) => {
+                const participant = participants.find((item) => item._id === row.registrationId);
+                const kills = Number(row.kills || 0);
+                const killPrize = prizesPaid
+                  ? Number(row.resultPrizeWon || 0)
+                  : Math.round(Math.max(0, kills) * perKillPrize * 100) / 100;
+                const title = participant ? getParticipantName(participant) : row.resultPlayerName || "Player";
+
+                return (
+                  <GlassCard key={row.registrationId || `${row.resultPlayerName || title}-${index}`} className="p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 shrink-0 grid place-items-center rounded-xl bg-secondary/15 text-secondary">
+                        <Crosshair className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-heading font-bold truncate">{title}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {participant ? `Slot ${participant.slotNumber ?? "-"} - ${getGameAccountLine(participant)}` : "Prize paid"}
+                        </p>
+                      </div>
+                      <div className="w-24 shrink-0">
+                        <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-heading">
+                          Kills
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={row.kills}
+                          disabled={prizesPaid}
+                          onChange={(event) =>
+                            setKillRows((current) =>
+                              current.map((item) =>
+                                item.registrationId === row.registrationId ? { ...item, kills: event.target.value } : item,
+                              ),
+                            )
+                          }
+                          className={cn(inputClass, "mt-1 h-9 px-2 text-right")}
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between rounded-lg border border-glass-border/70 bg-background/35 px-2.5 py-2">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-heading">Kill prize</span>
+                      <span className="font-heading text-sm font-bold text-accent">{formatCurrency(killPrize)}</span>
+                    </div>
+                  </GlassCard>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sticky transfer bar */}
@@ -535,7 +748,7 @@ const PrizeDistributionScreen = () => {
             <NeonButton
               onClick={handleTransfer}
               variant="purple"
-              disabled={submitting || rows.length === 0 || overBudget || prizesPaid}
+              disabled={submitting || overBudget || prizesPaid || (usesPositionPrize && rows.length === 0 && !usesKillPrize)}
               className="w-full sm:w-auto shrink-0"
             >
               <span className="flex items-center justify-center gap-2">

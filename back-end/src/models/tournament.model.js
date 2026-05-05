@@ -174,13 +174,33 @@ const TournamentSchema = new mongoose.Schema({
         {
             position: {
                 type: Number,
-                required: true,
-                min: 1
+                default: 0,
+                min: 0
             },
             player: {
                 type: mongoose.Schema.Types.ObjectId,
                 ref: "User",
                 required: true
+            },
+            kills: {
+                type: Number,
+                default: 0,
+                min: 0
+            },
+            positionPrizeWon: {
+                type: Number,
+                default: 0,
+                min: 0
+            },
+            killPrizeWon: {
+                type: Number,
+                default: 0,
+                min: 0
+            },
+            prizeMode: {
+                type: String,
+                enum: ["position", "kill", "both"],
+                default: "position"
             },
             prizeWon: {
                 type: Number,
