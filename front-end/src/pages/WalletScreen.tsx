@@ -13,6 +13,7 @@ import {
   Trophy,
   TrendingUp,
   Wallet,
+  TrendingDown,
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
@@ -214,10 +215,21 @@ const WalletScreen = () => {
               {loading ? (
                 <div className="h-6 w-28 rounded bg-muted animate-pulse" />
               ) : (
-                <p className="font-heading text-lg font-bold text-secondary truncate">{formatCurrency(creatorEarnings)}</p>
+                creatorEarnings > 0 ? <p className="font-heading text-lg font-bold text-secondary truncate">{formatCurrency(creatorEarnings)}</p> :
+                    <p className="text-red-600 font-heading text-lg font-bold text-muted-foreground truncate">{ formatCurrency(creatorEarnings)}</p>
               )}
               <p className="text-[10px] text-accent flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> {formatMonthlyChange(monthlyChange)}
+                {
+                  monthlyChange >= 0 ? (
+                    <>
+                      <TrendingUp className="w-3 h-3" /> {formatMonthlyChange(monthlyChange)}
+                    </>
+                  ) : (
+                    <div className="text-destructive flex items-center gap-1">
+                      <TrendingDown className="w-3 h-3" /> {formatMonthlyChange(monthlyChange)}
+                    </div>
+                  )
+                }
               </p>
             </div>
             <NeonButton variant="blue" className="text-[10px] py-1.5 px-3 shrink-0" onClick={() => navigate("/creator-dashboard")}>
