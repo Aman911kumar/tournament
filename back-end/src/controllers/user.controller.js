@@ -776,6 +776,54 @@ const deleteUser = asyncHandler(async (req, res) => {
 
 //wallet & transactions_____________________________________________________________________________________________
 
+const CREATOR_CREDIT_CATEGORIES = ["ORGANIZER_EARNING", "TRANSFER"];
+const CREATOR_DEBIT_CATEGORIES = ["TRANSFER"];
+
+const getCreatorTransactionMatch = (userId, extra = {}) => ({
+    user: userId,
+    status: "SUCCESS",
+    ...extra,
+    $or: [
+        { type: "CREDIT", category: { $in: CREATOR_CREDIT_CATEGORIES } },
+        { type: "DEBIT", category: { $in: CREATOR_DEBIT_CATEGORIES } }
+    ]
+});
+
+const getCreatorEarningsTotals = async (userId, extraMatch = {}) => {
+    const totals = await WalletTransaction.aggregate([
+        { $match: getCreatorTransactionMatch(userId, extraMatch) },
+        {
+            $group: {
+                _id: null,
+                credits: {
+                    $sum: {
+                        $cond: [{ $eq: ["$type", "CREDIT"] }, "$amount", 0]
+                    }
+                },
+                debits: {
+                    $sum: {
+                        $cond: [{ $eq: ["$type", "DEBIT"] }, "$amount", 0]
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                _id: 0,
+                credits: 1,
+                debits: 1,
+                total: { $subtract: ["$credits", "$debits"] }
+            }
+        }
+    ]);
+
+    return {
+        credits: Number(totals[0]?.credits || 0),
+        debits: Number(totals[0]?.debits || 0),
+        total: Number(totals[0]?.total || 0),
+    };
+};
+
 const getWalletBalance = asyncHandler(async (req, res) => {
     const wallet = await Wallet.findOne({
         user: req.user._id
@@ -797,13 +845,16 @@ const getWalletTransaction = asyncHandler(async (req, res) => {
         query.type = type.toUpperCase();
     }
     if (filter === "creator") {
-        query.type = "CREDIT";
-        query.category = { $in: ["ORGANIZER_EARNING", "TRANSFER"] };
+        query.status = "SUCCESS";
+        query.$or = [
+            { type: "CREDIT", category: { $in: CREATOR_CREDIT_CATEGORIES } },
+            { type: "DEBIT", category: { $in: CREATOR_DEBIT_CATEGORIES } }
+        ];
     }
     if (filter === "player") {
-        query.$or = [
-            { type: { $ne: "CREDIT" } },
-            { category: { $nin: ["ORGANIZER_EARNING", "TRANSFER"] } }
+        query.$nor = [
+            { type: "CREDIT", category: { $in: CREATOR_CREDIT_CATEGORIES } },
+            { type: "DEBIT", category: { $in: CREATOR_DEBIT_CATEGORIES } }
         ];
     }
 
@@ -837,22 +888,23 @@ const getCreatorEarnings = asyncHandler(async (req, res) => {
     startOfMonth.setHours(0, 0, 0, 0);
 
     const [allTimeTotals, monthlyTotals] = await Promise.all([
-        WalletTransaction.aggregate([
-            { $match: { user: userId, type: "CREDIT", category: { $in: ["ORGANIZER_EARNING", "TRANSFER"] } } },
-            { $group: { _id: null, total: { $sum: "$amount" } } }
-        ]),
-        WalletTransaction.aggregate([
-            { $match: { user: userId, type: "CREDIT", category: { $in: ["ORGANIZER_EARNING", "TRANSFER"] }, createdAt: { $gte: startOfMonth } } },
-            { $group: { _id: null, total: { $sum: "$amount" } } }
-        ])
+        getCreatorEarningsTotals(userId),
+        getCreatorEarningsTotals(userId, { createdAt: { $gte: startOfMonth } })
     ]);
 
-    const total = Number(allTimeTotals[0]?.total || 0);
-    const monthTotal = Number(monthlyTotals[0]?.total || 0);
-    const monthlyChange = total > 0 ? Math.round((monthTotal / total) * 100) : 0;
+    const total = allTimeTotals.total;
+    const monthTotal = monthlyTotals.total;
+    const monthlyChange = total !== 0 ? Math.round((monthTotal / Math.abs(total)) * 100) : 0;
 
     return res.status(200).json(
-        new ApiResponse(200, { total, monthlyChange }, "Creator earnings fetched successfully")
+        new ApiResponse(200, {
+            total,
+            monthlyChange,
+            received: allTimeTotals.credits,
+            deducted: allTimeTotals.debits,
+            monthlyReceived: monthlyTotals.credits,
+            monthlyDeducted: monthlyTotals.debits,
+        }, "Creator earnings fetched successfully")
     );
 });
 

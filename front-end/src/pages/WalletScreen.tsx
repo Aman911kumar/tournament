@@ -42,6 +42,8 @@ const statusColors: Record<string, string> = {
   rejected: "text-destructive",
 };
 
+const formatMonthlyChange = (value: number) => `${value > 0 ? "+" : ""}${value}% this month`;
+
 const WalletScreen = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"all" | "player" | "creator">("all");
@@ -196,7 +198,7 @@ const WalletScreen = () => {
                 <p className="font-heading text-lg font-bold text-accent truncate">{formatCurrency(playerEarnings)}</p>
               )}
               <p className="text-[10px] text-accent flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> +{playerMonthlyChange}% this month
+                <TrendingUp className="w-3 h-3" /> {formatMonthlyChange(playerMonthlyChange)}
               </p>
             </div>
           </div>
@@ -215,7 +217,7 @@ const WalletScreen = () => {
                 <p className="font-heading text-lg font-bold text-secondary truncate">{formatCurrency(creatorEarnings)}</p>
               )}
               <p className="text-[10px] text-accent flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> +{monthlyChange}% this month
+                <TrendingUp className="w-3 h-3" /> {formatMonthlyChange(monthlyChange)}
               </p>
             </div>
             <NeonButton variant="blue" className="text-[10px] py-1.5 px-3 shrink-0" onClick={() => navigate("/creator-dashboard")}>

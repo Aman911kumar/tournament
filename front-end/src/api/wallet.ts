@@ -107,6 +107,8 @@ const mapTransaction = (transaction: WalletTransactionDto): WalletTransaction =>
       ? transaction.type === "DEBIT"
         ? `Transfer to ${getUserName(transaction.toUser)}`
         : `Transfer from ${getUserName(transaction.fromUser)}`
+      : transaction.category === "TRANSFER" && transaction.type === "DEBIT"
+        ? "Creator Deduction"
       : sourceLabels[transaction.category ?? ""] ?? transaction.category ?? "Wallet Transaction";
 
   return {
