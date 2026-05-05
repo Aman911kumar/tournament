@@ -32,7 +32,6 @@ export interface Tournament {
   platform?: "mobile" | "pc" | "console" | "crossplay";
   perspective?: "tpp" | "fpp" | "both" | "na";
   type: "solo" | "duo" | "squad" | "team";
-  format: "single_elim" | "double_elim" | "round_robin" | "swiss";
   startAt: string;
   endAt?: string;
   registrationStart: string;
@@ -44,10 +43,17 @@ export interface Tournament {
   platformFeePercent?: number;
   platformFeeAmount?: number;
   organizerEarnings?: number;
-  prizePool?: {
-    total?: number;
-    distribution?: { place: number; amount: number }[];
-  };
+  receivedMoney?: number;
+  paidMoney?: number;
+  registrationCount?: number;
+  participantCount?: number;
+  views?: number;
+  joinedPlayers?: string[];
+  prizePool?: number;
+  prizeMode?: "position" | "kill" | "both";
+  killPrizeAmount?: number;
+  prizeDistribution?: { position: number; prizeAmount: number }[];
+  results?: { position: number; player: string | { _id?: string; username?: string; avatar?: { url?: string } }; prizeWon: number }[];
   rules?: string;
   status: "draft" | "open" | "running" | "completed" | "cancelled";
   room_details?: {
@@ -93,8 +99,7 @@ export interface GameAccountSummary {
 
 export interface PrizePayoutInput {
   registrationId: string;
-  place: number;
-  amount: number;
+  position: number;
 }
 
 interface TournamentListData {
@@ -121,10 +126,10 @@ export async function getTournaments(filters: TournamentFilters = {}) {
   if (filters.type === "free") tournaments = tournaments.filter((t) => Number(t.entryFee || 0) === 0);
   if (filters.type === "paid") tournaments = tournaments.filter((t) => Number(t.entryFee || 0) > 0);
   if (filters.sort === "prize_asc") {
-    tournaments = [...tournaments].sort((a, b) => Number(a.prizePool?.total || 0) - Number(b.prizePool?.total || 0));
+    tournaments = [...tournaments].sort((a, b) => Number(a.prizePool || 0) - Number(b.prizePool || 0));
   }
   if (filters.sort === "prize_desc") {
-    tournaments = [...tournaments].sort((a, b) => Number(b.prizePool?.total || 0) - Number(a.prizePool?.total || 0));
+    tournaments = [...tournaments].sort((a, b) => Number(b.prizePool || 0) - Number(a.prizePool || 0));
   }
   if (filters.sort === "latest") {
     tournaments = [...tournaments].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
@@ -173,9 +178,9 @@ export async function getMyTournamentRegistrations() {
 }
 
 export async function distributeTournamentPrizes(id: string, payouts: PrizePayoutInput[]) {
-  const res = await apiFetch<ApiResponse<{ tournament: Tournament; transactions: unknown[] }>>(ENDPOINTS.distributePrizes(id), {
+  const res = await apiFetch<ApiResponse<{ tournament: Tournament; payoutTotal: number; transactions: unknown[]; organizerTransaction?: unknown }>>(ENDPOINTS.distributePrizes(id), {
     method: "POST",
-    body: JSON.stringify({ payouts }),
+    body: JSON.stringify({ results: payouts }),
   });
   return res.data;
 }

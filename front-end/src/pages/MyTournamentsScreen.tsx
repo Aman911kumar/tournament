@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Calendar, Search, Trophy, Users } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import BottomNav from "@/components/BottomNav";
 import { getMyTournamentRegistrations, Tournament, TournamentRegistration } from "@/api/tournaments";
 import { toast } from "@/components/ui/sonner";
 import { formatCurrency, getErrorMessage, getErrorToast } from "@/lib/page-utils";
@@ -118,7 +117,7 @@ const MyTournamentsScreen = () => {
                 <div className="min-w-0">
                   <p className="text-sm font-heading font-bold truncate">{tournament.title}</p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {gameLabels[tournament.game] ?? tournament.game} · Slot {registration.slotNumber ?? "-"}
+                    {gameLabels[tournament.game] ?? tournament.game} - Slot {registration.slotNumber ?? "-"}
                   </p>
                 </div>
                 <span className={`text-[10px] font-heading font-semibold px-2 py-1 rounded-full ${statusClass[registration.status] ?? "bg-muted text-muted-foreground"}`}>
@@ -139,7 +138,7 @@ const MyTournamentsScreen = () => {
                 <div className="glass rounded-lg p-2 min-w-0">
                   <Trophy className="w-3.5 h-3.5 text-accent mb-1" />
                   <p className="text-[10px] text-muted-foreground">Prize</p>
-                  <p className="text-[10px] font-heading font-bold truncate">{formatCurrency(Number(tournament.prizePool?.total || 0))}</p>
+                  <p className="text-[10px] font-heading font-bold truncate">{formatCurrency(Number(tournament.prizePool || 0))}</p>
                 </div>
               </div>
             </GlassCard>
@@ -147,7 +146,6 @@ const MyTournamentsScreen = () => {
         })}
       </div>
 
-      <BottomNav />
     </div>
   );
 };

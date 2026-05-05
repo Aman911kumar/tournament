@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { GoogleOAuthProvider } from "@react-oauth/google";
@@ -29,10 +29,20 @@ import SubscriptionsScreen from "./pages/SubscriptionsScreen.tsx";
 import TournamentCommentsScreen from "./pages/TournamentCommentsScreen.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ProtectedRoute from "./components/ProtectedRoute";
+import BottomNav from "./components/BottomNav";
 import { toast } from "@/components/ui/sonner";
 
 const VITE_GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 const queryClient = new QueryClient();
+
+const ProtectedShell = () => (
+  <ProtectedRoute>
+    <div className="min-h-screen pb-24">
+      <Outlet />
+    </div>
+    <BottomNav />
+  </ProtectedRoute>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -52,29 +62,31 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<LoginScreen />} />
             <Route path="/test" element={<Test />} />
-            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-            <Route path="/tournaments" element={<ProtectedRoute><TournamentsScreen /></ProtectedRoute>} />
-            <Route path="/my-tournaments" element={<ProtectedRoute><MyTournamentsScreen /></ProtectedRoute>} />
-            <Route path="/tournament/:id" element={<ProtectedRoute><TournamentDetailScreen /></ProtectedRoute>} />
-            <Route path="/tournament/:id/slots" element={<ProtectedRoute><SlotSelectionScreen /></ProtectedRoute>} />
-            <Route path="/tournament/:id/comments" element={<ProtectedRoute><TournamentCommentsScreen /></ProtectedRoute>} />
-            <Route path="/tournament/:id/distribute-prizes" element={<ProtectedRoute><PrizeDistributionScreen /></ProtectedRoute>} />
-            <Route path="/wallet" element={<ProtectedRoute><WalletScreen /></ProtectedRoute>} />
-            <Route path="/wallet/transaction/:id" element={<ProtectedRoute><TransactionDetailScreen /></ProtectedRoute>} />
-            <Route path="/wallet/add" element={<ProtectedRoute><AddMoneyScreen /></ProtectedRoute>} />
-            <Route path="/wallet/withdraw" element={<ProtectedRoute><WithdrawScreen /></ProtectedRoute>} />
-            <Route path="/wallet/transfer" element={<ProtectedRoute><TransferMoneyScreen /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
-            <Route path="/edit-profile" element={<ProtectedRoute><EditProfileScreen /></ProtectedRoute>} />
-            <Route path="/change-password" element={<ProtectedRoute><ChangePasswordScreen /></ProtectedRoute>} />
-            <Route path="/game-accounts" element={<ProtectedRoute><GameAccountsScreen /></ProtectedRoute>} />
-            <Route path="/creator/:id" element={<ProtectedRoute><CreatorProfileScreen /></ProtectedRoute>} />
-            <Route path="/create-tournament" element={<ProtectedRoute><CreateTournamentScreen /></ProtectedRoute>} />
-            <Route path="/edit-tournament/:id" element={<ProtectedRoute><CreateTournamentScreen /></ProtectedRoute>} />
-            <Route path="/creator-dashboard" element={<ProtectedRoute><CreatorDashboardScreen /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute><AdminDashboardScreen /></ProtectedRoute>} />
-            <Route path="/notifications" element={<ProtectedRoute><NotificationsScreen /></ProtectedRoute>} />
-            <Route path="/subscriptions" element={<ProtectedRoute><SubscriptionsScreen /></ProtectedRoute>} />
+            <Route element={<ProtectedShell />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/tournaments" element={<TournamentsScreen />} />
+              <Route path="/my-tournaments" element={<MyTournamentsScreen />} />
+              <Route path="/tournament/:id" element={<TournamentDetailScreen />} />
+              <Route path="/tournament/:id/slots" element={<SlotSelectionScreen />} />
+              <Route path="/tournament/:id/comments" element={<TournamentCommentsScreen />} />
+              <Route path="/tournament/:id/distribute-prizes" element={<PrizeDistributionScreen />} />
+              <Route path="/wallet" element={<WalletScreen />} />
+              <Route path="/wallet/transaction/:id" element={<TransactionDetailScreen />} />
+              <Route path="/wallet/add" element={<AddMoneyScreen />} />
+              <Route path="/wallet/withdraw" element={<WithdrawScreen />} />
+              <Route path="/wallet/transfer" element={<TransferMoneyScreen />} />
+              <Route path="/profile" element={<ProfileScreen />} />
+              <Route path="/edit-profile" element={<EditProfileScreen />} />
+              <Route path="/change-password" element={<ChangePasswordScreen />} />
+              <Route path="/game-accounts" element={<GameAccountsScreen />} />
+              <Route path="/creator/:id" element={<CreatorProfileScreen />} />
+              <Route path="/create-tournament" element={<CreateTournamentScreen />} />
+              <Route path="/edit-tournament/:id" element={<CreateTournamentScreen />} />
+              <Route path="/creator-dashboard" element={<CreatorDashboardScreen />} />
+              <Route path="/admin" element={<AdminDashboardScreen />} />
+              <Route path="/notifications" element={<NotificationsScreen />} />
+              <Route path="/subscriptions" element={<SubscriptionsScreen />} />
+            </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
         </GoogleOAuthProvider>

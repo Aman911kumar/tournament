@@ -6,13 +6,16 @@ import {
   Award,
   Calendar,
   CheckCircle2,
+  Crosshair,
   DollarSign,
   FileText,
   Gamepad2,
   Hash,
+  IndianRupee,
   KeyRound,
   Lock,
   Swords,
+  Trash2,
   Trophy,
   Users,
 } from "lucide-react";
@@ -24,7 +27,7 @@ import { getErrorToast } from "@/lib/page-utils";
 
 type GameKey = "freefire" | "bgmi" | "callofduty" | "valorant";
 type TeamType = "solo" | "duo" | "squad" | "team";
-type TournamentFormat = "single_elim" | "double_elim" | "round_robin" | "swiss";
+type PrizeMode = "position" | "kill" | "both";
 
 interface GamePreset {
   label: string;
@@ -107,13 +110,6 @@ const typeOptions: { value: TeamType; label: string; teamSize: number }[] = [
   { value: "team", label: "5v5 Team", teamSize: 5 },
 ];
 
-const formatOptions: { value: TournamentFormat; label: string }[] = [
-  { value: "single_elim", label: "Single Elim" },
-  { value: "round_robin", label: "Round Robin" },
-  { value: "double_elim", label: "Double Elim" },
-  { value: "swiss", label: "Swiss" },
-];
-
 interface FormState {
   game: GameKey;
   title: string;
@@ -122,10 +118,10 @@ interface FormState {
   type: TeamType;
   teamSize: string;
   maxTeams: string;
-  format: TournamentFormat;
   entryFee: string;
-  prizePool: string;
-  prizeDistribution: { place: string; amount: string }[];
+  prizeMode: PrizeMode;
+  killPrizeAmount: string;
+  prizeDistribution: { position: string; prizeAmount: string }[];
   registrationStart: string;
   registrationEnd: string;
   startAt: string;
@@ -148,17 +144,15 @@ interface TournamentPayload {
   teamSize: number;
   maxTeams: number;
   maxPlayers: number;
-  format: TournamentFormat;
   entryFee: number;
+  prizeMode: PrizeMode;
+  killPrizeAmount: number;
   registrationStart: string;
   registrationEnd: string;
   startAt: string;
   endAt?: string;
   rules: string;
-  prizePool: {
-    total: number;
-    distribution: { place: number; amount: number }[];
-  };
+  prizeDistribution: { position: number; prizeAmount: number }[];
   room_details: {
     roomId: string;
     roomPass: string;
@@ -194,10 +188,10 @@ const makeEmptyForm = (game: GameKey = "freefire"): FormState => {
     type: preset.defaultType,
     teamSize: String(preset.defaultTeamSize),
     maxTeams: String(preset.defaultTeams),
-    format: "single_elim",
     entryFee: "0",
-    prizePool: "",
-    prizeDistribution: [{ place: "1", amount: "" }],
+    prizeMode: "position",
+    killPrizeAmount: "",
+    prizeDistribution: [{ position: "1", prizeAmount: "" }],
     registrationStart: nowLocal(),
     registrationEnd: "",
     startAt: "",
@@ -228,15 +222,18 @@ const CreateTournamentScreen = () => {
   const teamSize = Number(form.teamSize || preset.defaultTeamSize);
   const maxTeams = Number(form.maxTeams || preset.defaultTeams);
   const totalSlots = Math.max(teamSize * maxTeams, 0);
-  const prizePool = Number(form.prizePool || 0);
   const resolvedPrizeDistribution = useMemo(() => {
-    const rows = form.prizeDistribution
-      .map((row) => ({ place: Number(row.place), amount: Number(row.amount || 0) }))
-      .filter((row) => Number.isFinite(row.place) && row.place > 0 && Number.isFinite(row.amount) && row.amount > 0);
-
-    if (rows.length > 0) return rows;
-    return prizePool > 0 ? [{ place: 1, amount: prizePool }] : [];
-  }, [form.prizeDistribution, prizePool]);
+    return form.prizeDistribution
+      .map((row) => ({ position: Number(row.position), prizeAmount: Number(row.prizeAmount || 0) }))
+      .filter((row) => Number.isFinite(row.position) && row.position > 0 && Number.isFinite(row.prizeAmount) && row.prizeAmount > 0);
+  }, [form.prizeDistribution]);
+  const configuredPrizeTotal = useMemo(
+    () => resolvedPrizeDistribution.reduce((sum, row) => sum + row.prizeAmount, 0),
+    [resolvedPrizeDistribution],
+  );
+  const usesPositionPrize = form.prizeMode === "position" || form.prizeMode === "both";
+  const usesKillPrize = form.prizeMode === "kill" || form.prizeMode === "both";
+  const killPrizeAmount = Number(form.killPrizeAmount || 0);
 
   useEffect(() => {
     if (!id) {
@@ -258,13 +255,13 @@ const CreateTournamentScreen = () => {
           type: tournament.type,
           teamSize: String(tournament.teamSize || nextPreset.defaultTeamSize),
           maxTeams: String(tournament.maxTeams || Math.ceil((tournament.maxPlayers || nextPreset.defaultTeams) / (tournament.teamSize || nextPreset.defaultTeamSize))),
-          format: tournament.format,
           entryFee: String(tournament.entryFee ?? 0),
-          prizePool: String(tournament.prizePool?.total || ""),
+          prizeMode: tournament.prizeMode ?? "position",
+          killPrizeAmount: tournament.killPrizeAmount ? String(tournament.killPrizeAmount) : "",
           prizeDistribution:
-            tournament.prizePool?.distribution?.length
-              ? tournament.prizePool.distribution.map((row) => ({ place: String(row.place), amount: String(row.amount) }))
-              : [{ place: "1", amount: String(tournament.prizePool?.total || "") }],
+            tournament.prizeDistribution?.length
+              ? tournament.prizeDistribution.map((row) => ({ position: String(row.position), prizeAmount: String(row.prizeAmount) }))
+              : [{ position: "1", prizeAmount: "" }],
           registrationStart: toDateTimeLocal(tournament.registrationStart) || nowLocal(),
           registrationEnd: toDateTimeLocal(tournament.registrationEnd),
           startAt: toDateTimeLocal(tournament.startAt),
@@ -324,6 +321,18 @@ const CreateTournamentScreen = () => {
       toast.error("Invalid schedule", { description: "Registration close time must be after registration open time." });
       return;
     }
+    if (form.endAt && new Date(form.endAt) <= new Date(form.startAt)) {
+      toast.error("Invalid schedule", { description: "End time must be after match starts." });
+      return;
+    }
+    if (usesPositionPrize && resolvedPrizeDistribution.length === 0) {
+      toast.error("Invalid prize distribution", { description: "Add at least one prize position and amount." });
+      return;
+    }
+    if (usesKillPrize && (!Number.isFinite(killPrizeAmount) || killPrizeAmount <= 0)) {
+      toast.error("Invalid kill prize", { description: "Add a per-kill prize amount greater than zero." });
+      return;
+    }
 
     const payload: TournamentPayload = {
       game: form.game,
@@ -337,17 +346,15 @@ const CreateTournamentScreen = () => {
       teamSize,
       maxTeams,
       maxPlayers: totalSlots,
-      format: form.format,
       entryFee: Number(form.entryFee || 0),
+      prizeMode: form.prizeMode,
+      killPrizeAmount: usesKillPrize ? killPrizeAmount : 0,
       registrationStart: toIsoDateTime(form.registrationStart || nowLocal()),
       registrationEnd: toIsoDateTime(form.registrationEnd),
       startAt: toIsoDateTime(form.startAt),
       endAt: form.endAt ? toIsoDateTime(form.endAt) : undefined,
       rules: form.rules.trim(),
-      prizePool: {
-        total: prizePool,
-        distribution: resolvedPrizeDistribution,
-      },
+      prizeDistribution: usesPositionPrize ? resolvedPrizeDistribution : [],
       room_details: {
         roomId: form.roomId.trim(),
         roomPass: form.roomPass.trim(),
@@ -396,9 +403,8 @@ const CreateTournamentScreen = () => {
                 key={game}
                 type="button"
                 onClick={() => selectGame(game)}
-                className={`rounded-lg px-3 py-3 text-left transition-all ${
-                  form.game === game ? "bg-primary text-primary-foreground neon-glow-purple" : "glass text-muted-foreground hover:text-foreground"
-                }`}
+                className={`rounded-lg px-3 py-3 text-left transition-all ${form.game === game ? "bg-primary text-primary-foreground neon-glow-purple" : "glass text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 <span className="block text-sm font-heading font-bold">{GAME_PRESETS[game].label}</span>
                 <span className="text-[10px] opacity-80">{GAME_PRESETS[game].platform.toUpperCase()}</span>
@@ -419,33 +425,18 @@ const CreateTournamentScreen = () => {
           />
         </GlassCard>
 
-        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
-          <GlassCard neon>
-            <label className="text-xs text-muted-foreground font-heading mb-2 flex items-center gap-1.5">
-              <Swords className="w-3.5 h-3.5" /> Mode
-            </label>
-            <select value={form.gameMode} onChange={(event) => update("gameMode", event.target.value)} className={inputClass}>
-              {preset.modes.map((mode) => (
-                <option key={mode.value} value={mode.value} className="bg-background">
-                  {mode.label}
-                </option>
-              ))}
-            </select>
-          </GlassCard>
-
-          <GlassCard neon>
-            <label className="text-xs text-muted-foreground font-heading mb-2 flex items-center gap-1.5">
-              <Award className="w-3.5 h-3.5" /> Format
-            </label>
-            <select value={form.format} onChange={(event) => update("format", event.target.value as TournamentFormat)} className={inputClass}>
-              {formatOptions.map((format) => (
-                <option key={format.value} value={format.value} className="bg-background">
-                  {format.label}
-                </option>
-              ))}
-            </select>
-          </GlassCard>
-        </div>
+        <GlassCard neon>
+          <label className="text-xs text-muted-foreground font-heading mb-2 flex items-center gap-1.5">
+            <Swords className="w-3.5 h-3.5" /> Mode
+          </label>
+          <select value={form.gameMode} onChange={(event) => update("gameMode", event.target.value)} className={inputClass}>
+            {preset.modes.map((mode) => (
+              <option key={mode.value} value={mode.value} className="bg-background">
+                {mode.label}
+              </option>
+            ))}
+          </select>
+        </GlassCard>
 
         <GlassCard neon>
           <label className="text-xs text-muted-foreground font-heading mb-2 flex items-center gap-1.5">
@@ -457,9 +448,8 @@ const CreateTournamentScreen = () => {
                 key={type.value}
                 type="button"
                 onClick={() => selectType(type.value)}
-                className={`px-3 py-2.5 rounded-lg text-xs font-heading font-medium transition-all ${
-                  form.type === type.value ? "bg-primary text-primary-foreground neon-glow-purple" : "glass text-muted-foreground hover:text-foreground"
-                }`}
+                className={`px-3 py-2.5 rounded-lg text-xs font-heading font-medium transition-all ${form.type === type.value ? "bg-primary text-primary-foreground neon-glow-purple" : "glass text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 {type.label}
               </button>
@@ -481,21 +471,115 @@ const CreateTournamentScreen = () => {
           </div>
         </GlassCard>
 
-        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
+        <GlassCard neon>
+          <label className="text-xs text-muted-foreground font-heading mb-1.5 flex items-center gap-1.5">
+            <IndianRupee className="w-3.5 h-3.5" /> Entry Fee
+          </label>
+          <input type="number" min="0" value={form.entryFee} onChange={(event) => update("entryFee", event.target.value)} placeholder="0 for free" className={inputClass} />
+          <p className="text-[10px] text-muted-foreground/70 mt-1">
+            Position prize pool: {configuredPrizeTotal}
+          </p>
+        </GlassCard>
+
+        <GlassCard neon>
+          <label className="text-xs text-muted-foreground font-heading mb-2 flex items-center gap-1.5">
+            <Award className="w-3.5 h-3.5" /> Prize Type
+          </label>
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-2 mb-3">
+            {[
+              { value: "position" as PrizeMode, label: "Position", icon: Trophy },
+              { value: "kill" as PrizeMode, label: "Kill", icon: Crosshair },
+              { value: "both" as PrizeMode, label: "Both", icon: Award },
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => update("prizeMode", option.value)}
+                className={`rounded-lg px-3 py-2.5 text-left transition-all ${form.prizeMode === option.value ? "bg-primary text-primary-foreground neon-glow-purple" : "glass text-muted-foreground hover:text-foreground"}`}
+              >
+                <span className="flex items-center gap-2 text-xs font-heading font-bold">
+                  <option.icon className="h-3.5 w-3.5" /> {option.label}
+                </span>
+              </button>
+            ))}
+          </div>
+          {usesKillPrize && (
+            <div>
+              <p className="text-[10px] text-muted-foreground mb-1">Per Kill Prize</p>
+              <input
+                type="number"
+                min="0"
+                value={form.killPrizeAmount}
+                onChange={(event) => update("killPrizeAmount", event.target.value)}
+                placeholder="Amount per kill"
+                className={inputClass}
+              />
+            </div>
+          )}
+        </GlassCard>
+
+        {usesPositionPrize && (
+        <div>
           <GlassCard neon>
             <label className="text-xs text-muted-foreground font-heading mb-1.5 flex items-center gap-1.5">
-              <DollarSign className="w-3.5 h-3.5" /> Entry Fee
+              <Award className="w-3.5 h-3.5" /> Prize Distribution
             </label>
-            <input type="number" min="0" value={form.entryFee} onChange={(event) => update("entryFee", event.target.value)} placeholder="0 for free" className={inputClass} />
-            <p className="text-[10px] text-muted-foreground/70 mt-1">Paid entries credit 90% to you.</p>
-          </GlassCard>
-          <GlassCard neon>
-            <label className="text-xs text-muted-foreground font-heading mb-1.5 flex items-center gap-1.5">
-              <Trophy className="w-3.5 h-3.5 text-accent" /> Prize Pool
-            </label>
-            <input type="number" min="0" value={form.prizePool} onChange={(event) => update("prizePool", event.target.value)} placeholder="1000" className={inputClass} />
+            <div className="space-y-2">
+              {form.prizeDistribution.map((row, index) => (
+                <div key={index} className="flex max-[420px]:flex-col items-center max-[420px]:items-start gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    value={row.position || String(index + 1)}
+                    onChange={(event) => {
+                      const position = event.target.value;
+                      setForm((previous) => {
+                        const next = [...previous.prizeDistribution];
+                        next[index] = { ...next[index], position };
+                        return { ...previous, prizeDistribution: next };
+                      });
+                    }}
+                    placeholder="Position"
+                    className={`${inputClass} max-w-[100px] flex-1`}
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={row.prizeAmount}
+                    onChange={(event) => {
+                      const prizeAmount = event.target.value;
+                      setForm((previous) => {
+                        const next = [...previous.prizeDistribution];
+                        next[index] = { ...next[index], prizeAmount };
+                        return { ...previous, prizeDistribution: next };
+                      });
+                    }}
+                    placeholder="Prize amount"
+                    className={`${inputClass} flex-1`}
+                  />
+                  <button
+                    type="button"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                    onClick={() =>
+                      setForm((previous) => {
+                        const next = previous.prizeDistribution.filter((_, i) => i !== index);
+                        return { ...previous, prizeDistribution: next };
+                      })
+                    }
+                    aria-label="Remove prize row"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <NeonButton full variant="green" onClick={() => setForm((previous) => ({ ...previous, prizeDistribution: [...previous.prizeDistribution, { position: String(previous.prizeDistribution.length + 1), prizeAmount: "" }] }))}>
+                Add Place
+              </NeonButton>
+            </div>
           </GlassCard>
         </div>
+        )}
 
         <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3">
           <GlassCard neon>

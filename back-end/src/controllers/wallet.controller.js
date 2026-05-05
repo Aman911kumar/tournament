@@ -5,6 +5,8 @@ import { creditWallet, debitWallet } from "../services/wallet.service.js";
 import { User } from '../models/user.model.js'
 import { Wallet } from "../models/wallet.model.js";
 import { WalletTransaction } from "../models/walletTransaction.model.js";
+import { Ledger } from "../models/ledger.model.js";
+import { calculateFeeSplit, getPlatformFeePercent } from "../utils/money.js";
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 
@@ -69,8 +71,8 @@ const transferMoney = asyncHandler(async (req, res) => {
         throw new ApiError(400, "You cannot transfer money to yourself");
     }
 
-    const platformFee = Math.round(transferAmount * 2) / 100;
-    const netAmount = Math.round((transferAmount - platformFee) * 100) / 100;
+    const feePercent = getPlatformFeePercent("WALLET_TRANSFER");
+    const { platformFee, netAmount } = calculateFeeSplit(transferAmount, feePercent);
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -110,8 +112,8 @@ const transferMoney = asyncHandler(async (req, res) => {
             fromUser: req.user._id,
             toUser: receiver._id,
             description: note?.trim() || `Transfer to ${receiver.username}`,
-            metadata: { note: note?.trim() || "", feePercent: 2 }
-        }], { session });
+            metadata: { note: note?.trim() || "", feePercent }
+        }], { session, ordered: true });
 
         const receiverTx = await WalletTransaction.create([{
             transactionId: uuidv4(),
@@ -130,8 +132,41 @@ const transferMoney = asyncHandler(async (req, res) => {
             fromUser: req.user._id,
             toUser: receiver._id,
             description: note?.trim() || `Transfer from ${req.user.username}`,
-            metadata: { note: note?.trim() || "", feePercent: 2 }
-        }], { session });
+            metadata: { note: note?.trim() || "", feePercent }
+        }], { session, ordered: true });
+
+        await Ledger.create([
+            {
+                transactionId: senderTx[0].transactionId,
+                debitAccount: "USER_WALLET",
+                creditAccount: "USER_WALLET",
+                fromUser: req.user._id,
+                toUser: receiver._id,
+                category: "WALLET_TRANSFER",
+                referenceId: transferRef,
+                amount: netAmount,
+                currency: "INR",
+                platformFee,
+                netAmount,
+                status: "SUCCESS",
+                metadata: { note: note?.trim() || "", feePercent, receiverTransactionId: receiverTx[0].transactionId }
+            },
+            ...(platformFee > 0 ? [{
+                transactionId: senderTx[0].transactionId,
+                debitAccount: "USER_WALLET",
+                creditAccount: "PLATFORM_FEE",
+                fromUser: req.user._id,
+                toUser: null,
+                category: "WALLET_TRANSFER_FEE",
+                referenceId: transferRef,
+                amount: platformFee,
+                currency: "INR",
+                platformFee,
+                netAmount: 0,
+                status: "SUCCESS",
+                metadata: { feePercent }
+            }] : [])
+        ], { session, ordered: true });
 
         await session.commitTransaction();
 

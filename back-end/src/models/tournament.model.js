@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { getPlatformFeePercent } from "../utils/money.js";
 
 const SUPPORTED_GAMES = ["freefire", "bgmi", "callofduty", "valorant"];
 const SUPPORTED_GAME_MODES = [
@@ -70,11 +71,6 @@ const TournamentSchema = new mongoose.Schema({
         enum: ['solo', 'duo', 'squad', 'team'],
         required: true
     },
-    format: {
-        type: String,
-        enum: ['single_elim', 'double_elim', 'round_robin', 'swiss'],
-        required: true
-    },
     startAt: {
         type: Date,
         required: true,
@@ -122,9 +118,15 @@ const TournamentSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    joinedPlayers: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        }
+    ],
     platformFeePercent: {
         type: Number,
-        default: 10,
+        default: () => getPlatformFeePercent("TOURNAMENT_ENTRY"),
         min: 0,
         max: 100
     },
@@ -139,17 +141,54 @@ const TournamentSchema = new mongoose.Schema({
         min: 0
     },
     prizePool: {
-        total: {
-            type: Number,
-            default: 0
-        },
-        distribution: [
-            {
-                place: { type: Number },
-                amount: { type: Number }
-            }
-        ]
+        type: Number,
+        default: 0,
+        min: 0
     },
+    prizeMode: {
+        type: String,
+        enum: ["position", "kill", "both"],
+        default: "position"
+    },
+    killPrizeAmount: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    prizeDistribution: [
+        {
+            position: {
+                type: Number,
+                required: true,
+                min: 1
+            },
+            prizeAmount: {
+                type: Number,
+                required: true,
+                default: 0,
+                min: 0
+            }
+        }
+    ],
+    results: [
+        {
+            position: {
+                type: Number,
+                required: true,
+                min: 1
+            },
+            player: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User",
+                required: true
+            },
+            prizeWon: {
+                type: Number,
+                default: 0,
+                min: 0
+            }
+        }
+    ],
     rules: {
         type: String,
         trim: true

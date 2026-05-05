@@ -473,7 +473,7 @@ const AdminDashboardScreen = () => {
                     </span>
                   </div>
                   <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{formatCurrency(tournament.prizePool?.total || 0)}</span>
+                    <span>{formatCurrency(tournament.prizePool || 0)}</span>
                     <span>{tournament.startAt ? formatShortDate(tournament.startAt) : "No date"}</span>
                   </div>
                 </div>

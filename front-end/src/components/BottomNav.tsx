@@ -14,8 +14,8 @@ const BottomNav = () => {
   const navigate = useNavigate();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-glass-border">
-      <div className="max-w-md mx-auto flex items-center justify-around py-2 px-4">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-glass-border pb-[env(safe-area-inset-bottom)]">
+      <div className="max-w-md mx-auto flex items-center justify-around px-4 py-2">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;
           return (

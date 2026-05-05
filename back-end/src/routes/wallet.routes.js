@@ -3,7 +3,8 @@ import {
   getCreatorEarnings,
   getWalletBalance,
   getWalletTransaction,
-  getTransactionDetails
+  getTransactionDetails,
+  getPlayerEarnings
 } from "../controllers/user.controller.js";
 import { addMoney,withdrawMoney, transferMoney } from "../controllers/wallet.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
@@ -14,6 +15,7 @@ router.get("/balance", protect, getWalletBalance);
 router.get("/transactions", protect, getWalletTransaction);
 router.get("/transaction/:id", protect, getTransactionDetails);
 router.get("/creator-earnings", protect, getCreatorEarnings);
+router.get("/player-earnings", protect, getPlayerEarnings);
 router.post("/add", protect, addMoney);
 router.post("/withdraw", protect, withdrawMoney);
 router.post("/transfer", protect, transferMoney);

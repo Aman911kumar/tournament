@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { AlertCircle, Calendar, DollarSign, RefreshCcw, Search, Shield, SlidersHorizontal, Trophy, Users } from "lucide-react";
+import { AlertCircle, Calendar, Crosshair, DollarSign, RefreshCcw, Search, Shield, SlidersHorizontal, Trophy, Users } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import BottomNav from "@/components/BottomNav";
 import { formatCurrency, getErrorMessage } from "@/lib/page-utils";
-import { getTournaments, Tournament } from "@/api/tournaments";
+import { getMyTournamentRegistrations, getTournaments, Tournament } from "@/api/tournaments";
 
 const gameFilters = ["All", "Free Fire", "BGMI", "Valorant", "COD"];
 const feeFilters = ["All Fees", "Free", "Paid"];
@@ -34,6 +33,19 @@ const statusStyle = (status: Tournament["status"]) => {
   return "bg-primary/10 text-primary";
 };
 
+const getRegistrationTournamentId = (registration: Awaited<ReturnType<typeof getMyTournamentRegistrations>>[number]) =>
+  typeof registration.tournament === "string" ? registration.tournament : registration.tournament?._id;
+
+const getPrizeSummary = (tournament: Tournament) => {
+  const prizeMode = tournament.prizeMode ?? "position";
+  const positionPrize = Number(tournament.prizePool || 0);
+  const killPrize = Number(tournament.killPrizeAmount || 0);
+
+  if (prizeMode === "kill") return `Kill: ${formatCurrency(killPrize)}/kill`;
+  if (prizeMode === "both") return `${formatCurrency(positionPrize)} + ${formatCurrency(killPrize)}/kill`;
+  return formatCurrency(positionPrize);
+};
+
 const TournamentsScreen = () => {
   const navigate = useNavigate();
   const [activeGame, setActiveGame] = useState("All");
@@ -42,6 +54,7 @@ const TournamentsScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [joinedTournamentIds, setJoinedTournamentIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,13 +64,17 @@ const TournamentsScreen = () => {
       setError(null);
       const feeFilter = activeFee === "Free" ? "free" : activeFee === "Paid" ? "paid" : "all";
       const gameFilter = activeGame === "COD" ? gameMap.COD : activeGame;
-      const data = await getTournaments({
-        game: gameFilter,
-        type: feeFilter,
-        sort: sortMap[activeSort],
-        search: searchQuery.trim() || undefined,
-      });
+      const [data, registrations] = await Promise.all([
+        getTournaments({
+          game: gameFilter,
+          type: feeFilter,
+          sort: sortMap[activeSort],
+          search: searchQuery.trim() || undefined,
+        }),
+        getMyTournamentRegistrations().catch(() => []),
+      ]);
       setTournaments(data);
+      setJoinedTournamentIds(new Set(registrations.map(getRegistrationTournamentId).filter(Boolean)));
     } catch (err) {
       setError(getErrorMessage(err, "Failed to load tournaments."));
     } finally {
@@ -88,8 +105,8 @@ const TournamentsScreen = () => {
       );
     }
 
-    if (activeSort === "Prize Up") return [...list].sort((a, b) => Number(a.prizePool?.total || 0) - Number(b.prizePool?.total || 0));
-    if (activeSort === "Prize Down") return [...list].sort((a, b) => Number(b.prizePool?.total || 0) - Number(a.prizePool?.total || 0));
+    if (activeSort === "Prize Up") return [...list].sort((a, b) => Number(a.prizePool || 0) - Number(b.prizePool || 0));
+    if (activeSort === "Prize Down") return [...list].sort((a, b) => Number(b.prizePool || 0) - Number(a.prizePool || 0));
     return [...list].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
   }, [activeFee, activeGame, activeSort, searchQuery, tournaments]);
 
@@ -205,7 +222,7 @@ const TournamentsScreen = () => {
           filtered.map((t, i) => {
             const gameName = gameLabels[t.game] ?? t.game;
             const creatorName = t.channel?.name ?? t.organizer?.username ?? "Creator";
-            const prize = Number(t.prizePool?.total || 0);
+            const joined = joinedTournamentIds.has(t._id);
             return (
             <GlassCard key={t._id} neon delay={i * 0.06}>
               <div className="flex items-start justify-between gap-3 mb-2">
@@ -236,24 +253,23 @@ const TournamentsScreen = () => {
                   <Calendar className="w-3 h-3 shrink-0" /> <span className="truncate">{new Date(t.startAt).toLocaleString()}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <Users className="w-3 h-3 shrink-0" /> {t.maxPlayers} slots
+                  <Users className="w-3 h-3 shrink-0" /> {Number(t.registrationCount || 0)}/{t.maxPlayers} slots
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                   <DollarSign className="w-3 h-3 shrink-0" /> Entry: {Number(t.entryFee || 0) === 0 ? "FREE" : formatCurrency(t.entryFee)}
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-accent neon-text-green">
-                  <Trophy className="w-3 h-3 shrink-0" /> {formatCurrency(prize)}
+                  {t.prizeMode === "kill" ? <Crosshair className="w-3 h-3 shrink-0" /> : <Trophy className="w-3 h-3 shrink-0" />} {getPrizeSummary(t)}
                 </div>
               </div>
-              <NeonButton full variant="purple" className="text-xs py-2" onClick={() => navigate(`/tournament/${t._id}`)}>
-                VIEW & REGISTER
+              <NeonButton full variant={joined ? "green" : "purple"} className="text-xs py-2" onClick={() => navigate(`/tournament/${t._id}`)}>
+                {joined ? "JOINED" : "VIEW & REGISTER"}
               </NeonButton>
             </GlassCard>
           )})
         ))}
       </div>
 
-      <BottomNav />
     </div>
   );
 };

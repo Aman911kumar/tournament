@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, ArrowLeft, Calendar, Users, Trophy, DollarSign, Shield, CheckCircle, Star, MessageCircle, RefreshCcw } from "lucide-react";
+import { AlertCircle, ArrowLeft, Award, Calendar, Crosshair, Users, Trophy, DollarSign, Shield, CheckCircle, Star, MessageCircle, RefreshCcw } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import { getTournamentById, Tournament } from "@/api/tournaments";
+import { getMyTournamentRegistrations, getTournamentById, Tournament } from "@/api/tournaments";
 import { formatCurrency, getErrorMessage } from "@/lib/page-utils";
 
 const gameLabels: Record<string, string> = {
@@ -13,6 +13,9 @@ const gameLabels: Record<string, string> = {
   callofduty: "Call of Duty",
   valorant: "Valorant",
 };
+
+const getRegistrationTournamentId = (registration: Awaited<ReturnType<typeof getMyTournamentRegistrations>>[number]) =>
+  typeof registration.tournament === "string" ? registration.tournament : registration.tournament?._id;
 
 const TournamentDetailScreen = () => {
   const navigate = useNavigate();
@@ -29,7 +32,12 @@ const TournamentDetailScreen = () => {
     try {
       setLoading(true);
       setError(null);
-      setTournament(await getTournamentById(id));
+      const [tournamentRes, registrations] = await Promise.all([
+        getTournamentById(id),
+        getMyTournamentRegistrations().catch(() => []),
+      ]);
+      setTournament(tournamentRes);
+      setRegistered(registrations.some((registration) => getRegistrationTournamentId(registration) === id));
     } catch (err) {
       setError(getErrorMessage(err, "Failed to load tournament."));
     } finally {
@@ -56,8 +64,14 @@ const TournamentDetailScreen = () => {
   const rules = tournament?.rules
     ? tournament.rules.split("\n").filter(Boolean)
     : ["Match starts at scheduled time.", "Disputes are resolved by admin decision."];
-  const prize = Number(tournament?.prizePool?.total || 0);
+  const prize = Number(tournament?.prizePool || 0);
+  const prizeMode = tournament?.prizeMode ?? "position";
+  const killPrizeAmount = Number(tournament?.killPrizeAmount || 0);
+  const usesPositionPrize = prizeMode === "position" || prizeMode === "both";
+  const usesKillPrize = prizeMode === "kill" || prizeMode === "both";
   const entryFee = Number(tournament?.entryFee || 0);
+  const registeredSlots = Number(tournament?.registrationCount || 0);
+  const participantCount = Number(tournament?.participantCount || registeredSlots);
   const registrationStartMs = tournament?.registrationStart ? new Date(tournament.registrationStart).getTime() : 0;
   const registrationEndMs = tournament?.registrationEnd ? new Date(tournament.registrationEnd).getTime() : 0;
   const registrationIsOpen =
@@ -69,7 +83,9 @@ const TournamentDetailScreen = () => {
     now <= registrationEndMs;
   const registerButtonText = !tournament
     ? "REGISTER NOW"
-    : tournament.status === "completed"
+    : registered
+      ? "JOINED"
+      : tournament.status === "completed"
       ? "TOURNAMENT COMPLETED"
       : tournament.status === "running"
         ? "TOURNAMENT LIVE"
@@ -148,9 +164,9 @@ const TournamentDetailScreen = () => {
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { icon: Calendar, label: "Date & Time", value: "Apr 15, 2026, 8 PM" },
-                  { icon: Users, label: "Slots", value: String(tournament.maxPlayers) },
+                  { icon: Users, label: "Slots", value: `${registeredSlots}/${tournament.maxPlayers}` },
                   { icon: DollarSign, label: "Entry Fee", value: entryFee === 0 ? "FREE" : formatCurrency(entryFee) },
-                  { icon: Trophy, label: "Prize Pool", value: formatCurrency(prize) },
+                  { icon: Trophy, label: "Position Prize", value: usesPositionPrize ? formatCurrency(prize) : "No position prize" },
                 ].map((item) => (
                   <div key={item.label} className="glass rounded-lg p-3">
                     <item.icon className="w-4 h-4 text-primary mb-1" />
@@ -161,6 +177,37 @@ const TournamentDetailScreen = () => {
                   </div>
                 ))}
               </div>
+            </GlassCard>
+
+            <GlassCard delay={0.08}>
+              <div className="flex items-center gap-2 mb-3">
+                <Award className="w-4 h-4 text-accent" />
+                <h3 className="font-heading font-bold text-sm">Prize Settings</h3>
+              </div>
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+                <div className="glass rounded-lg p-3">
+                  <p className="text-[10px] text-muted-foreground">Prize Type</p>
+                  <p className="font-heading font-bold capitalize">{prizeMode === "both" ? "Position + Kill" : prizeMode}</p>
+                </div>
+                {usesKillPrize && (
+                  <div className="glass rounded-lg p-3">
+                    <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <Crosshair className="w-3 h-3" /> Per Kill
+                    </p>
+                    <p className="font-heading font-bold text-accent">{formatCurrency(killPrizeAmount)}</p>
+                  </div>
+                )}
+              </div>
+              {usesPositionPrize && Boolean(tournament.prizeDistribution?.length) && (
+                <div className="mt-3 grid grid-cols-1 min-[420px]:grid-cols-3 gap-2">
+                  {tournament.prizeDistribution.map((row) => (
+                    <div key={row.position} className="rounded-lg border border-glass-border/70 bg-background/35 p-3">
+                      <p className="text-[10px] text-muted-foreground">Position #{row.position}</p>
+                      <p className="font-heading font-bold text-primary">{formatCurrency(row.prizeAmount)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </GlassCard>
 
             {/* Rules */}
@@ -204,7 +251,11 @@ const TournamentDetailScreen = () => {
                   Participants
                 </h3>
               </div>
-              <p className="text-xs text-muted-foreground">Participant registration will appear here after teams join.</p>
+              <p className="text-xs text-muted-foreground">
+                {registeredSlots > 0
+                  ? `${registeredSlots} slot${registeredSlots === 1 ? "" : "s"} booked with ${participantCount} participant${participantCount === 1 ? "" : "s"}.`
+                  : "No participants have joined yet."}
+              </p>
             </GlassCard>
 
             {/* Comments Link */}
@@ -230,7 +281,7 @@ const TournamentDetailScreen = () => {
                 )
               }
             >
-              {registered ? "REGISTERED" : registerButtonText}
+              {registerButtonText}
             </NeonButton>
           </>
         )}

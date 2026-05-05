@@ -88,9 +88,7 @@ export interface RecentTournament {
   type?: string;
   status: string;
   entryFee?: number;
-  prizePool?: {
-    total?: number;
-  };
+  prizePool?: number;
   maxPlayers?: number;
   startAt?: string;
   organizer?: {

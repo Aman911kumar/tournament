@@ -3,11 +3,12 @@ import { ApiError } from "@/api/client";
 export const formatCurrency = (value: number | string) => {
   const numberValue = typeof value === "string" ? Number(value) : value;
 
-  if (Number.isNaN(numberValue)) {
-    return "Rs. 0";
+  if (!Number.isFinite(numberValue)) {
+    return "₹0";
   }
 
-  return `Rs. ${numberValue.toLocaleString("en-IN")}`;
+  const sign = numberValue < 0 ? "-" : "";
+  return `${sign}₹${Math.abs(numberValue).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 };
 
 const humanizeErrorDetail = (detail: Record<string, unknown>) => {

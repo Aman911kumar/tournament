@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { AlertCircle, ArrowLeft, Bell, Megaphone, RefreshCcw, Swords, Wallet } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
-import BottomNav from "@/components/BottomNav";
 import { toast } from "@/components/ui/sonner";
 import {
   getNotifications,
@@ -149,7 +148,6 @@ const NotificationsScreen = () => {
         )})}
       </div>
 
-      <BottomNav />
     </div>
   );
 };

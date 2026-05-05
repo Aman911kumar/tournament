@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import BottomNav from "@/components/BottomNav";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/sonner";
@@ -610,7 +609,6 @@ const GameAccountsScreen = () => {
       />
       </div>
 
-      <BottomNav />
     </div>
   );
 };

@@ -249,7 +249,7 @@ const SlotSelectionScreen = () => {
         })}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 px-5 pb-6 pt-4 bg-gradient-to-t from-background via-background to-transparent">
+      <div className="fixed bottom-[72px] left-0 right-0 z-30 px-5 pb-3 pt-4 bg-gradient-to-t from-background via-background to-transparent">
         <NeonButton full variant={canConfirm ? "green" : "purple"} onClick={() => canConfirm && handleConfirm()} disabled={!canConfirm}>
           {confirming ? "Booking..." : canConfirm ? `Confirm Slot - ${entryFee === 0 ? "FREE" : `Rs. ${entryFee}`}` : "Pick a slot to continue"}
         </NeonButton>

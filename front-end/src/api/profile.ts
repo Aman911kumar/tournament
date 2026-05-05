@@ -24,10 +24,13 @@ export interface User {
   _id: string;
   username: string;
   email: string;
-  phone_number: string;
+  phone_number?: string;
+  avatar?: { public_id?: string; url?: string };
   dateOfBirth: string | null;
   gender: string | null;
   walletBalance: number;
+  playerEarnings?: number;
+  playerMonthlyChange?: number;
   role: string[];
   lastLoginAt: string;
   isActive: boolean;
@@ -35,7 +38,7 @@ export interface User {
   updatedAt: string;
   __v: number;
 
-  stats: Stats;
+  stats?: Stats;
   preferences: Preferences;
 }
 

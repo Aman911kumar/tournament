@@ -8,8 +8,11 @@ import { Channel } from '../models/channel.model.js';
 import { Registration } from '../models/registration.model.js';
 import { Wallet } from '../models/wallet.model.js';
 import { WalletTransaction } from '../models/walletTransaction.model.js';
+import { Ledger } from '../models/ledger.model.js';
 import { GameAccount } from '../models/gameAccount.model.js';
 import { hasRole } from '../middlewares/auth.middleware.js';
+import { calculateFeeSplit, getPlatformFeePercent, roundCurrency } from '../utils/money.js';
+import { applyPrizeSettings, assignTournamentResults, updatePrizePool } from '../services/tournamentPrize.service.js';
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from "uuid";
 
@@ -164,6 +167,64 @@ const buildGameAccountSnapshot = (account) => ({
     verified: account.verified
 });
 
+const getParticipantStats = async (tournamentIds) => {
+    if (!tournamentIds.length) return new Map();
+
+    const stats = await Registration.aggregate([
+        {
+            $match: {
+                tournament: { $in: tournamentIds.map((id) => new mongoose.Types.ObjectId(id)) },
+                status: { $ne: "cancelled" }
+            }
+        },
+        {
+            $project: {
+                tournament: 1,
+                paidAmount: { $ifNull: ["$paidAmount", 0] },
+                platformFee: { $ifNull: ["$platformFee", 0] },
+                organizerAmount: { $ifNull: ["$organizerAmount", 0] },
+                playerCount: {
+                    $cond: [
+                        { $gt: [{ $size: { $ifNull: ["$team", []] } }, 0] },
+                        { $size: { $ifNull: ["$team", []] } },
+                        1
+                    ]
+                }
+            }
+        },
+        {
+            $group: {
+                _id: "$tournament",
+                registrationCount: { $sum: 1 },
+                participantCount: { $sum: "$playerCount" },
+                paidAmount: { $sum: "$paidAmount" },
+                platformFeeAmount: { $sum: "$platformFee" },
+                organizerEarnings: { $sum: "$organizerAmount" }
+            }
+        }
+    ]);
+
+    return new Map(stats.map((item) => [item._id.toString(), item]));
+};
+
+const serializeTournament = (tournament, participantStats = new Map()) => {
+    const plain = tournament?.toObject?.() || tournament;
+    const stats = participantStats.get(plain._id?.toString?.() || String(plain._id)) || {};
+    const receivedMoney = Number(plain.organizerEarnings || stats.organizerEarnings || 0);
+    const platformFeeAmount = Number(plain.platformFeeAmount || stats.platformFeeAmount || 0);
+    const paidMoney = (plain.results || []).reduce((sum, result) => sum + Number(result.prizeWon || 0), 0);
+
+    return {
+        ...plain,
+        organizerEarnings: receivedMoney,
+        platformFeeAmount,
+        receivedMoney,
+        paidMoney,
+        registrationCount: stats.registrationCount || 0,
+        participantCount: stats.participantCount || 0
+    };
+};
+
 const buildTournamentPayload = (body, organizerId, channelId = null) => {
     const startAt = parseDate(body.startAt || body.startDate, "startAt");
     const endAt = parseOptionalDate(body.endAt || body.endDate, "endAt");
@@ -193,7 +254,7 @@ const buildTournamentPayload = (body, organizerId, channelId = null) => {
     const maxTeams = Number(body.maxTeams || (maxPlayersInput ? Math.ceil(maxPlayersInput / teamSize) : preset.defaultTeams || 2));
     const maxPlayers = Number(maxPlayersInput || maxTeams * teamSize);
 
-    return {
+    const payload = {
         title: body.title.trim(),
         description: body.description,
         game,
@@ -204,7 +265,6 @@ const buildTournamentPayload = (body, organizerId, channelId = null) => {
         organizer: organizerId,
         channel: channelId,
         type: normalizeType(body.type, teamSize),
-        format: body.format || "single_elim",
         startAt,
         endAt,
         registrationStart,
@@ -213,12 +273,27 @@ const buildTournamentPayload = (body, organizerId, channelId = null) => {
         maxTeams,
         teamSize,
         entryFee: Number(body.entryFee || 0),
-        platformFeePercent: Number(body.platformFeePercent ?? 10),
-        prizePool: body.prizePool,
+        platformFeePercent: Number(body.platformFeePercent ?? getPlatformFeePercent("TOURNAMENT_ENTRY")),
+        joinedPlayers: [],
+        prizePool: 0,
         rules: body.rules,
         status: normalizeStatus(body.status) || (registrationStart > now ? "draft" : "open"),
         room_details: body.room_details
     };
+
+    const distributionInput = Array.isArray(body.prizeDistribution)
+        ? body.prizeDistribution
+        : Array.isArray(body.prizePool?.distribution)
+            ? body.prizePool.distribution
+            : [];
+
+    applyPrizeSettings(payload, {
+        prizeMode: body.prizeMode,
+        killPrizeAmount: body.killPrizeAmount,
+        prizeDistribution: distributionInput
+    });
+
+    return payload;
 };
 
 // ---------------------------------
@@ -247,11 +322,12 @@ const getAllTournaments = asyncHandler(async (req, res) => {
     const syncedTournaments = await Promise.all(
         tournaments.map((tournament) => syncTournamentLifecycle(tournament, { save: true }))
     );
+    const participantStats = await getParticipantStats(syncedTournaments.map((tournament) => tournament._id));
 
     const total = await Tournament.countDocuments(query);
 
     return res.status(200).json(
-        new ApiResponse(200, { tournaments: syncedTournaments, total }, "Tournaments fetched successfully")
+        new ApiResponse(200, { tournaments: syncedTournaments.map((tournament) => serializeTournament(tournament, participantStats)), total }, "Tournaments fetched successfully")
     );
 });
 
@@ -267,13 +343,15 @@ const getTournamentById = asyncHandler(async (req, res) => {
 
     const tournament = await Tournament.findById(tournamentId)
         .populate("organizer", "username avatar stats")
-        .populate("channel", "name handle avatar");
+        .populate("channel", "name handle avatar")
+        .populate("results.player", "username avatar");
 
     if (!tournament) throw new ApiError(404, "Tournament not found");
     await syncTournamentLifecycle(tournament, { save: true });
+    const participantStats = await getParticipantStats([tournament._id]);
 
     return res.status(200).json(
-        new ApiResponse(200, tournament, "Tournament fetched successfully")
+        new ApiResponse(200, serializeTournament(tournament, participantStats), "Tournament fetched successfully")
     );
 });
 
@@ -286,7 +364,7 @@ const createTournament = asyncHandler(async (req, res) => {
     const tournament = await Tournament.create(payload);
 
     return res.status(201).json(
-        new ApiResponse(201, tournament, "Tournament created successfully")
+        new ApiResponse(201, serializeTournament(tournament), "Tournament created successfully")
     );
 });
 
@@ -324,6 +402,27 @@ const updateTournament = asyncHandler(async (req, res) => {
         updates.maxPlayers = Number(updates.maxTeams || tournament.maxTeams || 1) * Number(updates.teamSize || tournament.teamSize || 1);
     }
 
+    const distributionInput = Array.isArray(updates.prizeDistribution)
+        ? updates.prizeDistribution
+        : Array.isArray(updates.prizePool?.distribution)
+            ? updates.prizePool.distribution
+            : null;
+    const hasPrizeSettings =
+        distributionInput !== null ||
+        Object.prototype.hasOwnProperty.call(updates, "prizeMode") ||
+        Object.prototype.hasOwnProperty.call(updates, "killPrizeAmount");
+    if (hasPrizeSettings) {
+        applyPrizeSettings(tournament, {
+            prizeMode: updates.prizeMode ?? tournament.prizeMode,
+            killPrizeAmount: updates.killPrizeAmount ?? tournament.killPrizeAmount,
+            prizeDistribution: distributionInput ?? tournament.prizeDistribution
+        });
+        delete updates.prizeMode;
+        delete updates.killPrizeAmount;
+        delete updates.prizeDistribution;
+        delete updates.prizePool;
+    }
+
     validateTournamentSchedule({
         startAt: updates.startAt || tournament.startAt,
         endAt: Object.prototype.hasOwnProperty.call(updates, "endAt") ? updates.endAt : tournament.endAt,
@@ -340,7 +439,6 @@ const updateTournament = asyncHandler(async (req, res) => {
         "platform",
         "perspective",
         "type",
-        "format",
         "startAt",
         "endAt",
         "registrationStart",
@@ -350,7 +448,6 @@ const updateTournament = asyncHandler(async (req, res) => {
         "teamSize",
         "entryFee",
         "platformFeePercent",
-        "prizePool",
         "rules",
         "status",
         "room_details"
@@ -362,11 +459,13 @@ const updateTournament = asyncHandler(async (req, res) => {
         }
     });
 
+    updatePrizePool(tournament);
     await tournament.save();
     await syncTournamentLifecycle(tournament, { save: true });
+    const participantStats = await getParticipantStats([tournament._id]);
 
     return res.status(200).json(
-        new ApiResponse(200, tournament, "Tournament updated successfully")
+        new ApiResponse(200, serializeTournament(tournament, participantStats), "Tournament updated successfully")
     );
 });
 
@@ -466,8 +565,8 @@ const joinTournament = asyncHandler(async (req, res) => {
 
     try {
         const entryFee = Number(tournament.entryFee || 0);
-        const platformFee = Math.round(entryFee * Number(tournament.platformFeePercent || 10)) / 100;
-        const organizerAmount = entryFee - platformFee;
+        const entryFeePercent = Number(tournament.platformFeePercent ?? getPlatformFeePercent("TOURNAMENT_ENTRY"));
+        const { platformFee, netAmount: organizerAmount } = calculateFeeSplit(entryFee, entryFeePercent);
         let paymentRef = null;
 
         if (entryFee > 0) {
@@ -497,40 +596,74 @@ const joinTournament = asyncHandler(async (req, res) => {
                 fromUser: req.user._id,
                 toUser: tournament.organizer,
                 description: `Entry fee for ${tournament.title}`,
-                metadata: { tournament: tournamentId, platformFee, organizerAmount }
-            }], { session });
+                metadata: { tournament: tournamentId, platformFee, organizerAmount, feePercent: entryFeePercent }
+            }], { session, ordered: true });
 
             paymentRef = debitTx[0].transactionId;
 
+            let organizerTx = null;
             if (organizerAmount > 0) {
                 const organizerWallet = await Wallet.findOne({ user: tournament.organizer }).session(session);
-                if (organizerWallet) {
-                    const organizerBefore = organizerWallet.balance;
-                    organizerWallet.balance = organizerBefore + organizerAmount;
-                    organizerWallet.lastTransactionAt = new Date();
-                    await organizerWallet.save({ session });
+                if (!organizerWallet) throw new ApiError(404, "Organizer wallet not found");
 
-                    await WalletTransaction.create([{
-                        transactionId: uuidv4(),
-                        user: tournament.organizer,
-                        walletId: organizerWallet._id,
-                        type: "CREDIT",
-                        category: "ORGANIZER_EARNING",
-                        amount: organizerAmount,
-                        grossAmount: entryFee,
-                        platformFee,
-                        netAmount: organizerAmount,
-                        balanceBefore: organizerBefore,
-                        balanceAfter: organizerWallet.balance,
-                        status: "SUCCESS",
-                        referenceId: tournamentId,
-                        fromUser: req.user._id,
-                        toUser: tournament.organizer,
-                        description: `Organizer earning from ${tournament.title}`,
-                        metadata: { tournament: tournamentId, player: req.user._id, platformFee }
-                    }], { session });
-                }
+                const organizerBefore = organizerWallet.balance;
+                organizerWallet.balance = organizerBefore + organizerAmount;
+                organizerWallet.lastTransactionAt = new Date();
+                await organizerWallet.save({ session });
+
+                organizerTx = await WalletTransaction.create([{
+                    transactionId: uuidv4(),
+                    user: tournament.organizer,
+                    walletId: organizerWallet._id,
+                    type: "CREDIT",
+                    category: "ORGANIZER_EARNING",
+                    amount: organizerAmount,
+                    grossAmount: entryFee,
+                    platformFee,
+                    netAmount: organizerAmount,
+                    balanceBefore: organizerBefore,
+                    balanceAfter: organizerWallet.balance,
+                    status: "SUCCESS",
+                    referenceId: tournamentId,
+                    fromUser: req.user._id,
+                    toUser: tournament.organizer,
+                    description: `Organizer earning from ${tournament.title}`,
+                    metadata: { tournament: tournamentId, player: req.user._id, platformFee, feePercent: entryFeePercent }
+                }], { session, ordered: true });
             }
+
+            await Ledger.create([
+                ...(organizerAmount > 0 ? [{
+                    transactionId: debitTx[0].transactionId,
+                    debitAccount: "USER_WALLET",
+                    creditAccount: "ORGANIZER_WALLET",
+                    fromUser: req.user._id,
+                    toUser: tournament.organizer,
+                    category: "TOURNAMENT_ENTRY",
+                    referenceId: tournamentId,
+                    amount: organizerAmount,
+                    currency: "INR",
+                    platformFee,
+                    netAmount: organizerAmount,
+                    status: "SUCCESS",
+                    metadata: { tournament: tournamentId, organizerTransactionId: organizerTx?.[0]?.transactionId, feePercent: entryFeePercent }
+                }] : []),
+                ...(platformFee > 0 ? [{
+                    transactionId: debitTx[0].transactionId,
+                    debitAccount: "USER_WALLET",
+                    creditAccount: "PLATFORM_FEE",
+                    fromUser: req.user._id,
+                    toUser: null,
+                    category: "TOURNAMENT_ENTRY_FEE",
+                    referenceId: tournamentId,
+                    amount: platformFee,
+                    currency: "INR",
+                    platformFee,
+                    netAmount: 0,
+                    status: "SUCCESS",
+                    metadata: { tournament: tournamentId, feePercent: entryFeePercent }
+                }] : [])
+            ].filter(Boolean), { session, ordered: true });
 
             tournament.platformFeeAmount = Number(tournament.platformFeeAmount || 0) + platformFee;
             tournament.organizerEarnings = Number(tournament.organizerEarnings || 0) + organizerAmount;
@@ -548,7 +681,12 @@ const joinTournament = asyncHandler(async (req, res) => {
             organizerAmount,
             paymentRef,
             gameAccounts: memberIds.map((userId) => buildGameAccountSnapshot(accountByUser.get(userId.toString())))
-        }], { session });
+        }], { session, ordered: true });
+
+        const joinedPlayerIds = new Set((tournament.joinedPlayers || []).map((playerId) => playerId.toString()));
+        memberIds.forEach((userId) => joinedPlayerIds.add(userId.toString()));
+        tournament.joinedPlayers = Array.from(joinedPlayerIds).map((userId) => new mongoose.Types.ObjectId(userId));
+        await tournament.save({ session });
 
         if (tournament.type !== "solo") {
             await Team.create([{
@@ -556,7 +694,7 @@ const joinTournament = asyncHandler(async (req, res) => {
                 tournament: tournamentId,
                 players: memberIds,
                 createdBy: req.user._id
-            }], { session });
+            }], { session, ordered: true });
         }
 
         await session.commitTransaction();
@@ -662,14 +800,18 @@ const getRegistrationRecipient = (registration) => {
 // ---------------------------------
 const distributeTournamentPrizes = asyncHandler(async (req, res) => {
     const tournamentId = getParamId(req, "tournamentId");
-    const payouts = Array.isArray(req.body?.payouts) ? req.body.payouts : [];
+    const resultRows = Array.isArray(req.body?.results)
+        ? req.body.results
+        : Array.isArray(req.body?.payouts)
+            ? req.body.payouts
+            : [];
 
     if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
         throw new ApiError(400, "Invalid tournament ID");
     }
 
-    if (payouts.length === 0) {
-        throw new ApiError(400, "Add at least one prize payout");
+    if (resultRows.length === 0) {
+        throw new ApiError(400, "Assign at least one tournament result");
     }
 
     const tournament = await Tournament.findById(tournamentId);
@@ -683,79 +825,84 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Mark the tournament as completed before distributing prizes");
     }
 
-    const previousPayout = await WalletTransaction.exists({
-        referenceId: tournamentId,
-        category: "WINNING",
-        "metadata.prizePayout": true
-    });
-    if (previousPayout) {
-        throw new ApiError(400, "Prize money has already been distributed for this tournament");
+    if (Array.isArray(tournament.results) && tournament.results.length > 0) {
+        const populatedTournament = await Tournament.findById(tournamentId).populate("results.player", "username avatar");
+        return res.status(200).json(
+            new ApiResponse(200, {
+                tournament: populatedTournament,
+                payoutTotal: tournament.results.reduce((sum, result) => sum + Number(result.prizeWon || 0), 0),
+                transactions: []
+            }, "Tournament prizes already distributed")
+        );
     }
 
-    const normalizedPayouts = payouts.map((payout) => ({
-        registrationId: String(payout.registrationId || ""),
-        place: Number(payout.place),
-        amount: Number(payout.amount)
+    const normalizedResults = resultRows.map((row) => ({
+        registrationId: row.registrationId ? String(row.registrationId) : "",
+        position: Number(row.position ?? row.place),
+        playerId: row.playerId || row.player ? String(row.playerId || row.player) : "",
     }));
 
-    const registrationIds = normalizedPayouts.map((payout) => payout.registrationId);
-    const duplicateRegistration = registrationIds.find((id, index) => id && registrationIds.indexOf(id) !== index);
-    if (duplicateRegistration) {
-        throw new ApiError(400, "A participant can only receive one prize payout");
+    const registrationIds = normalizedResults.map((row) => row.registrationId).filter(Boolean);
+    const registrationMap = new Map();
+    if (registrationIds.length > 0) {
+        const registrations = await Registration.find({
+            _id: { $in: registrationIds },
+            tournament: tournamentId,
+            status: { $in: ["paid", "confirmed"] }
+        });
+
+        if (registrations.length !== registrationIds.length) {
+            throw new ApiError(400, "One or more selected participants are not registered for this tournament");
+        }
+
+        registrations.forEach((registration) => {
+            registrationMap.set(registration._id.toString(), registration);
+        });
     }
 
-    normalizedPayouts.forEach((payout) => {
-        if (!mongoose.Types.ObjectId.isValid(payout.registrationId)) {
-            throw new ApiError(400, "Every payout must include a valid participant");
-        }
-        if (!Number.isFinite(payout.place) || payout.place < 1) {
-            throw new ApiError(400, "Every payout must include a valid position");
-        }
-        if (!Number.isFinite(payout.amount) || payout.amount <= 0) {
-            throw new ApiError(400, "Every payout amount must be greater than zero");
-        }
+    const resultInput = normalizedResults.map((row) => {
+        const registration = row.registrationId ? registrationMap.get(row.registrationId) : null;
+        const player = row.playerId || (registration ? getRegistrationRecipient(registration)?.toString() : "");
+        return { position: row.position, playerId: player };
     });
 
-    const prizeTotal = Number(tournament.prizePool?.total || 0);
+    assignTournamentResults(tournament, resultInput);
+    const normalizedPayouts = tournament.results.map((result) => ({
+        place: Number(result.position),
+        recipient: result.player,
+        amount: Number(result.prizeWon || 0),
+    }));
     const payoutTotal = normalizedPayouts.reduce((sum, payout) => sum + payout.amount, 0);
-    if (prizeTotal > 0 && payoutTotal > prizeTotal) {
-        throw new ApiError(400, "Prize payouts cannot exceed the tournament prize pool");
-    }
+    const transferFeePercent = getPlatformFeePercent("TRANSFER");
+    const { platformFee: transferPlatformFee } = calculateFeeSplit(payoutTotal, transferFeePercent);
+    const organizerDebitAmount = roundCurrency(payoutTotal + transferPlatformFee);
+    const winningFeePercent = getPlatformFeePercent("WINNING");
 
-    const registrations = await Registration.find({
-        _id: { $in: registrationIds },
-        tournament: tournamentId,
-        status: { $in: ["paid", "confirmed"] }
-    })
-        .populate("user", "username")
-        .populate("team", "username");
-
-    if (registrations.length !== normalizedPayouts.length) {
-        throw new ApiError(400, "One or more selected participants are not registered for this tournament");
-    }
-
-    const registrationMap = new Map(registrations.map((registration) => [registration._id.toString(), registration]));
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
         const organizerWallet = await Wallet.findOne({ user: tournament.organizer }).session(session);
         if (!organizerWallet) throw new ApiError(404, "Organizer wallet not found");
-        if (organizerWallet.balance < payoutTotal) throw new ApiError(400, "Organizer wallet does not have enough balance for prize payouts");
+        if (organizerWallet.balance < organizerDebitAmount) {
+            throw new ApiError(400, "Organizer wallet does not have enough balance for prize payouts");
+        }
 
         const organizerBefore = organizerWallet.balance;
-        organizerWallet.balance = organizerBefore - payoutTotal;
+        organizerWallet.balance = organizerBefore - organizerDebitAmount;
         organizerWallet.lastTransactionAt = new Date();
         await organizerWallet.save({ session });
 
-        await WalletTransaction.create([{
+        const payoutRef = uuidv4();
+        const organizerDebitTx = await WalletTransaction.create([{
             transactionId: uuidv4(),
             user: tournament.organizer,
             walletId: organizerWallet._id,
             type: "DEBIT",
             category: "TRANSFER",
-            amount: payoutTotal,
-            grossAmount: payoutTotal,
+            amount: organizerDebitAmount,
+            grossAmount: organizerDebitAmount,
+            platformFee: transferPlatformFee,
             netAmount: payoutTotal,
             balanceBefore: organizerBefore,
             balanceAfter: organizerWallet.balance,
@@ -763,61 +910,120 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
             referenceId: tournamentId,
             fromUser: tournament.organizer,
             description: `Prize distribution for ${tournament.title}`,
-            metadata: { tournament: tournamentId, prizePayout: true, payoutCount: normalizedPayouts.length }
-        }], { session });
+            metadata: { tournament: tournamentId, prizePayout: true, payoutRef, payoutCount: normalizedPayouts.length, feePercent: transferFeePercent }
+        }], { session, ordered: true });
 
         const transactions = [];
-        for (const payout of normalizedPayouts) {
-            const registration = registrationMap.get(payout.registrationId);
-            const recipient = getRegistrationRecipient(registration);
-            if (!recipient) throw new ApiError(400, "Selected participant does not have a payout receiver");
+        const ledgerEntries = [];
+        if (transferPlatformFee > 0) {
+            ledgerEntries.push({
+                transactionId: organizerDebitTx[0].transactionId,
+                debitAccount: "ORGANIZER_WALLET",
+                creditAccount: "PLATFORM_FEE",
+                fromUser: tournament.organizer,
+                toUser: null,
+                category: "TRANSFER_FEE",
+                referenceId: tournamentId,
+                amount: transferPlatformFee,
+                currency: "INR",
+                platformFee: transferPlatformFee,
+                netAmount: 0,
+                status: "SUCCESS",
+                metadata: { tournament: tournamentId, prizePayout: true, payoutRef, feePercent: transferFeePercent }
+            });
+        }
 
-            const winnerWallet = await Wallet.findOne({ user: recipient }).session(session);
+        for (const payout of normalizedPayouts) {
+            const winnerWallet = await Wallet.findOne({ user: payout.recipient }).session(session);
             if (!winnerWallet) throw new ApiError(404, "Winner wallet not found");
 
+            const { platformFee: winningPlatformFee, netAmount: winningNetAmount } = calculateFeeSplit(payout.amount, winningFeePercent);
             const before = winnerWallet.balance;
-            winnerWallet.balance = before + payout.amount;
+            winnerWallet.balance = before + winningNetAmount;
             winnerWallet.lastTransactionAt = new Date();
             await winnerWallet.save({ session });
 
             const tx = await WalletTransaction.create([{
                 transactionId: uuidv4(),
-                user: recipient,
+                user: payout.recipient,
                 walletId: winnerWallet._id,
                 type: "CREDIT",
                 category: "WINNING",
-                amount: payout.amount,
+                amount: winningNetAmount,
                 grossAmount: payout.amount,
-                netAmount: payout.amount,
+                platformFee: winningPlatformFee,
+                netAmount: winningNetAmount,
                 balanceBefore: before,
                 balanceAfter: winnerWallet.balance,
                 status: "SUCCESS",
                 referenceId: tournamentId,
                 fromUser: tournament.organizer,
-                toUser: recipient,
+                toUser: payout.recipient,
                 description: `Place #${payout.place} prize for ${tournament.title}`,
+                metadata: { tournament: tournamentId, place: payout.place, prizePayout: true, payoutRef, feePercent: winningFeePercent }
+            }], { session, ordered: true });
+
+            transactions.push(tx[0]);
+            ledgerEntries.push({
+                transactionId: tx[0].transactionId,
+                debitAccount: "ORGANIZER_WALLET",
+                creditAccount: "USER_WALLET",
+                fromUser: tournament.organizer,
+                toUser: payout.recipient,
+                category: "WINNING",
+                referenceId: tournamentId,
+                amount: winningNetAmount,
+                currency: "INR",
+                platformFee: winningPlatformFee,
+                netAmount: winningNetAmount,
+                status: "SUCCESS",
                 metadata: {
                     tournament: tournamentId,
-                    registration: payout.registrationId,
                     place: payout.place,
-                    prizePayout: true
+                    prizePayout: true,
+                    payoutRef,
+                    feePercent: winningFeePercent,
+                    organizerDebitTransactionId: organizerDebitTx[0].transactionId
                 }
-            }], { session });
-            transactions.push(tx[0]);
+            });
+            if (winningPlatformFee > 0) {
+                ledgerEntries.push({
+                    transactionId: tx[0].transactionId,
+                    debitAccount: "ORGANIZER_WALLET",
+                    creditAccount: "PLATFORM_FEE",
+                    fromUser: tournament.organizer,
+                    toUser: null,
+                    category: "WINNING_FEE",
+                    referenceId: tournamentId,
+                    amount: winningPlatformFee,
+                    currency: "INR",
+                    platformFee: winningPlatformFee,
+                    netAmount: 0,
+                    status: "SUCCESS",
+                    metadata: {
+                        tournament: tournamentId,
+                        place: payout.place,
+                        prizePayout: true,
+                        payoutRef,
+                        feePercent: winningFeePercent,
+                        organizerDebitTransactionId: organizerDebitTx[0].transactionId
+                    }
+                });
+            }
+        }
+
+        if (ledgerEntries.length > 0) {
+            await Ledger.create(ledgerEntries, { session, ordered: true });
         }
 
         tournament.status = "completed";
-        tournament.prizePool = {
-            ...(tournament.prizePool?.toObject?.() || tournament.prizePool || {}),
-            total: prizeTotal,
-            distribution: normalizedPayouts.map((payout) => ({ place: payout.place, amount: payout.amount }))
-        };
         await tournament.save({ session });
 
         await session.commitTransaction();
 
+        const populatedTournament = await Tournament.findById(tournamentId).populate("results.player", "username avatar");
         return res.status(200).json(
-            new ApiResponse(200, { tournament, transactions }, "Prize money distributed successfully")
+            new ApiResponse(200, { tournament: populatedTournament, payoutTotal, transactions, organizerTransaction: organizerDebitTx[0] }, "Prize money transferred successfully")
         );
     } catch (error) {
         await session.abortTransaction();

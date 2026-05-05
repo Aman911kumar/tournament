@@ -6,6 +6,7 @@ import { WalletTransaction } from '../models/walletTransaction.model.js'
 import { Wallet } from '../models/wallet.model.js'
 import { Notification } from '../models/notification.model.js'
 import { Tournament } from '../models/tournament.model.js'
+import { Registration } from '../models/registration.model.js'
 import { hasRole } from '../middlewares/auth.middleware.js'
 import mongoose from 'mongoose'
 import jwt from 'jsonwebtoken'
@@ -63,6 +64,70 @@ const createUniqueUsername = async (name, email, providerId) => {
     return username;
 };
 
+const isProviderPhoneNumber = (value) => /^(google|facebook):/i.test(String(value || ""));
+
+const sanitizeUserForResponse = (user) => {
+    const plain = user?.toObject?.() || user;
+    if (!plain) return plain;
+
+    const { password, refreshToken, ...safeUser } = plain;
+    if (isProviderPhoneNumber(safeUser.phone_number)) {
+        delete safeUser.phone_number;
+    }
+
+    return safeUser;
+};
+
+const getPlayerStats = async (userId) => {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const [wallet, allTimeWinnings, monthlyWinnings, matchesPlayed] = await Promise.all([
+        Wallet.findOne({ user: userId }).select("balance"),
+        WalletTransaction.aggregate([
+            { $match: { user: new mongoose.Types.ObjectId(userId), type: "CREDIT", category: "WINNING", status: "SUCCESS" } },
+            { $group: { _id: null, total: { $sum: "$amount" } } }
+        ]),
+        WalletTransaction.aggregate([
+            { $match: { user: new mongoose.Types.ObjectId(userId), type: "CREDIT", category: "WINNING", status: "SUCCESS", createdAt: { $gte: startOfMonth } } },
+            { $group: { _id: null, total: { $sum: "$amount" } } }
+        ]),
+        Registration.countDocuments({
+            $or: [{ user: userId }, { team: userId }],
+            status: { $in: ["paid", "confirmed"] }
+        })
+    ]);
+
+    const amountWon = Number(allTimeWinnings[0]?.total || 0);
+    const monthWon = Number(monthlyWinnings[0]?.total || 0);
+
+    return {
+        walletBalance: Number(wallet?.balance || 0),
+        stats: {
+            matchesPlayed,
+            kills: 0,
+            amount_won: amountWon,
+        },
+        playerEarnings: amountWon,
+        playerMonthlyChange: amountWon > 0 ? Math.round((monthWon / amountWon) * 100) : 0,
+    };
+};
+
+const buildUserProfileResponse = async (user) => {
+    const safeUser = sanitizeUserForResponse(user);
+    if (!safeUser?._id) return safeUser;
+
+    const playerStats = await getPlayerStats(safeUser._id);
+    return {
+        ...safeUser,
+        walletBalance: playerStats.walletBalance,
+        stats: playerStats.stats,
+        playerEarnings: playerStats.playerEarnings,
+        playerMonthlyChange: playerStats.playerMonthlyChange,
+    };
+};
+
 const issueAuthResponse = async (res, user, message) => {
     user.lastLoginAt = new Date();
     await user.save({ validateBeforeSave: false });
@@ -74,7 +139,7 @@ const issueAuthResponse = async (res, user, message) => {
         .cookie('accessToken', accessToken, options)
         .cookie('refreshToken', refreshToken, options)
         .json(
-            new ApiResponse(200, { user: loggedInUser, accessToken, refreshToken }, message)
+            new ApiResponse(200, { user: sanitizeUserForResponse(loggedInUser), accessToken, refreshToken }, message)
         );
 };
 
@@ -85,12 +150,13 @@ const findOrCreateSocialUser = async ({ provider, providerId, email, name, pictu
 
     const normalizedEmail = email?.trim().toLowerCase();
     const accountEmail = normalizedEmail || `${provider}_${providerId}@${provider}.local`;
-    const socialPhoneNumber = `${provider}:${providerId}`;
+    const legacySocialPhoneNumber = `${provider}:${providerId}`;
 
     const existingUser = await User.findOne({
         $or: [
+            { socialProvider: provider, socialProviderId: providerId },
             { email: accountEmail },
-            { phone_number: socialPhoneNumber }
+            { phone_number: legacySocialPhoneNumber }
         ]
     });
 
@@ -100,6 +166,17 @@ const findOrCreateSocialUser = async ({ provider, providerId, email, name, pictu
 
         if (!existingUser.email && normalizedEmail) {
             existingUser.email = normalizedEmail;
+            isUpdated = true;
+        }
+
+        if (!existingUser.socialProvider || !existingUser.socialProviderId) {
+            existingUser.socialProvider = provider;
+            existingUser.socialProviderId = providerId;
+            isUpdated = true;
+        }
+
+        if (isProviderPhoneNumber(existingUser.phone_number)) {
+            existingUser.set("phone_number", undefined);
             isUpdated = true;
         }
 
@@ -128,7 +205,8 @@ const findOrCreateSocialUser = async ({ provider, providerId, email, name, pictu
                 {
                     username,
                     email: accountEmail,
-                    phone_number: socialPhoneNumber,
+                    socialProvider: provider,
+                    socialProviderId: providerId,
                     password,
                     avatar: picture ? { url: picture } : undefined,
                 }
@@ -545,10 +623,15 @@ const changePassword = asyncHandler(async (req, res) => {
 //profile Management________________________________________________________________________________________________
 
 const getUserProfile = asyncHandler(async (req, res) => {
-    const user = req.user
+    const user = req.user;
+    if (isProviderPhoneNumber(user.phone_number)) {
+        user.set("phone_number", undefined);
+        await user.save({ validateBeforeSave: false });
+    }
+
     return res.status(200).json(
-        new ApiResponse(200, { user }, "User fetched successfully")
-    )
+        new ApiResponse(200, { user: await buildUserProfileResponse(user) }, "User fetched successfully")
+    );
 })
 
 const getUserById = asyncHandler(async (req, res) => {
@@ -565,7 +648,7 @@ const getUserById = asyncHandler(async (req, res) => {
     }
 
     return res.status(200).json(
-        new ApiResponse(200, user, "User fetched successfully")
+        new ApiResponse(200, sanitizeUserForResponse(user), "User fetched successfully")
     );
 });
 
@@ -773,6 +856,17 @@ const getCreatorEarnings = asyncHandler(async (req, res) => {
     );
 });
 
+const getPlayerEarnings = asyncHandler(async (req, res) => {
+    const stats = await getPlayerStats(req.user._id);
+
+    return res.status(200).json(
+        new ApiResponse(200, {
+            total: stats.playerEarnings,
+            monthlyChange: stats.playerMonthlyChange,
+        }, "Player earnings fetched successfully")
+    );
+});
+
 //notification______________________________________________________________________________________________________
 
 const getUserNotifications = asyncHandler(async (req, res) => {
@@ -960,6 +1054,7 @@ export {
     getWalletTransaction,
     getTransactionDetails,
     getCreatorEarnings,
+    getPlayerEarnings,
     getUserNotifications,
     markNotificationAsRead,
     markAllNotificationsAsRead,

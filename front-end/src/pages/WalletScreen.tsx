@@ -10,13 +10,13 @@ import {
   Plus,
   RefreshCcw,
   Send,
+  Trophy,
   TrendingUp,
   Wallet,
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import BottomNav from "@/components/BottomNav";
-import { getBalance, getCreatorEarnings, getTransactions, WalletTransaction } from "@/api/wallet";
+import { getBalance, getCreatorEarnings, getPlayerEarnings, getTransactions, WalletTransaction } from "@/api/wallet";
 import {
   CACHE_KEYS,
   getSavedDataLabel,
@@ -29,7 +29,9 @@ import { formatCurrency, getErrorMessage } from "@/lib/page-utils";
 interface WalletSummary {
   balance: number;
   creatorEarnings: number;
+  playerEarnings: number;
   monthlyChange: number;
+  playerMonthlyChange: number;
 }
 
 const statusColors: Record<string, string> = {
@@ -45,7 +47,9 @@ const WalletScreen = () => {
   const [activeTab, setActiveTab] = useState<"all" | "player" | "creator">("all");
   const [balance, setBalance] = useState(0);
   const [creatorEarnings, setCreatorEarnings] = useState(0);
+  const [playerEarnings, setPlayerEarnings] = useState(0);
   const [monthlyChange, setMonthlyChange] = useState(0);
+  const [playerMonthlyChange, setPlayerMonthlyChange] = useState(0);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,27 +65,34 @@ const WalletScreen = () => {
       if (cachedSummary) {
         setBalance(cachedSummary.data.balance);
         setCreatorEarnings(cachedSummary.data.creatorEarnings);
-        setMonthlyChange(cachedSummary.data.monthlyChange);
+        setPlayerEarnings(cachedSummary.data.playerEarnings ?? 0);
+        setMonthlyChange(cachedSummary.data.monthlyChange ?? 0);
+        setPlayerMonthlyChange(cachedSummary.data.playerMonthlyChange ?? 0);
         setCacheNotice(getSavedDataLabel(cachedSummary.savedAt));
       }
       if (cachedTransactions) {
         setTransactions(cachedTransactions.data);
       }
 
-      const [balanceRes, earningsRes, transactionsRes] = await Promise.all([
+      const [balanceRes, earningsRes, playerEarningsRes, transactionsRes] = await Promise.all([
         getBalance(),
         getCreatorEarnings(),
+        getPlayerEarnings(),
         getTransactions("all"),
       ]);
       setBalance(balanceRes.balance);
       setCreatorEarnings(earningsRes.total);
+      setPlayerEarnings(playerEarningsRes.total);
       setMonthlyChange(earningsRes.monthlyChange);
+      setPlayerMonthlyChange(playerEarningsRes.monthlyChange);
       setTransactions(transactionsRes);
       setCacheNotice(null);
       writeAuthenticatedCache(CACHE_KEYS.walletSummary, {
         balance: balanceRes.balance,
         creatorEarnings: earningsRes.total,
+        playerEarnings: playerEarningsRes.total,
         monthlyChange: earningsRes.monthlyChange,
+        playerMonthlyChange: playerEarningsRes.monthlyChange,
       });
       writeAuthenticatedCache(CACHE_KEYS.walletTransactions, transactionsRes);
     } catch (loadError) {
@@ -89,7 +100,9 @@ const WalletScreen = () => {
         if (cachedSummary) {
           setBalance(cachedSummary.data.balance);
           setCreatorEarnings(cachedSummary.data.creatorEarnings);
-          setMonthlyChange(cachedSummary.data.monthlyChange);
+          setPlayerEarnings(cachedSummary.data.playerEarnings ?? 0);
+          setMonthlyChange(cachedSummary.data.monthlyChange ?? 0);
+          setPlayerMonthlyChange(cachedSummary.data.playerMonthlyChange ?? 0);
         }
         if (cachedTransactions) {
           setTransactions(cachedTransactions.data);
@@ -169,7 +182,26 @@ const WalletScreen = () => {
         </GlassCard>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-4">
+      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-4 grid gap-3 sm:grid-cols-2">
+        <GlassCard className="neon-border">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <Trophy className="w-4 h-4 text-accent" />
+                <span className="text-xs text-muted-foreground font-heading">Player Earnings</span>
+              </div>
+              {loading ? (
+                <div className="h-6 w-28 rounded bg-muted animate-pulse" />
+              ) : (
+                <p className="font-heading text-lg font-bold text-accent truncate">{formatCurrency(playerEarnings)}</p>
+              )}
+              <p className="text-[10px] text-accent flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" /> +{playerMonthlyChange}% this month
+              </p>
+            </div>
+          </div>
+        </GlassCard>
+
         <GlassCard className="neon-border">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -258,7 +290,6 @@ const WalletScreen = () => {
         </div>
       </div>
 
-      <BottomNav />
     </div>
   );
 };

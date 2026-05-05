@@ -1,18 +1,18 @@
-import asyncHandler from "../utils/asyncHandler.js";
-import ApiResponse from "../utils/apiResponse.js";
-import ApiError from "../utils/apiError.js";
+import asyncHandler from "../utils/AsyncHandler.js";
+import ApiResponse from "../utils/ApiResponse.js";
+import ApiError from "../utils/ApiError.js";
 
-import { joinTournament, giveWinning, refundEntry } from "../services/tournamentWallet.service.js";
+import { giveWinning, joinTournament as debitTournamentEntry, refundEntry } from "../services/tournamentWallet.service.js";
 
 const joinTournament = asyncHandler(async (req, res) => {
     const { tournamentId, entryFee } = req.body;
 
     if (!tournamentId || !entryFee) {
-        throw new ApiError("TournamentId and entryFee required", 400);
+        throw new ApiError(400, "TournamentId and entryFee required");
     }
 
-    const tx = await tournamentWalletService.joinTournament({
-        user: req.user._id,
+    const tx = await debitTournamentEntry({
+        userId: req.user._id,
         entryFee,
     });
 
@@ -31,12 +31,12 @@ const joinTournament = asyncHandler(async (req, res) => {
 const distributeWinning = asyncHandler(async (req, res) => {
     const { user, amount, tournamentId } = req.body;
 
-    if (!userId || !amount) {
-        throw new ApiError("UserId and amount required", 400);
+    if (!user || !amount) {
+        throw new ApiError(400, "UserId and amount required");
     }
 
-    const tx = await tournamentWalletService.giveWinning({
-        user,
+    const tx = await giveWinning({
+        userId: user,
         amount,
     });
 
@@ -56,11 +56,11 @@ const refundTournament = asyncHandler(async (req, res) => {
     const { user, amount, tournamentId } = req.body;
 
     if (!user || !amount) {
-        throw new ApiError("UserId and amount required", 400);
+        throw new ApiError(400, "UserId and amount required");
     }
 
-    const tx = await tournamentWalletService.refundEntry({
-        user,
+    const tx = await refundEntry({
+        userId: user,
         amount,
     });
 

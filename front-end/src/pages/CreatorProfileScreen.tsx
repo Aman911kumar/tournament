@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import BottomNav from "@/components/BottomNav";
 import { followCreator, getCreatorProfile, unfollowCreator, CreatorProfileData } from "@/api/creators";
 import { Tournament } from "@/api/tournaments";
 import { toast } from "@/components/ui/sonner";
@@ -248,7 +247,7 @@ const CreatorProfileScreen = () => {
                           </p>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-xs font-heading font-bold text-accent">{formatCurrency(Number(tournament.prizePool?.total || 0))}</p>
+                          <p className="text-xs font-heading font-bold text-accent">{formatCurrency(Number(tournament.prizePool || 0))}</p>
                           <span className={`text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full ${statusClass[tournament.status]}`}>
                             {tournament.status}
                           </span>
@@ -279,7 +278,6 @@ const CreatorProfileScreen = () => {
         )}
       </div>
 
-      <BottomNav />
     </div>
   );
 };

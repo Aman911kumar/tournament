@@ -179,7 +179,7 @@ const getChannelByIdentifier = asyncHandler(async (req, res) => {
     const tournamentCount = await Tournament.countDocuments(tournamentQuery);
     const prizeTotals = await Tournament.aggregate([
         { $match: tournamentQuery },
-        { $group: { _id: null, totalPrize: { $sum: "$prizePool.total" } } }
+        { $group: { _id: null, totalPrize: { $sum: "$prizePool" } } }
     ]);
 
     return res.status(200).json(
@@ -222,7 +222,7 @@ const getCreatorByUserId = asyncHandler(async (req, res) => {
         Tournament.countDocuments(tournamentQuery),
         Tournament.aggregate([
             { $match: tournamentQuery },
-            { $group: { _id: null, totalPrize: { $sum: "$prizePool.total" } } }
+            { $group: { _id: null, totalPrize: { $sum: "$prizePool" } } }
         ])
     ]);
 

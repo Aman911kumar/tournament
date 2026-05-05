@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Star, Shield, Search } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import BottomNav from "@/components/BottomNav";
 import { CreatorChannel, getCreators } from "@/api/creators";
 
 const SubscriptionsScreen = () => {
@@ -105,7 +104,6 @@ const SubscriptionsScreen = () => {
         </div>
       </div>
 
-      <BottomNav />
     </div>
   );
 };

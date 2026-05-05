@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Bell, Search, ChevronRight, Flame, Zap, Star, Users, Crown } from "lucide-react";
+import { Bell, Search, ChevronRight, Crosshair, Flame, Zap, Star, Users, Crown } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import BottomNav from "@/components/BottomNav";
-import { getTournaments, Tournament } from "@/api/tournaments";
+import { getMyTournamentRegistrations, getTournaments, Tournament } from "@/api/tournaments";
 import { getCreators, CreatorChannel } from "@/api/creators";
 import { formatCurrency } from "@/lib/page-utils";
 
@@ -28,23 +27,40 @@ const gameLabels: Record<string, string> = {
   valorant: "Valorant",
 };
 
+const getRegistrationTournamentId = (registration: Awaited<ReturnType<typeof getMyTournamentRegistrations>>[number]) =>
+  typeof registration.tournament === "string" ? registration.tournament : registration.tournament?._id;
+
+const getPrizeSummary = (tournament?: Tournament) => {
+  if (!tournament) return formatCurrency(0);
+  const prizeMode = tournament.prizeMode ?? "position";
+  const positionPrize = Number(tournament.prizePool || 0);
+  const killPrize = Number(tournament.killPrizeAmount || 0);
+
+  if (prizeMode === "kill") return `${formatCurrency(killPrize)}/kill`;
+  if (prizeMode === "both") return `${formatCurrency(positionPrize)} + ${formatCurrency(killPrize)}/kill`;
+  return formatCurrency(positionPrize);
+};
+
 const Index = () => {
   const navigate = useNavigate();
   const [trendingTournaments, setTrendingTournaments] = useState<Tournament[]>([]);
   const [recommendedCreators, setRecommendedCreators] = useState<(CreatorChannel & { tournamentCount?: number })[]>([]);
+  const [joinedTournamentIds, setJoinedTournamentIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let active = true;
 
     const loadHome = async () => {
       try {
-        const [tournaments, creators] = await Promise.all([
+        const [tournaments, creators, registrations] = await Promise.all([
           getTournaments({ sort: "trending" }),
           getCreators(),
+          getMyTournamentRegistrations().catch(() => []),
         ]);
         if (!active) return;
         setTrendingTournaments(tournaments.slice(0, 3));
         setRecommendedCreators(creators.slice(0, 4));
+        setJoinedTournamentIds(new Set(registrations.map(getRegistrationTournamentId).filter(Boolean)));
       } catch {
         if (!active) return;
         setTrendingTournaments([]);
@@ -100,7 +116,7 @@ const Index = () => {
             by <span className="text-primary">{liveTournament?.channel?.name ?? liveTournament?.organizer?.username ?? "Creator"}</span> - Verified Creator
           </p>
           <p className="text-xs text-muted-foreground font-body mb-3">
-            Prize Pool: {formatCurrency(Number(liveTournament?.prizePool?.total || 0))} - {liveTournament?.maxPlayers ?? 0} Players
+            Prize: {getPrizeSummary(liveTournament)} - {liveTournament?.maxPlayers ?? 0} Players
           </p>
           <NeonButton variant="green" className="text-xs py-2 px-4" onClick={() => liveTournament?._id && navigate(`/tournament/${liveTournament._id}`)}>
             Watch Live
@@ -234,9 +250,12 @@ const Index = () => {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-xs font-heading font-bold text-accent neon-text-green">{formatCurrency(Number(t.prizePool?.total || 0))}</p>
-                <NeonButton variant="purple" className="text-[10px] py-1 px-3 mt-1">
-                  Join
+                <p className="text-xs font-heading font-bold text-accent neon-text-green flex items-center justify-end gap-1">
+                  {t.prizeMode === "kill" && <Crosshair className="w-3 h-3" />}
+                  {getPrizeSummary(t)}
+                </p>
+                <NeonButton variant={joinedTournamentIds.has(t._id) ? "green" : "purple"} className="text-[10px] py-1 px-3 mt-1">
+                  {joinedTournamentIds.has(t._id) ? "Joined" : "Join"}
                 </NeonButton>
               </div>
             </div>
@@ -244,7 +263,6 @@ const Index = () => {
         ))}
       </div>
 
-      <BottomNav />
     </div>
   );
 };

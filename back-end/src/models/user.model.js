@@ -28,7 +28,20 @@ const userSchema = new mongoose.Schema({
         index: true,
         type: String,
         unique: true,
-        required: [true, "Mobile number is required"],
+        sparse: true,
+        trim: true,
+        default: undefined,
+    },
+    socialProvider: {
+        type: String,
+        enum: ["google", "facebook"],
+        index: true,
+        default: undefined,
+    },
+    socialProviderId: {
+        type: String,
+        index: true,
+        default: undefined,
     },
     dateOfBirth: {
         type: Date,
@@ -71,6 +84,17 @@ const userSchema = new mongoose.Schema({
         type: String
     }
 }, { timestamps: true });
+
+userSchema.index(
+    { socialProvider: 1, socialProviderId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            socialProvider: { $type: "string" },
+            socialProviderId: { $type: "string" },
+        },
+    }
+);
 
 // Hash password before saving
 userSchema.pre("save", async function (next) {

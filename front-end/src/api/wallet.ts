@@ -9,6 +9,7 @@ export const ENDPOINTS = {
   withdraw: "/wallet/withdraw",
   transfer: "/wallet/transfer",
   creatorEarnings: "/wallet/creator-earnings",
+  playerEarnings: "/wallet/player-earnings",
 };
 
 export interface AddMoneyPayload { amount: number; method: "upi" | "card" | "bank" }
@@ -195,6 +196,20 @@ export async function getCreatorEarnings() {
   const res = await apiFetch<
     { total?: number; monthlyChange?: number } & ApiData<{ total?: number; monthlyChange?: number }>
   >(ENDPOINTS.creatorEarnings, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  return {
+    total: res.data?.total ?? res.total ?? 0,
+    monthlyChange: res.data?.monthlyChange ?? res.monthlyChange ?? 0,
+  };
+}
+
+export async function getPlayerEarnings() {
+  const res = await apiFetch<
+    { total?: number; monthlyChange?: number } & ApiData<{ total?: number; monthlyChange?: number }>
+  >(ENDPOINTS.playerEarnings, {
     method: "GET",
     credentials: "include",
   });

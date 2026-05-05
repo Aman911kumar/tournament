@@ -21,7 +21,6 @@ import {
   Users,
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
-import BottomNav from "@/components/BottomNav";
 import { toast } from "@/components/ui/sonner";
 import { logout } from "@/api/auth";
 import { becomeCreator, getMyProfile, leaveCreator, User as ProfileUser } from "@/api/profile";
@@ -48,6 +47,12 @@ const creatorMenu = [
   { icon: Users, label: "My Subscribers", route: "/subscriptions" },
 ];
 
+const getDisplayPhoneNumber = (phoneNumber?: string) => {
+  const value = String(phoneNumber || "").trim();
+  if (!value || /^(google|facebook):/i.test(value)) return "";
+  return value.startsWith("+") ? value : `+91 ${value}`;
+};
+
 const ProfileSkeleton = () => (
   <GlassCard neon className="flex flex-col items-center text-center">
     <div className="w-20 h-20 rounded-full bg-muted animate-pulse mb-3" />
@@ -72,9 +77,9 @@ const ProfileScreen = () => {
   const [creatorLoading, setCreatorLoading] = useState(false);
 
   const stats = [
-    // { label: "Matches", value: profile?.stats.matchesPlayed ?? 0 },
-    // { label: "Balance", value: formatCurrency(profile?.walletBalance ?? 0) },
-    // { label: "Won", value: formatCurrency(profile?.stats.amount_won ?? 0) },
+    { label: "Balance", value: formatCurrency(profile?.walletBalance ?? 0) },
+    { label: "Won", value: formatCurrency(profile?.stats?.amount_won ?? profile?.playerEarnings ?? 0) },
+    { label: "Matches", value: profile?.stats?.matchesPlayed ?? 0 },
   ];
 
   const fetchProfile = useCallback(async () => {
@@ -191,18 +196,30 @@ const ProfileScreen = () => {
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className="relative z-10 w-20 h-20 rounded-full gradient-primary flex items-center justify-center mb-3 neon-glow-purple"
+              className="relative z-10 w-20 h-20 rounded-full gradient-primary flex items-center justify-center mb-3 neon-glow-purple overflow-hidden"
             >
-              <User className="w-8 h-8 text-primary-foreground" />
+              {profile.avatar?.url ? (
+                <img
+                  src={profile.avatar.url}
+                  alt={profile.username}
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <User className="w-8 h-8 text-primary-foreground" />
+              )}
             </motion.div>
             <h2 className="font-heading text-lg font-bold max-w-full truncate">{profile.username}</h2>
             <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1 max-w-full">
               <Mail className="w-3 h-3 shrink-0" />
               <span className="truncate">{profile.email}</span>
             </div>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-4">
-              <Phone className="w-3 h-3" />+91 {profile.phone_number}
-            </div>
+            {getDisplayPhoneNumber(profile.phone_number) && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground mb-4 max-w-full">
+                <Phone className="w-3 h-3 shrink-0" />
+                <span className="truncate">{getDisplayPhoneNumber(profile.phone_number)}</span>
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-3 w-full">
               {stats.map((s) => (
@@ -325,7 +342,6 @@ const ProfileScreen = () => {
         </div>
       </div>
 
-      <BottomNav />
     </div>
   );
 };

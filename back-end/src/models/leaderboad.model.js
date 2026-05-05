@@ -8,12 +8,12 @@ const LeaderboardSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['solo', 'duo', 'squad'],
+        enum: ['solo', 'duo', 'squad', 'team'],
         required: true
     },
     entries: [
         {
-            user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
             team: { type: mongoose.Schema.Types.ObjectId, ref: 'Team', default: null },
             kills: { type: Number, default: 0 },
             points: { type: Number, default: 0 },

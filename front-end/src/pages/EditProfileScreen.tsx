@@ -47,6 +47,7 @@ const EditProfileScreen = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cacheNotice, setCacheNotice] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState("");
 
   const hasChanges = useMemo(
     () =>
@@ -77,6 +78,7 @@ const EditProfileScreen = () => {
         };
         setInitialForm(cachedForm);
         setForm(cachedForm);
+        setAvatarUrl(cachedProfile.data.avatar?.url ?? "");
         setCacheNotice(getSavedDataLabel(cachedProfile.savedAt));
       }
 
@@ -89,6 +91,7 @@ const EditProfileScreen = () => {
       };
       setInitialForm(nextForm);
       setForm(nextForm);
+      setAvatarUrl(res.data.user.avatar?.url ?? "");
       setCacheNotice(null);
       writeAuthenticatedCache(CACHE_KEYS.profile, res.data.user, res);
     } catch (loadError) {
@@ -156,9 +159,18 @@ const EditProfileScreen = () => {
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="relative w-24 h-24 rounded-full gradient-primary flex items-center justify-center neon-glow-purple"
+            className="relative w-24 h-24 rounded-full gradient-primary flex items-center justify-center neon-glow-purple overflow-hidden"
           >
-            <User className="w-10 h-10 text-primary-foreground" />
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={form.username || "Profile avatar"}
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <User className="w-10 h-10 text-primary-foreground" />
+            )}
             <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-accent flex items-center justify-center">
               <Camera className="w-4 h-4 text-accent-foreground" />
             </div>

@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   DollarSign,
   Edit,
-  Eye,
   PlayCircle,
   Plus,
   Search,
@@ -19,18 +18,10 @@ import {
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import BottomNav from "@/components/BottomNav";
 import { deleteTournament, getTournaments, Tournament, updateTournamentStatus } from "@/api/tournaments";
 import { getMyProfile } from "@/api/profile";
 import { formatCurrency, getErrorToast } from "@/lib/page-utils";
 import { toast } from "@/components/ui/sonner";
-
-const earningsData = [
-  { month: "Jan", amount: "Rs. 18,000", height: 45 },
-  { month: "Feb", amount: "Rs. 24,500", height: 62 },
-  { month: "Mar", amount: "Rs. 31,200", height: 80 },
-  { month: "Apr", amount: "Rs. 28,800", height: 72 },
-];
 
 const statusFilters = ["all", "live", "upcoming", "completed", "draft"] as const;
 type DashboardStatus = Exclude<(typeof statusFilters)[number], "all">;
@@ -48,6 +39,24 @@ const toDashboardStatus = (status: Tournament["status"]): DashboardStatus => {
   if (status === "draft") return "draft";
   return "upcoming";
 };
+
+const formatDateTime = (value?: string) => {
+  if (!value) return "No start date";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "No start date" : date.toLocaleString();
+};
+
+const getPrizePaidTotal = (tournament: Tournament) =>
+  (tournament.results ?? []).reduce((sum, result) => sum + Number(result.prizeWon || 0), 0);
+
+const getReceivedMoney = (tournament: Tournament) =>
+  Number(tournament.receivedMoney ?? tournament.organizerEarnings ?? 0);
+
+const getPaidMoney = (tournament: Tournament) =>
+  Number(tournament.paidMoney ?? getPrizePaidTotal(tournament));
+
+const getNetEarnings = (tournament: Tournament) =>
+  getReceivedMoney(tournament) - getPaidMoney(tournament);
 
 const CreatorDashboardScreen = () => {
   const navigate = useNavigate();
@@ -81,16 +90,40 @@ const CreatorDashboardScreen = () => {
   }, []);
 
   const stats = useMemo(() => {
-    const totalEarnings = tournaments.reduce((sum, tournament) => sum + Number(tournament.organizerEarnings || 0), 0);
-    const totalParticipants = 0;
-    const totalViews = 0;
+    const totalReceived = tournaments.reduce((sum, tournament) => sum + getReceivedMoney(tournament), 0);
+    const totalPaid = tournaments.reduce((sum, tournament) => sum + getPaidMoney(tournament), 0);
+    const totalEarnings = totalReceived - totalPaid;
+    const totalParticipants = tournaments.reduce((sum, tournament) => sum + Number(tournament.participantCount || tournament.registrationCount || 0), 0);
 
     return [
       { icon: Trophy, label: "Tournaments", value: String(tournaments.length), color: "text-primary" },
-      { icon: DollarSign, label: "Earnings", value: formatCurrency(totalEarnings), color: "text-accent" },
+      { icon: DollarSign, label: "Received", value: formatCurrency(totalReceived), color: "text-accent" },
+      { icon: CheckCircle2, label: "Paid", value: formatCurrency(totalPaid), color: "text-secondary" },
+      { icon: TrendingUp, label: "Earnings", value: formatCurrency(totalEarnings), color: totalEarnings < 0 ? "text-destructive" : "text-accent" },
       { icon: Users, label: "Participants", value: totalParticipants.toLocaleString("en-IN"), color: "text-secondary" },
-      { icon: Eye, label: "Views", value: totalViews.toLocaleString("en-IN"), color: "text-neon-pink" },
     ];
+  }, [tournaments]);
+
+  const earningsData = useMemo(() => {
+    const now = new Date();
+    const months = Array.from({ length: 4 }, (_, index) => new Date(now.getFullYear(), now.getMonth() - 3 + index, 1));
+    const amounts = months.map((month) =>
+      tournaments.reduce((sum, tournament) => {
+        const date = new Date(tournament.startAt);
+        if (Number.isNaN(date.getTime())) return sum;
+        return date.getFullYear() === month.getFullYear() && date.getMonth() === month.getMonth()
+          ? sum + getNetEarnings(tournament)
+          : sum;
+      }, 0),
+    );
+    const maxAmount = Math.max(...amounts.map((amount) => Math.abs(amount)), 1);
+
+    return months.map((month, index) => ({
+      month: month.toLocaleString("en-IN", { month: "short" }),
+      amount: formatCurrency(amounts[index]),
+      height: amounts[index] === 0 ? 4 : Math.max(16, Math.round((Math.abs(amounts[index]) / maxAmount) * 72)),
+      negative: amounts[index] < 0,
+    }));
   }, [tournaments]);
 
   const filteredTournaments = useMemo(() => {
@@ -163,7 +196,7 @@ const CreatorDashboardScreen = () => {
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-5">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {stats.map((s, i) => (
             <GlassCard key={s.label} neon delay={i * 0.06}>
               <div className="flex items-center gap-2 mb-1 min-w-0">
@@ -181,20 +214,23 @@ const CreatorDashboardScreen = () => {
           <TrendingUp className="w-4 h-4 text-accent" />
           Monthly Earnings
         </h2>
-        <GlassCard neon>
-          <div className="flex items-end gap-3 h-28">
+        <GlassCard neon className="p-4">
+          <div className="grid grid-cols-4 gap-3">
             {earningsData.map((e, i) => (
-              <motion.div
-                key={e.month}
-                initial={{ height: 0 }}
-                animate={{ height: e.height }}
-                transition={{ delay: i * 0.15, duration: 0.5, ease: "easeOut" }}
-                className="flex-1 flex flex-col items-center gap-1"
-              >
-                <div className="w-full rounded-t-md gradient-primary opacity-80" style={{ height: e.height }} />
-                <p className="text-[9px] text-muted-foreground font-heading">{e.month}</p>
-                <p className="text-[9px] text-accent font-heading font-bold">{e.amount}</p>
-              </motion.div>
+              <div key={e.month} className="min-w-0">
+                <div className="h-24 rounded-lg border border-glass-border/70 bg-background/35 px-2 py-2 flex items-end overflow-hidden">
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: `${e.height}%` }}
+                    transition={{ delay: i * 0.12, duration: 0.45, ease: "easeOut" }}
+                    className={`w-full rounded-md ${e.negative ? "bg-destructive" : "gradient-primary"}`}
+                  />
+                </div>
+                <p className="mt-2 text-center text-[10px] text-muted-foreground font-heading truncate">{e.month}</p>
+                <p className={`text-center text-[10px] font-heading font-bold truncate ${e.negative ? "text-destructive" : "text-accent"}`}>
+                  {e.amount}
+                </p>
+              </div>
             ))}
           </div>
         </GlassCard>
@@ -221,15 +257,18 @@ const CreatorDashboardScreen = () => {
                   <p className="font-heading font-bold text-sm truncate">{tournament.title}</p>
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <Users className="w-3 h-3" /> 0
+                      <Users className="w-3 h-3" /> {Number(tournament.participantCount || tournament.registrationCount || 0)}
                     </span>
                     <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                      <Eye className="w-3 h-3" /> {tournament.views}
+                      <DollarSign className="w-3 h-3" /> {formatCurrency(getReceivedMoney(tournament))} received
                     </span>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-xs font-heading font-bold text-accent">{formatCurrency(Number(tournament.organizerEarnings || 0))}</p>
+                  <p className={`text-xs font-heading font-bold ${getNetEarnings(tournament) < 0 ? "text-destructive" : "text-accent"}`}>
+                    {formatCurrency(getNetEarnings(tournament))} net
+                  </p>
+                  <p className="text-[10px] text-muted-foreground font-heading">{formatCurrency(getPaidMoney(tournament))} paid</p>
                   <span className={`text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full ${statusClass[toDashboardStatus(tournament.status)]}`}>
                     {toDashboardStatus(tournament.status)}
                   </span>
@@ -294,12 +333,15 @@ const CreatorDashboardScreen = () => {
                     </span>
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {tournament.game} - {formatCurrency(Number(tournament.prizePool?.total || 0))} prize
+                    {tournament.game} - {formatCurrency(Number(tournament.prizePool || 0))} prize
                   </p>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[10px] text-muted-foreground">
-                    <span>0/{tournament.maxPlayers} players</span>
+                    <span>{Number(tournament.registrationCount || 0)}/{tournament.maxPlayers} slots</span>
                     <span>{formatCurrency(tournament.entryFee)} entry</span>
-                    <span>{tournament.startAt || "No start date"}</span>
+                    <span>{formatCurrency(getReceivedMoney(tournament))} received</span>
+                    {getPaidMoney(tournament) > 0 && <span>{formatCurrency(getPaidMoney(tournament))} paid</span>}
+                    <span>{formatCurrency(getNetEarnings(tournament))} earnings</span>
+                    <span>{formatDateTime(tournament.startAt)}</span>
                   </div>
                 </div>
 
@@ -309,7 +351,7 @@ const CreatorDashboardScreen = () => {
                       whileTap={{ scale: 0.9 }}
                       onClick={() => navigate(`/tournament/${tournament._id}/distribute-prizes`)}
                       className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center hover:bg-accent/20 transition-colors"
-                      title="Prize distribution"
+                      title={getPaidMoney(tournament) > 0 ? "View results" : "Prize distribution"}
                     >
                       <Trophy className="w-3.5 h-3.5 text-accent" />
                     </motion.button>
@@ -360,7 +402,6 @@ const CreatorDashboardScreen = () => {
         </div>
       </div>
 
-      <BottomNav />
     </div>
   );
 };
