@@ -3,6 +3,7 @@ import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { Analytics } from "@vercel/analytics/next"
 import Index from "./pages/Index.tsx";
 import LoginScreen from "./pages/LoginScreen.tsx";
 import Test from "./pages/test.tsx"
@@ -89,10 +90,12 @@ const App = () => (
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <Analytics />
         </GoogleOAuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  
 );
 
 export default App;
