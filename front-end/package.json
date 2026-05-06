@@ -44,6 +44,7 @@
     "@radix-ui/react-tooltip": "^1.2.7",
     "@react-oauth/google": "^0.13.5",
     "@tanstack/react-query": "^5.83.0",
+    "@vercel/speed-insights": "^2.0.0",
     "baseline-browser-mapping": "^2.10.21",
     "caniuse-lite": "^1.0.30001790",
     "class-variance-authority": "^0.7.1",

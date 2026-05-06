@@ -3,6 +3,7 @@ import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import Index from "./pages/Index.tsx";
 import LoginScreen from "./pages/LoginScreen.tsx";
 import Test from "./pages/test.tsx"
@@ -48,6 +49,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Sonner />
+      <SpeedInsights />
       <BrowserRouter>
         <GoogleOAuthProvider
           clientId={VITE_GOOGLE_CLIENT_ID}
