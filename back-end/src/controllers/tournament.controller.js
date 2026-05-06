@@ -115,6 +115,22 @@ const validateTournamentSchedule = ({ startAt, endAt, registrationStart, registr
     }
 };
 
+const normalizeRoomDetails = (details = {}) => {
+    details = details || {};
+    const roomJoinTime = parseOptionalDate(details.roomJoinTime || details.joinTime || details.customRoomJoinTime, "roomJoinTime");
+    return {
+        roomId: details.roomId?.trim?.() || "",
+        roomPass: details.roomPass?.trim?.() || "",
+        ...(roomJoinTime ? { roomJoinTime } : {})
+    };
+};
+
+const validateRoomJoinTime = (roomDetails, startAt) => {
+    if (roomDetails?.roomJoinTime && startAt && roomDetails.roomJoinTime > startAt) {
+        throw new ApiError(400, "Room join time must be before match start time");
+    }
+};
+
 const GAME_ALIASES = {
     freefire: "freefire",
     ff: "freefire",
@@ -207,15 +223,57 @@ const getParticipantStats = async (tournamentIds) => {
     return new Map(stats.map((item) => [item._id.toString(), item]));
 };
 
-const serializeTournament = (tournament, participantStats = new Map()) => {
+const getResultRegistrationDetails = async (tournamentIds) => {
+    if (!tournamentIds.length) return new Map();
+
+    const registrations = await Registration.find({
+        tournament: { $in: tournamentIds },
+        status: { $in: ["paid", "confirmed"] }
+    }).select("tournament user team paidAmount gameAccounts");
+
+    const details = new Map();
+    registrations.forEach((registration) => {
+        const tournamentId = registration.tournament?.toString();
+        const users = [
+            registration.user?.toString?.(),
+            ...(registration.team || []).map((member) => member?.toString?.())
+        ].filter(Boolean);
+
+        users.forEach((userId) => {
+            const account = (registration.gameAccounts || []).find((item) => item.user?.toString?.() === userId)
+                || registration.gameAccounts?.[0]
+                || null;
+            details.set(`${tournamentId}:${userId}`, {
+                gameName: account?.inGameName || "",
+                gameId: account?.gameId || ""
+            });
+        });
+    });
+
+    return details;
+};
+
+const serializeTournament = (tournament, participantStats = new Map(), resultDetails = new Map()) => {
     const plain = tournament?.toObject?.() || tournament;
     const stats = participantStats.get(plain._id?.toString?.() || String(plain._id)) || {};
     const receivedMoney = Number(plain.organizerEarnings || stats.organizerEarnings || 0);
     const platformFeeAmount = Number(plain.platformFeeAmount || stats.platformFeeAmount || 0);
     const paidMoney = (plain.results || []).reduce((sum, result) => sum + Number(result.prizeWon || 0), 0);
+    const tournamentId = plain._id?.toString?.() || String(plain._id);
+    const results = (plain.results || []).map((result) => {
+        const playerId = result.player?._id?.toString?.() || result.player?.toString?.() || String(result.player || "");
+        const detail = resultDetails.get(`${tournamentId}:${playerId}`) || {};
+        return {
+            ...result,
+            gameName: detail.gameName || "",
+            gameId: detail.gameId || "",
+            paidAmount: Number(result.prizeWon || 0)
+        };
+    });
 
     return {
         ...plain,
+        results,
         organizerEarnings: receivedMoney,
         platformFeeAmount,
         receivedMoney,
@@ -254,6 +312,9 @@ const buildTournamentPayload = (body, organizerId, channelId = null) => {
     const maxTeams = Number(body.maxTeams || (maxPlayersInput ? Math.ceil(maxPlayersInput / teamSize) : preset.defaultTeams || 2));
     const maxPlayers = Number(maxPlayersInput || maxTeams * teamSize);
 
+    const roomDetails = normalizeRoomDetails(body.room_details);
+    validateRoomJoinTime(roomDetails, startAt);
+
     const payload = {
         title: body.title.trim(),
         description: body.description,
@@ -278,7 +339,7 @@ const buildTournamentPayload = (body, organizerId, channelId = null) => {
         prizePool: 0,
         rules: body.rules,
         status: normalizeStatus(body.status) || (registrationStart > now ? "draft" : "open"),
-        room_details: body.room_details
+        room_details: roomDetails
     };
 
     const distributionInput = Array.isArray(body.prizeDistribution)
@@ -308,6 +369,7 @@ const getAllTournaments = asyncHandler(async (req, res) => {
     }
 
     if (status) query.status = normalizeStatus(status);
+    if (!status && req.query.excludeCompleted === "true") query.status = { $ne: "completed" };
     if (game) query.game = normalizeGame(game);
     if (req.query.entryFee === "0") query.entryFee = 0;
     if (organizer && mongoose.Types.ObjectId.isValid(organizer)) query.organizer = organizer;
@@ -316,6 +378,7 @@ const getAllTournaments = asyncHandler(async (req, res) => {
     const tournaments = await Tournament.find(query)
         .populate("organizer", "username avatar stats")
         .populate("channel", "name handle avatar")
+        .populate("results.player", "username avatar")
         .sort({ createdAt: -1, startAt: -1 })
         .skip(Number(skip))
         .limit(Number(limit));
@@ -323,11 +386,12 @@ const getAllTournaments = asyncHandler(async (req, res) => {
         tournaments.map((tournament) => syncTournamentLifecycle(tournament, { save: true }))
     );
     const participantStats = await getParticipantStats(syncedTournaments.map((tournament) => tournament._id));
+    const resultDetails = await getResultRegistrationDetails(syncedTournaments.map((tournament) => tournament._id));
 
     const total = await Tournament.countDocuments(query);
 
     return res.status(200).json(
-        new ApiResponse(200, { tournaments: syncedTournaments.map((tournament) => serializeTournament(tournament, participantStats)), total }, "Tournaments fetched successfully")
+        new ApiResponse(200, { tournaments: syncedTournaments.map((tournament) => serializeTournament(tournament, participantStats, resultDetails)), total }, "Tournaments fetched successfully")
     );
 });
 
@@ -349,9 +413,10 @@ const getTournamentById = asyncHandler(async (req, res) => {
     if (!tournament) throw new ApiError(404, "Tournament not found");
     await syncTournamentLifecycle(tournament, { save: true });
     const participantStats = await getParticipantStats([tournament._id]);
+    const resultDetails = await getResultRegistrationDetails([tournament._id]);
 
     return res.status(200).json(
-        new ApiResponse(200, serializeTournament(tournament, participantStats), "Tournament fetched successfully")
+        new ApiResponse(200, serializeTournament(tournament, participantStats, resultDetails), "Tournament fetched successfully")
     );
 });
 
@@ -391,6 +456,7 @@ const updateTournament = asyncHandler(async (req, res) => {
     if (updates.endDate && !updates.endAt) updates.endAt = updates.endDate;
     if (updates.status) updates.status = normalizeStatus(updates.status);
     if (updates.game) updates.game = normalizeGame(updates.game);
+    if (Object.prototype.hasOwnProperty.call(updates, "room_details")) updates.room_details = normalizeRoomDetails(updates.room_details);
     if (Object.prototype.hasOwnProperty.call(updates, "startAt")) updates.startAt = parseDate(updates.startAt, "startAt");
     if (Object.prototype.hasOwnProperty.call(updates, "registrationStart")) updates.registrationStart = parseDate(updates.registrationStart, "registrationStart");
     if (Object.prototype.hasOwnProperty.call(updates, "registrationEnd")) updates.registrationEnd = parseDate(updates.registrationEnd, "registrationEnd");
@@ -429,6 +495,10 @@ const updateTournament = asyncHandler(async (req, res) => {
         registrationStart: updates.registrationStart || tournament.registrationStart,
         registrationEnd: updates.registrationEnd || tournament.registrationEnd
     });
+    validateRoomJoinTime(
+        Object.prototype.hasOwnProperty.call(updates, "room_details") ? updates.room_details : tournament.room_details,
+        updates.startAt || tournament.startAt
+    );
 
     const allowedFields = [
         "title",
@@ -484,6 +554,16 @@ const deleteTournament = asyncHandler(async (req, res) => {
 
     if (!userCanManageTournament(req.user, tournament)) {
         throw new ApiError(403, "Not authorized to delete this tournament");
+    }
+
+    const hasPaidRegistrations = await Registration.exists({
+        tournament: tournamentId,
+        status: { $in: ["paid", "confirmed"] },
+        paidAmount: { $gt: 0 }
+    });
+
+    if (hasPaidRegistrations && !hasRole(req.user, "admin")) {
+        throw new ApiError(400, "Tournament has paid registrations and cannot be deleted by creator");
     }
 
     await Match.deleteMany({ tournament: tournamentId });
@@ -845,6 +925,7 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
         registrationId: row.registrationId ? String(row.registrationId) : "",
         position: row.position ?? row.place ?? null,
         kills: row.kills ?? 0,
+        points: row.points ?? 0,
         playerId: row.playerId || row.player ? String(row.playerId || row.player) : "",
     }));
 
@@ -869,7 +950,7 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
     const resultInput = normalizedResults.map((row) => {
         const registration = row.registrationId ? registrationMap.get(row.registrationId) : null;
         const player = row.playerId || (registration ? getRegistrationRecipient(registration)?.toString() : "");
-        return { position: row.position, playerId: player, kills: row.kills };
+        return { position: row.position, playerId: player, kills: row.kills, points: row.points };
     });
 
     assignTournamentResults(tournament, resultInput, { prizeMode: payoutMode, killPrizeAmount });
@@ -878,6 +959,7 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
         recipient: result.player,
         amount: Number(result.prizeWon || 0),
         kills: Number(result.kills || 0),
+        points: Number(result.points || 0),
         positionPrizeWon: Number(result.positionPrizeWon || 0),
         killPrizeWon: Number(result.killPrizeWon || 0),
         prizeMode: result.prizeMode || payoutMode,
@@ -978,6 +1060,7 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
                     tournament: tournamentId,
                     place: payout.place,
                     kills: payout.kills,
+                    points: payout.points,
                     payoutMode: payout.prizeMode,
                     positionPrizeWon: payout.positionPrizeWon,
                     killPrizeWon: payout.killPrizeWon,
@@ -1005,6 +1088,7 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
                     tournament: tournamentId,
                     place: payout.place,
                     kills: payout.kills,
+                    points: payout.points,
                     payoutMode: payout.prizeMode,
                     positionPrizeWon: payout.positionPrizeWon,
                     killPrizeWon: payout.killPrizeWon,
@@ -1032,6 +1116,7 @@ const distributeTournamentPrizes = asyncHandler(async (req, res) => {
                         tournament: tournamentId,
                         place: payout.place,
                         kills: payout.kills,
+                        points: payout.points,
                         payoutMode: payout.prizeMode,
                         positionPrizeWon: payout.positionPrizeWon,
                         killPrizeWon: payout.killPrizeWon,

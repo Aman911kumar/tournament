@@ -1,11 +1,12 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, Lock, Eye, EyeOff, ShieldCheck, KeyRound, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { toast } from "@/components/ui/sonner";
 import { changePassword } from "@/api/auth";
+import { getMyProfile } from "@/api/profile";
 import { getErrorToast } from "@/lib/page-utils";
 
 type FieldKey = "current" | "next" | "confirm";
@@ -15,6 +16,29 @@ const ChangePasswordScreen = () => {
   const [values, setValues] = useState({ current: "", next: "", confirm: "" });
   const [show, setShow] = useState<Record<FieldKey, boolean>>({ current: false, next: false, confirm: false });
   const [loading, setLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [isSetPasswordMode, setIsSetPasswordMode] = useState(false);
+  const [hasPhoneNumber, setHasPhoneNumber] = useState(true);
+
+  const loadProfile = useCallback(async () => {
+    try {
+      setProfileLoading(true);
+      const res = await getMyProfile();
+      const user = res.data.user;
+      const phoneNumber = String(user.phone_number || "").trim();
+      setIsSetPasswordMode(Boolean(user.socialProvider) && user.passwordLoginEnabled !== true);
+      setHasPhoneNumber(Boolean(phoneNumber) && !/^(google|facebook):/i.test(phoneNumber));
+    } catch {
+      setIsSetPasswordMode(false);
+      setHasPhoneNumber(true);
+    } finally {
+      setProfileLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const strength = useMemo(() => {
     const p = values.next;
@@ -42,8 +66,13 @@ const ChangePasswordScreen = () => {
   ];
 
   const handleSubmit = async () => {
-    if (!values.current || !values.next || !values.confirm) {
-      toast.error("Fill in all password fields.");
+    if (isSetPasswordMode && !hasPhoneNumber) {
+      toast.error("Add your phone number first.");
+      navigate("/edit-profile");
+      return;
+    }
+    if ((!isSetPasswordMode && !values.current) || !values.next || !values.confirm) {
+      toast.error(isSetPasswordMode ? "Fill in the new password fields." : "Fill in all password fields.");
       return;
     }
     if (values.next !== values.confirm) {
@@ -56,7 +85,10 @@ const ChangePasswordScreen = () => {
     }
     try {
       setLoading(true);
-      const res = await changePassword({ currentPassword: values.current, newPassword: values.next });
+      const res = await changePassword({
+        ...(isSetPasswordMode ? {} : { currentPassword: values.current }),
+        newPassword: values.next,
+      });
       toast.success(res.message);
       navigate("/profile");
     } catch (err) {
@@ -108,7 +140,7 @@ const ChangePasswordScreen = () => {
         <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate("/profile")}>
           <ArrowLeft className="w-5 h-5" />
         </motion.button>
-        <h1 className="font-heading text-xl font-bold">Change Password</h1>
+        <h1 className="font-heading text-xl font-bold">{isSetPasswordMode ? "Set Password" : "Change Password"}</h1>
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 relative z-10">
@@ -135,11 +167,19 @@ const ChangePasswordScreen = () => {
           transition={{ delay: 0.15 }}
           className="text-center text-sm text-muted-foreground mb-6 max-w-xs mx-auto"
         >
-          Keep your account secure. Use a fresh password you don't reuse anywhere else.
+          {isSetPasswordMode
+            ? "Create a password so you can log in with your phone number next time."
+            : "Keep your account secure. Use a fresh password you don't reuse anywhere else."}
         </motion.p>
 
         <div className="space-y-4">
-          {renderField("current", "Current Password", "Enter current password")}
+          {!isSetPasswordMode && renderField("current", "Current Password", "Enter current password")}
+          {isSetPasswordMode && !hasPhoneNumber && !profileLoading && (
+            <GlassCard neon className="border border-destructive/30">
+              <p className="text-sm font-heading font-bold text-destructive">Phone number required</p>
+              <p className="mt-1 text-xs text-muted-foreground">Add a phone number before enabling phone/password login.</p>
+            </GlassCard>
+          )}
           {renderField("next", "New Password", "Enter new password")}
 
           {/* Strength meter */}
@@ -187,10 +227,10 @@ const ChangePasswordScreen = () => {
             <p className="text-xs text-destructive px-1 -mt-2">Passwords do not match</p>
           )}
 
-          <NeonButton full variant="purple" className="mt-2" onClick={handleSubmit} disabled={loading}>
+          <NeonButton full variant="purple" className="mt-2" onClick={handleSubmit} disabled={loading || profileLoading}>
             <span className="inline-flex items-center justify-center gap-2">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {loading ? "UPDATING..." : "UPDATE PASSWORD"}
+              {loading ? "UPDATING..." : isSetPasswordMode ? "SET PASSWORD" : "UPDATE PASSWORD"}
             </span>
           </NeonButton>
         </div>

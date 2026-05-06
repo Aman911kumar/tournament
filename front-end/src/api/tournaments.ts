@@ -6,6 +6,8 @@ export interface TournamentFilters {
   sort?: "trending" | "latest" | "prize_asc" | "prize_desc";
   search?: string;
   organizer?: string;
+  status?: Tournament["status"];
+  excludeCompleted?: boolean;
 }
 
 export const ENDPOINTS = {
@@ -57,9 +59,13 @@ export interface Tournament {
     position: number;
     player: string | { _id?: string; username?: string; avatar?: { url?: string } };
     kills?: number;
+    points?: number;
     positionPrizeWon?: number;
     killPrizeWon?: number;
     prizeMode?: "position" | "kill" | "both";
+    gameName?: string;
+    gameId?: string;
+    paidAmount?: number;
     prizeWon: number;
   }[];
   rules?: string;
@@ -67,6 +73,7 @@ export interface Tournament {
   room_details?: {
     roomId?: string;
     roomPass?: string;
+    roomJoinTime?: string;
   };
   organizer?: {
     _id?: string;
@@ -109,6 +116,7 @@ export interface PrizePayoutInput {
   registrationId: string;
   position?: number;
   kills?: number;
+  points?: number;
 }
 
 interface TournamentListData {
@@ -127,6 +135,8 @@ export async function getTournaments(filters: TournamentFilters = {}) {
   const game = toBackendGame(filters.game);
   if (game) params.set("game", game);
   if (filters.organizer) params.set("organizer", filters.organizer);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.excludeCompleted) params.set("excludeCompleted", "true");
   if (filters.type === "free") params.set("entryFee", "0");
   const qs = params.toString();
   const res = await apiFetch<ApiResponse<TournamentListData>>(`${ENDPOINTS.list}${qs ? `?${qs}` : ""}`);

@@ -187,6 +187,11 @@ const TournamentSchema = new mongoose.Schema({
                 default: 0,
                 min: 0
             },
+            points: {
+                type: Number,
+                default: 0,
+                min: 0
+            },
             positionPrizeWon: {
                 type: Number,
                 default: 0,
@@ -221,7 +226,8 @@ const TournamentSchema = new mongoose.Schema({
     },
     room_details: {
         roomId: { type: String, trim: true },
-        roomPass: { type: String, trim: true }
+        roomPass: { type: String, trim: true },
+        roomJoinTime: { type: Date }
     },
     matches: [{
         type: mongoose.Schema.Types.ObjectId,

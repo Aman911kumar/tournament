@@ -29,7 +29,9 @@ export interface User {
   _id: string;
   username: string;
   email: string;
-  phone_number: string;
+  phone_number?: string;
+  socialProvider?: "google" | "facebook";
+  passwordLoginEnabled?: boolean;
   dateOfBirth: string | null;
   gender: string | null;
   gamename: string;
@@ -46,6 +48,12 @@ export interface User {
   preferences: Preferences;
 }
 
+export type AuthResponse = ApiResponse<{
+  user: User;
+  accessToken: string;
+  refreshToken?: string;
+}>;
+
 export interface Stats {
   matchesPlayed: number;
   kills: number;
@@ -57,7 +65,7 @@ export interface Preferences {
 }
 
 export interface ChangePasswordPayload {
-  currentPassword: string;
+  currentPassword?: string;
   newPassword: string;
 }
 
@@ -74,23 +82,23 @@ export const ENDPOINTS = {
 
 
 
-export async function google(payload: GoogleLoginPayload): Promise<ApiResponse> {
-  return apiFetch<ApiResponse>(ENDPOINTS.google, {
+export async function google(payload: GoogleLoginPayload): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>(ENDPOINTS.google, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
   });
 }
 
-export async function facebook(payload: FacebookLoginPayload): Promise<ApiResponse> {
-  return apiFetch<ApiResponse>(ENDPOINTS.facebook, {
+export async function facebook(payload: FacebookLoginPayload): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>(ENDPOINTS.facebook, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
   });
 }
-export async function login(payload: LoginPayload): Promise<ApiResponse> {
-  return apiFetch<ApiResponse>(ENDPOINTS.login, {
+export async function login(payload: LoginPayload): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>(ENDPOINTS.login, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
@@ -104,8 +112,8 @@ export async function logout(): Promise<ApiResponse> {
   });
 }
 
-export async function signup(payload: SignupPayload): Promise<ApiResponse> {
-  return apiFetch<ApiResponse>(ENDPOINTS.signup, {
+export async function signup(payload: SignupPayload): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>(ENDPOINTS.signup, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",

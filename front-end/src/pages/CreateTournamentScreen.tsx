@@ -125,11 +125,11 @@ interface FormState {
   registrationStart: string;
   registrationEnd: string;
   startAt: string;
-  endAt: string;
   mapName: string;
   rules: string;
   roomId: string;
   roomPass: string;
+  roomJoinTime: string;
 }
 
 interface TournamentPayload {
@@ -150,12 +150,13 @@ interface TournamentPayload {
   registrationStart: string;
   registrationEnd: string;
   startAt: string;
-  endAt?: string;
+  endAt?: string | null;
   rules: string;
   prizeDistribution: { position: number; prizeAmount: number }[];
   room_details: {
     roomId: string;
     roomPass: string;
+    roomJoinTime?: string;
   };
 }
 
@@ -178,6 +179,14 @@ const toIsoDateTime = (value?: string) => {
 
 const nowLocal = () => toDateTimeLocal(new Date().toISOString());
 
+const BASIC_RULES = [
+  "Players must join the custom room at least 10 minutes before match start.",
+  "Use only the registered in-game account and assigned slot.",
+  "Teaming, hacking, emulator bypass, or abusive behavior leads to disqualification.",
+  "Room ID and password must not be shared with unregistered players.",
+  "Admin decision is final for result disputes and rule violations.",
+].join("\n");
+
 const makeEmptyForm = (game: GameKey = "freefire"): FormState => {
   const preset = GAME_PRESETS[game];
   return {
@@ -195,11 +204,11 @@ const makeEmptyForm = (game: GameKey = "freefire"): FormState => {
     registrationStart: nowLocal(),
     registrationEnd: "",
     startAt: "",
-    endAt: "",
     mapName: "",
     rules: "",
     roomId: "",
     roomPass: "",
+    roomJoinTime: "",
   };
 };
 
@@ -265,11 +274,11 @@ const CreateTournamentScreen = () => {
           registrationStart: toDateTimeLocal(tournament.registrationStart) || nowLocal(),
           registrationEnd: toDateTimeLocal(tournament.registrationEnd),
           startAt: toDateTimeLocal(tournament.startAt),
-          endAt: toDateTimeLocal(tournament.endAt),
           mapName: tournament.mapName ?? "",
           rules: tournament.rules ?? "",
           roomId: tournament.room_details?.roomId ?? "",
           roomPass: tournament.room_details?.roomPass ?? "",
+          roomJoinTime: toDateTimeLocal(tournament.room_details?.roomJoinTime),
         });
       })
       .catch((error) => {
@@ -321,8 +330,8 @@ const CreateTournamentScreen = () => {
       toast.error("Invalid schedule", { description: "Registration close time must be after registration open time." });
       return;
     }
-    if (form.endAt && new Date(form.endAt) <= new Date(form.startAt)) {
-      toast.error("Invalid schedule", { description: "End time must be after match starts." });
+    if (form.roomJoinTime && new Date(form.roomJoinTime) > new Date(form.startAt)) {
+      toast.error("Invalid room join time", { description: "Room join time must be before match start time." });
       return;
     }
     if (usesPositionPrize && resolvedPrizeDistribution.length === 0) {
@@ -352,12 +361,13 @@ const CreateTournamentScreen = () => {
       registrationStart: toIsoDateTime(form.registrationStart || nowLocal()),
       registrationEnd: toIsoDateTime(form.registrationEnd),
       startAt: toIsoDateTime(form.startAt),
-      endAt: form.endAt ? toIsoDateTime(form.endAt) : undefined,
+      endAt: null,
       rules: form.rules.trim(),
       prizeDistribution: usesPositionPrize ? resolvedPrizeDistribution : [],
       room_details: {
         roomId: form.roomId.trim(),
         roomPass: form.roomPass.trim(),
+        ...(form.roomJoinTime ? { roomJoinTime: toIsoDateTime(form.roomJoinTime) } : {}),
       },
     };
 
@@ -613,14 +623,10 @@ const CreateTournamentScreen = () => {
             rows={2}
             className={`${inputClass} font-body resize-none mb-2`}
           />
-          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <div>
               <p className="text-[10px] text-muted-foreground/70 mb-1">Map</p>
               <input value={form.mapName} onChange={(event) => update("mapName", event.target.value)} placeholder="Optional" className={inputClass} />
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground/70 mb-1">Ends At</p>
-              <input type="datetime-local" value={form.endAt} onChange={(event) => update("endAt", event.target.value)} className={`${inputClass} text-foreground`} />
             </div>
           </div>
         </GlassCard>
@@ -629,7 +635,7 @@ const CreateTournamentScreen = () => {
           <label className="text-xs text-muted-foreground font-heading mb-2 flex items-center gap-1.5">
             <KeyRound className="w-3.5 h-3.5 text-secondary" /> Room Details
           </label>
-          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-2">
             <div>
               <p className="text-[10px] text-muted-foreground/70 mb-1 flex items-center gap-1">
                 <Hash className="w-3 h-3" /> Room ID
@@ -642,13 +648,28 @@ const CreateTournamentScreen = () => {
               </p>
               <input value={form.roomPass} onChange={(event) => update("roomPass", event.target.value)} placeholder="Optional" className={inputClass} />
             </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground/70 mb-1 flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Join Time
+              </p>
+              <input type="datetime-local" value={form.roomJoinTime} onChange={(event) => update("roomJoinTime", event.target.value)} className={`${inputClass} text-foreground`} />
+            </div>
           </div>
         </GlassCard>
 
         <GlassCard neon>
-          <label className="text-xs text-muted-foreground font-heading mb-1.5 flex items-center gap-1.5">
-            <FileText className="w-3.5 h-3.5" /> Rules
-          </label>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <label className="text-xs text-muted-foreground font-heading flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5" /> Rules
+            </label>
+            <button
+              type="button"
+              onClick={() => update("rules", form.rules.trim() ? `${form.rules.trim()}\n${BASIC_RULES}` : BASIC_RULES)}
+              className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-heading text-primary hover:bg-primary/20 transition-colors"
+            >
+              Basic Rules
+            </button>
+          </div>
           <textarea
             value={form.rules}
             onChange={(event) => update("rules", event.target.value)}

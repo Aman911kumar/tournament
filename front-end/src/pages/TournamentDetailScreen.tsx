@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, ArrowLeft, Award, Calendar, Crosshair, Users, Trophy, DollarSign, Shield, CheckCircle, Star, MessageCircle, RefreshCcw } from "lucide-react";
+import { AlertCircle, ArrowLeft, Award, Calendar, Crosshair, Users, Trophy, DollarSign, Shield, CheckCircle, Star, MessageCircle, RefreshCcw, KeyRound, Hash, Lock } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { getMyTournamentRegistrations, getTournamentById, Tournament } from "@/api/tournaments";
@@ -16,6 +16,9 @@ const gameLabels: Record<string, string> = {
 
 const getRegistrationTournamentId = (registration: Awaited<ReturnType<typeof getMyTournamentRegistrations>>[number]) =>
   typeof registration.tournament === "string" ? registration.tournament : registration.tournament?._id;
+
+const getResultPlayerName = (player: NonNullable<Tournament["results"]>[number]["player"]) =>
+  typeof player === "string" ? "Player" : player?.username || "Player";
 
 const TournamentDetailScreen = () => {
   const navigate = useNavigate();
@@ -72,6 +75,14 @@ const TournamentDetailScreen = () => {
   const entryFee = Number(tournament?.entryFee || 0);
   const registeredSlots = Number(tournament?.registrationCount || 0);
   const participantCount = Number(tournament?.participantCount || registeredSlots);
+  const hasRoomDetails = Boolean(tournament?.room_details?.roomJoinTime || tournament?.room_details?.roomId || tournament?.room_details?.roomPass);
+  const resultRows = (tournament?.results ?? [])
+    .filter((result) => Number(result.prizeWon || 0) > 0)
+    .sort((a, b) => {
+      if (prizeMode === "kill") return Number(b.kills || 0) - Number(a.kills || 0);
+      return Number(a.position || 9999) - Number(b.position || 9999);
+    });
+  const resultPaidTotal = tournament?.paidMoney ?? resultRows.reduce((sum, result) => sum + Number(result.prizeWon || 0), 0);
   const registrationStartMs = tournament?.registrationStart ? new Date(tournament.registrationStart).getTime() : 0;
   const registrationEndMs = tournament?.registrationEnd ? new Date(tournament.registrationEnd).getTime() : 0;
   const registrationIsOpen =
@@ -209,6 +220,89 @@ const TournamentDetailScreen = () => {
                 </div>
               )}
             </GlassCard>
+
+            {hasRoomDetails && (
+              <GlassCard delay={0.085}>
+                <div className="flex items-center gap-2 mb-3">
+                  <KeyRound className="w-4 h-4 text-secondary" />
+                  <h3 className="font-heading font-bold text-sm">Custom Room</h3>
+                </div>
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-2 text-xs">
+                  {tournament.room_details?.roomJoinTime && (
+                    <div className="glass rounded-lg p-3">
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <Calendar className="w-3 h-3" /> Join Time
+                      </p>
+                      <p className="font-heading font-bold">{new Date(tournament.room_details.roomJoinTime).toLocaleString()}</p>
+                    </div>
+                  )}
+                  {tournament.room_details?.roomId && (
+                    <div className="glass rounded-lg p-3">
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <Hash className="w-3 h-3" /> Room ID
+                      </p>
+                      <p className="font-heading font-bold truncate">{tournament.room_details.roomId}</p>
+                    </div>
+                  )}
+                  {tournament.room_details?.roomPass && (
+                    <div className="glass rounded-lg p-3">
+                      <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                        <Lock className="w-3 h-3" /> Room Pass
+                      </p>
+                      <p className="font-heading font-bold truncate">{tournament.room_details.roomPass}</p>
+                    </div>
+                  )}
+                </div>
+              </GlassCard>
+            )}
+
+            {tournament.status === "completed" && (
+              <GlassCard delay={0.09}>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-accent" />
+                    <h3 className="font-heading font-bold text-sm">Tournament Result</h3>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">{formatCurrency(resultPaidTotal)} paid</span>
+                </div>
+                {resultRows.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Result not published yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {resultRows.map((result, index) => (
+                      <div key={`${tournament._id}-${result.position}-${index}`} className="rounded-lg border border-glass-border/70 bg-background/35 p-3">
+                        <div className="grid grid-cols-[3.25rem_1fr_auto] items-center gap-2">
+                          <div className="h-10 w-10 rounded-lg bg-accent/15 border border-accent/40 flex flex-col items-center justify-center shrink-0">
+                            <span className="text-[9px] leading-none text-muted-foreground">{prizeMode === "kill" ? "Rank" : "Pos"}</span>
+                            <span className="text-sm leading-tight font-heading font-bold text-accent">#{result.position || index + 1}</span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-heading font-bold">{getResultPlayerName(result.player)}</p>
+                            <p className="truncate text-[10px] text-muted-foreground">
+                              {result.gameName || "Game name not set"} - ID {result.gameId || "Not set"}
+                            </p>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              <span className="inline-flex items-center gap-1 rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-heading text-accent">
+                                <Crosshair className="w-3 h-3" /> {Number(result.kills || 0)} kill{Number(result.kills || 0) === 1 ? "" : "s"}
+                              </span>
+                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-heading text-primary">
+                                {Number(result.points || 0)} pts
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-heading font-bold text-secondary whitespace-nowrap">{formatCurrency(result.prizeWon)}</p>
+                            {usesKillPrize && Number(result.killPrizeWon || 0) > 0 && (
+                              <p className="text-[10px] text-muted-foreground whitespace-nowrap">{formatCurrency(result.killPrizeWon)} kills</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </GlassCard>
+            )}
 
             {/* Rules */}
             <GlassCard delay={0.1}>

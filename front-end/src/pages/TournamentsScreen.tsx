@@ -70,6 +70,7 @@ const TournamentsScreen = () => {
           type: feeFilter,
           sort: sortMap[activeSort],
           search: searchQuery.trim() || undefined,
+          excludeCompleted: true,
         }),
         getMyTournamentRegistrations().catch(() => []),
       ]);
@@ -89,8 +90,9 @@ const TournamentsScreen = () => {
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     let list = activeGame === "All"
-      ? tournaments
+      ? tournaments.filter((t) => t.status !== "completed")
       : tournaments.filter((t) => {
+        if (t.status === "completed") return false;
         const gameName = gameLabels[t.game] ?? t.game;
         return gameName === activeGame || gameName === gameMap[activeGame];
       });

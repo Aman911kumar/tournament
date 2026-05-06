@@ -105,6 +105,7 @@ export const assignTournamentResults = (tournament, resultInput = [], options = 
             : Number(row.position ?? row.place),
         player: String(row.playerId || row.player || ""),
         kills: Number(row.kills || 0),
+        points: Number(row.points || 0),
     }));
 
     normalized.forEach((row) => {
@@ -114,8 +115,11 @@ export const assignTournamentResults = (tournament, resultInput = [], options = 
         if (mode === "position" && row.position === null) {
             throw new ApiError(400, "Every position based result must include a position");
         }
-        if (usesKills && (!Number.isInteger(row.kills) || row.kills < 0)) {
+        if (!Number.isInteger(row.kills) || row.kills < 0) {
             throw new ApiError(400, "Kills must be zero or a positive whole number");
+        }
+        if (!Number.isFinite(row.points) || row.points < 0) {
+            throw new ApiError(400, "Points must be zero or a positive number");
         }
         if (!mongoose.Types.ObjectId.isValid(row.player)) {
             throw new ApiError(400, "Every result must include a valid player");
@@ -146,7 +150,7 @@ export const assignTournamentResults = (tournament, resultInput = [], options = 
         const positionPrizeWon = usesPositions && row.position !== null
             ? roundCurrency(distributionByPosition.get(row.position) || 0)
             : 0;
-        const kills = usesKills ? row.kills : 0;
+        const kills = row.kills;
         const killPrizeWon = usesKills ? roundCurrency(kills * killPrizeAmount) : 0;
         const prizeWon = roundCurrency(positionPrizeWon + killPrizeWon);
 
@@ -158,6 +162,7 @@ export const assignTournamentResults = (tournament, resultInput = [], options = 
             position: row.position ?? 0,
             player: row.player,
             kills,
+            points: roundCurrency(row.points),
             positionPrizeWon,
             killPrizeWon,
             prizeMode: mode,

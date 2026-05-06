@@ -25,6 +25,8 @@ export interface User {
   username: string;
   email: string;
   phone_number?: string;
+  socialProvider?: "google" | "facebook";
+  passwordLoginEnabled?: boolean;
   avatar?: { public_id?: string; url?: string };
   dateOfBirth: string | null;
   gender: string | null;

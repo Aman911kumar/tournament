@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { AlertCircle, ArrowLeft, Calendar, Camera, Lock, RefreshCcw, User, Users } from "lucide-react";
+import { AlertCircle, ArrowLeft, Calendar, Camera, Lock, Phone, RefreshCcw, User, Users } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { toast } from "@/components/ui/sonner";
-import { getMyProfile, updateProfile, User as ProfileUser } from "@/api/profile";
+import { getMyProfile, updateProfile, ProfileUpdatePayload, User as ProfileUser } from "@/api/profile";
 import {
   CACHE_KEYS,
   getSavedDataLabel,
@@ -17,6 +17,7 @@ import { getErrorMessage, getErrorToast } from "@/lib/page-utils";
 
 interface ProfileForm {
   username: string;
+  phone_number: string;
   dateOfBirth: string;
   gender: string;
   password: string;
@@ -24,6 +25,7 @@ interface ProfileForm {
 
 const emptyForm: ProfileForm = {
   username: "",
+  phone_number: "",
   dateOfBirth: "",
   gender: "",
   password: "",
@@ -39,6 +41,11 @@ const formatDateInput = (dateOfBirth: string | null) => {
   return date.toISOString().split("T")[0];
 };
 
+const getEditablePhoneNumber = (phoneNumber?: string) => {
+  const value = String(phoneNumber || "").trim();
+  return /^(google|facebook):/i.test(value) ? "" : value;
+};
+
 const EditProfileScreen = () => {
   const navigate = useNavigate();
   const [initialForm, setInitialForm] = useState<ProfileForm>(emptyForm);
@@ -48,16 +55,25 @@ const EditProfileScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [cacheNotice, setCacheNotice] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [isSocialUser, setIsSocialUser] = useState(false);
+  const [passwordLoginEnabled, setPasswordLoginEnabled] = useState(true);
 
   const hasChanges = useMemo(
     () =>
       form.username.trim() !== initialForm.username ||
+      form.phone_number.trim() !== initialForm.phone_number ||
       form.dateOfBirth !== initialForm.dateOfBirth ||
       form.gender !== initialForm.gender,
     [form, initialForm],
   );
 
-  const canSave = hasChanges && form.password.trim().length > 0 && !saving;
+  const onlyPhoneChanged = hasChanges
+    && form.phone_number.trim() !== initialForm.phone_number
+    && form.username.trim() === initialForm.username
+    && form.dateOfBirth === initialForm.dateOfBirth
+    && form.gender === initialForm.gender;
+  const needsPassword = !isSocialUser || !onlyPhoneChanged;
+  const canSave = hasChanges && (!needsPassword || form.password.trim().length > 0) && !saving;
 
   const update = (field: keyof ProfileForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -72,6 +88,7 @@ const EditProfileScreen = () => {
       if (cachedProfile) {
         const cachedForm = {
           username: cachedProfile.data.username ?? "",
+          phone_number: getEditablePhoneNumber(cachedProfile.data.phone_number),
           dateOfBirth: formatDateInput(cachedProfile.data.dateOfBirth),
           gender: cachedProfile.data.gender ?? "",
           password: "",
@@ -79,12 +96,15 @@ const EditProfileScreen = () => {
         setInitialForm(cachedForm);
         setForm(cachedForm);
         setAvatarUrl(cachedProfile.data.avatar?.url ?? "");
+        setIsSocialUser(Boolean(cachedProfile.data.socialProvider));
+        setPasswordLoginEnabled(cachedProfile.data.passwordLoginEnabled === true);
         setCacheNotice(getSavedDataLabel(cachedProfile.savedAt));
       }
 
       const res = await getMyProfile();
       const nextForm = {
         username: res.data.user.username ?? "",
+        phone_number: getEditablePhoneNumber(res.data.user.phone_number),
         dateOfBirth: formatDateInput(res.data.user.dateOfBirth),
         gender: res.data.user.gender ?? "",
         password: "",
@@ -92,6 +112,8 @@ const EditProfileScreen = () => {
       setInitialForm(nextForm);
       setForm(nextForm);
       setAvatarUrl(res.data.user.avatar?.url ?? "");
+      setIsSocialUser(Boolean(res.data.user.socialProvider));
+      setPasswordLoginEnabled(res.data.user.passwordLoginEnabled === true);
       setCacheNotice(null);
       writeAuthenticatedCache(CACHE_KEYS.profile, res.data.user, res);
     } catch (loadError) {
@@ -121,22 +143,28 @@ const EditProfileScreen = () => {
       return;
     }
 
-    if (!form.password.trim()) {
+    if (needsPassword && !form.password.trim()) {
       toast.error("Enter your password to confirm changes.");
       return;
     }
 
     try {
       setSaving(true);
-      const res = await updateProfile({
-        username: form.username.trim(),
-        dateOfBirth: form.dateOfBirth,
-        gender: form.gender,
-        password: form.password,
-      });
+      const payload: ProfileUpdatePayload = {};
+      if (form.username.trim() !== initialForm.username) payload.username = form.username.trim();
+      if (form.phone_number.trim() !== initialForm.phone_number) payload.phone_number = form.phone_number.trim();
+      if (form.dateOfBirth !== initialForm.dateOfBirth) payload.dateOfBirth = form.dateOfBirth;
+      if (form.gender !== initialForm.gender) payload.gender = form.gender;
+      if (needsPassword) payload.password = form.password;
+
+      const res = await updateProfile(payload);
       writeAuthenticatedCache(CACHE_KEYS.profile, res.data.user, res);
       toast.success(res.message);
-      navigate("/profile");
+      if (isSocialUser && !passwordLoginEnabled && payload.phone_number) {
+        navigate("/change-password");
+      } else {
+        navigate("/profile");
+      }
     } catch (saveError) {
       const errorToast = getErrorToast(saveError, { action: "Update profile", fallback: "Failed to update profile." });
       toast.error(errorToast.title, { description: errorToast.description });
@@ -227,6 +255,26 @@ const EditProfileScreen = () => {
             </GlassCard>
 
             <GlassCard neon>
+              <label className="text-xs text-muted-foreground font-heading mb-1 block">Phone Number</label>
+              <div className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
+                <input
+                  type="tel"
+                  value={form.phone_number}
+                  onChange={(e) => update("phone_number", e.target.value)}
+                  placeholder="Add phone number"
+                  disabled={saving}
+                  className={inputClass}
+                />
+              </div>
+              {isSocialUser && (
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  Social login users can add a phone number without entering a password.
+                </p>
+              )}
+            </GlassCard>
+
+            <GlassCard neon>
               <label className="text-xs text-muted-foreground font-heading mb-1 block">Date of Birth</label>
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -265,9 +313,9 @@ const EditProfileScreen = () => {
                 <input
                   type="password"
                   value={form.password}
-                  disabled={!hasChanges || saving}
+                  disabled={!hasChanges || saving || !needsPassword}
                   onChange={(e) => update("password", e.target.value)}
-                  placeholder={hasChanges ? "Enter password to confirm" : "Make a change first"}
+                  placeholder={!hasChanges ? "Make a change first" : needsPassword ? "Enter password to confirm" : "Not required for phone update"}
                   className={inputClass}
                 />
               </div>

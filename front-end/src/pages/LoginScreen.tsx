@@ -73,8 +73,13 @@ const LoginScreen = () => {
       accessToken: res.data.accessToken,
       refreshToken: res?.data.refreshToken,
     });
+    const user = res.data.user;
+    const phoneNumber = String(user?.phone_number || "").trim();
+    const isSocialUser = Boolean(user?.socialProvider);
+    const needsPhoneNumber = isSocialUser && (!phoneNumber || /^(google|facebook):/i.test(phoneNumber));
+    const needsPasswordSetup = isSocialUser && !needsPhoneNumber && user?.passwordLoginEnabled !== true;
     toast.success(res.message);
-    navigate("/");
+    navigate(needsPhoneNumber ? "/edit-profile" : needsPasswordSetup ? "/change-password" : "/");
   };
 
   const handleGoogleLogin = useGoogleLogin({
@@ -132,7 +137,7 @@ const LoginScreen = () => {
     e.preventDefault();
 
     if (!phone_number.trim() || !password) {
-      toast.error("Phone number and password are required.");
+      toast.error("Phone/email and password are required.");
       return;
     }
 
@@ -215,7 +220,7 @@ const LoginScreen = () => {
             <Phone className="w-4 h-4 text-muted-foreground" />
             <input
               type="tel"
-              placeholder="Phone no."
+              placeholder={isSignup ? "Phone no." : "Phone no. or email"}
               value={phone_number}
               onChange={(e) => setPhone_number(e.target.value)}
               disabled={loading}

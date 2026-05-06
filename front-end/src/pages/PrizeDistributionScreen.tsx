@@ -30,8 +30,8 @@ import { formatCurrency, getErrorMessage, getErrorToast } from "@/lib/page-utils
 import { cn } from "@/lib/utils";
 
 type PrizeMode = "position" | "kill" | "both";
-type PrizeRow = { registrationId: string; place: string; amount: string; resultPlayerName?: string };
-type KillRow = { registrationId: string; kills: string; resultPlayerName?: string; resultPrizeWon?: number };
+type PrizeRow = { registrationId: string; place: string; amount: string; kills: string; points: string; resultPlayerName?: string };
+type KillRow = { registrationId: string; kills: string; points: string; resultPlayerName?: string; resultPrizeWon?: number };
 
 const inputClass =
   "w-full bg-background/40 border border-glass-border rounded-lg px-3 py-2.5 text-sm font-heading text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 transition-all";
@@ -110,6 +110,8 @@ const buildPrizeRows = (
       registrationId: selectedParticipant?._id ?? "",
       place: String(position),
       amount: String(prize.prizeAmount),
+      kills: result ? String(result.kills || 0) : "",
+      points: result ? String(result.points || 0) : "",
       resultPlayerName: result ? selectedParticipant ? getParticipantName(selectedParticipant) : getResultPlayerName(result.player) : undefined,
     });
   });
@@ -123,13 +125,14 @@ const buildKillRows = (
 ): KillRow[] => {
   if (tournament.results?.length) {
     return tournament.results
-      .filter((result) => Number(result.kills || 0) > 0 || Number(result.killPrizeWon || 0) > 0)
+      .filter((result) => Number(result.kills || 0) > 0 || Number(result.points || 0) > 0 || Number(result.killPrizeWon || 0) > 0)
       .map((result) => {
         const resultPlayerId = getResultPlayerId(result.player);
         const selectedParticipant = activeParticipants.find((participant) => getRegistrationPlayerId(participant) === resultPlayerId);
         return {
           registrationId: selectedParticipant?._id ?? "",
           kills: String(result.kills || 0),
+          points: String(result.points || 0),
           resultPlayerName: selectedParticipant ? getParticipantName(selectedParticipant) : getResultPlayerName(result.player),
           resultPrizeWon: Number(result.killPrizeWon || 0),
         };
@@ -140,6 +143,7 @@ const buildKillRows = (
   return activeParticipants.map((participant) => ({
     registrationId: participant._id,
     kills: "",
+    points: "",
   }));
 };
 
@@ -251,14 +255,19 @@ const PrizeDistributionScreen = () => {
       return;
     }
 
-    const payoutMap = new Map<string, { registrationId: string; position?: number; kills?: number }>();
+    const payoutMap = new Map<string, { registrationId: string; position?: number; kills?: number; points?: number }>();
     const positionPayouts = usesPositionPrize
       ? rows
-        .map((r) => ({ registrationId: r.registrationId, position: Number(r.place) }))
+        .map((r) => ({ registrationId: r.registrationId, position: Number(r.place), kills: Number(r.kills || 0), points: Number(r.points || 0) }))
         .filter((r) => r.registrationId && r.position > 0)
       : [];
 
     if (usesPositionPrize) {
+      const invalidStats = positionPayouts.find((payout) => !Number.isInteger(payout.kills) || payout.kills < 0 || !Number.isFinite(payout.points) || payout.points < 0);
+      if (invalidStats) {
+        toast.error("Invalid stats", { description: "Kills must be whole numbers and points must be zero or higher." });
+        return;
+      }
       const duplicateWinner = positionPayouts.find((payout, index) => positionPayouts.findIndex((item) => item.registrationId === payout.registrationId) !== index);
       if (duplicateWinner) {
         toast.error("Duplicate winner", { description: "One player cannot be assigned to multiple positions." });
@@ -275,12 +284,17 @@ const PrizeDistributionScreen = () => {
     if (usesKillPrize) {
       for (const row of killRows) {
         const kills = Number(row.kills || 0);
+        const points = Number(row.points || 0);
         if (!Number.isInteger(kills) || kills < 0) {
           toast.error("Invalid kills", { description: "Kills must be zero or a positive whole number." });
           return;
         }
+        if (!Number.isFinite(points) || points < 0) {
+          toast.error("Invalid points", { description: "Points must be zero or a positive number." });
+          return;
+        }
         if (row.registrationId && kills > 0) {
-          payoutMap.set(row.registrationId, { ...payoutMap.get(row.registrationId), registrationId: row.registrationId, kills });
+          payoutMap.set(row.registrationId, { ...payoutMap.get(row.registrationId), registrationId: row.registrationId, kills, points });
         }
       }
     }
@@ -589,7 +603,7 @@ const PrizeDistributionScreen = () => {
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
                           <div>
                             <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-heading">
                               Position
@@ -612,6 +626,48 @@ const PrizeDistributionScreen = () => {
                               value={row.amount}
                               disabled
                               className={cn(inputClass, "mt-1 font-bold text-accent opacity-80")}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-heading">
+                              Kills
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={row.kills}
+                              disabled={prizesPaid}
+                              onChange={(event) =>
+                                setRows((current) =>
+                                  current.map((item) =>
+                                    item.place === row.place ? { ...item, kills: event.target.value } : item,
+                                  ),
+                                )
+                              }
+                              className={cn(inputClass, "mt-1")}
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-heading">
+                              Points
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              value={row.points}
+                              disabled={prizesPaid}
+                              onChange={(event) =>
+                                setRows((current) =>
+                                  current.map((item) =>
+                                    item.place === row.place ? { ...item, points: event.target.value } : item,
+                                  ),
+                                )
+                              }
+                              className={cn(inputClass, "mt-1")}
+                              placeholder="0"
                             />
                           </div>
                         </div>
@@ -685,7 +741,7 @@ const PrizeDistributionScreen = () => {
 
                 return (
                   <GlassCard key={row.registrationId || `${row.resultPlayerName || title}-${index}`} className="p-3">
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <div className="h-9 w-9 shrink-0 grid place-items-center rounded-xl bg-secondary/15 text-secondary">
                         <Crosshair className="h-4 w-4" />
                       </div>
@@ -695,7 +751,7 @@ const PrizeDistributionScreen = () => {
                           {participant ? `Slot ${participant.slotNumber ?? "-"} - ${getGameAccountLine(participant)}` : "Prize paid"}
                         </p>
                       </div>
-                      <div className="w-24 shrink-0">
+                      <div className="w-20 shrink-0">
                         <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-heading">
                           Kills
                         </label>
@@ -709,6 +765,27 @@ const PrizeDistributionScreen = () => {
                             setKillRows((current) =>
                               current.map((item) =>
                                 item.registrationId === row.registrationId ? { ...item, kills: event.target.value } : item,
+                              ),
+                            )
+                          }
+                          className={cn(inputClass, "mt-1 h-9 px-2 text-right")}
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="w-20 shrink-0">
+                        <label className="text-[9px] uppercase tracking-wider text-muted-foreground font-heading">
+                          Points
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          value={row.points}
+                          disabled={prizesPaid}
+                          onChange={(event) =>
+                            setKillRows((current) =>
+                              current.map((item) =>
+                                item.registrationId === row.registrationId ? { ...item, points: event.target.value } : item,
                               ),
                             )
                           }

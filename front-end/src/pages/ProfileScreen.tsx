@@ -36,7 +36,6 @@ import { formatCurrency, getErrorMessage, getErrorToast } from "@/lib/page-utils
 
 const menuItems = [
   { icon: Edit, label: "Edit Profile", route: "/edit-profile" },
-  { icon: Lock, label: "Change Password", route: "/change-password" },
   { icon: Trophy, label: "My Tournaments", route: "/my-tournaments" },
   { icon: Gamepad2, label: "Game Accounts", route: "/game-accounts" },
 ];
@@ -143,6 +142,12 @@ const ProfileScreen = () => {
     ? [{ icon: ShieldCheck, label: "Admin Panel", route: "/admin" }]
     : [];
   const isCreator = Boolean(profile?.role?.includes("creator"));
+  const passwordLabel = profile?.socialProvider && profile.passwordLoginEnabled !== true ? "Set Password" : "Change Password";
+  const accountMenuItems = [
+    menuItems[0],
+    { icon: Lock, label: passwordLabel, route: "/change-password" },
+    ...menuItems.slice(1),
+  ];
 
   const handleCreatorToggle = async () => {
     try {
@@ -309,7 +314,7 @@ const ProfileScreen = () => {
           Account
         </h2>
         <div className="space-y-2">
-          {menuItems.map((item, i) => (
+          {accountMenuItems.map((item, i) => (
             <GlassCard
               key={item.label}
               delay={i * 0.06}

@@ -142,6 +142,11 @@ const CreatorDashboardScreen = () => {
   const recentTournaments = tournaments.slice(0, 4);
 
   const handleDelete = async (tournament: Tournament) => {
+    if (Number(tournament.receivedMoney ?? tournament.organizerEarnings ?? 0) > 0) {
+      toast.error("Cannot delete tournament", { description: "This tournament already has paid registrations." });
+      return;
+    }
+
     const previous = tournaments;
 
     try {
@@ -322,7 +327,9 @@ const CreatorDashboardScreen = () => {
             </GlassCard>
           )}
 
-          {filteredTournaments.map((tournament, index) => (
+          {filteredTournaments.map((tournament, index) => {
+            const hasPaidEntries = Number(tournament.receivedMoney ?? tournament.organizerEarnings ?? 0) > 0;
+            return (
             <GlassCard key={tournament._id} delay={index * 0.04} className="relative overflow-hidden">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -388,17 +395,17 @@ const CreatorDashboardScreen = () => {
                   </motion.button>
                   <motion.button
                     whileTap={{ scale: 0.9 }}
-                    onClick={() => handleDelete(tournament)}
-                    disabled={deletingId === tournament._id}
+                    onClick={() => !hasPaidEntries && handleDelete(tournament)}
+                    disabled={deletingId === tournament._id || hasPaidEntries}
                     className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors disabled:opacity-50"
-                    title="Delete tournament"
+                    title={hasPaidEntries ? "Cannot delete after paid registrations" : "Delete tournament"}
                   >
                     <Trash2 className="w-3.5 h-3.5 text-destructive" />
                   </motion.button>
                 </div>
               </div>
             </GlassCard>
-          ))}
+          )})}
         </div>
       </div>
 

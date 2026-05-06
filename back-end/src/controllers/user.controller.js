@@ -66,6 +66,15 @@ const createUniqueUsername = async (name, email, providerId) => {
 
 const isProviderPhoneNumber = (value) => /^(google|facebook):/i.test(String(value || ""));
 
+const normalizePhoneNumber = (value = "") => String(value).trim().replace(/\s+/g, "");
+
+const toDateInputString = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toISOString().split("T")[0];
+};
+
 const sanitizeUserForResponse = (user) => {
     const plain = user?.toObject?.() || user;
     if (!plain) return plain;
@@ -208,6 +217,7 @@ const findOrCreateSocialUser = async ({ provider, providerId, email, name, pictu
                     socialProvider: provider,
                     socialProviderId: providerId,
                     password,
+                    passwordLoginEnabled: false,
                     avatar: picture ? { url: picture } : undefined,
                 }
             ],
@@ -377,7 +387,7 @@ const registerUser = asyncHandler(async (req, res) => {
     try {
         // 1️⃣ Create user
         const createdUserArr = await User.create(
-            [{ username, phone_number, password, email }],
+            [{ username, phone_number, password, email, passwordLoginEnabled: true }],
             { session }
         );
 
@@ -466,7 +476,7 @@ const loginUser = asyncHandler(async (req, res) => {
         .cookie('accessToken', accessToken, options)
         .cookie('refreshToken', refreshToken, options)
         .json(
-            new ApiResponse(200, { user: loggedInUser, accessToken, refreshToken }, "logged in successfully")
+            new ApiResponse(200, { user: sanitizeUserForResponse(loggedInUser), accessToken, refreshToken }, "logged in successfully")
         );
 });
 const loginWithGoogle = asyncHandler(async (req, res) => {
@@ -589,6 +599,7 @@ const resetPassword = asyncHandler(async (req, res) => {
     }
 
     user.password = newPassword;
+    user.passwordLoginEnabled = true;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
@@ -600,23 +611,34 @@ const resetPassword = asyncHandler(async (req, res) => {
 const changePassword = asyncHandler(async (req, res) => {
     const user = req.user;
     const { currentPassword, newPassword } = req.body;
+    const isSettingSocialPassword = Boolean(user.socialProvider) && user.passwordLoginEnabled !== true;
 
-    if (!currentPassword || !newPassword || newPassword.trim() === '') {
+    if (!newPassword || newPassword.trim() === '') {
+        throw new ApiError(400, isSettingSocialPassword ? "New password is required" : "Current and new password are required");
+    }
+
+    if (isSettingSocialPassword && !user.phone_number) {
+        throw new ApiError(400, "Add a phone number before setting password login");
+    }
+
+    if (!isSettingSocialPassword && !currentPassword) {
         throw new ApiError(400, "Current and new password are required");
     }
 
-    // Verify current password
-    const isCorrect = await user.isPasswordCorrect(currentPassword);
-    if (!isCorrect) {
-        throw new ApiError(400, "Incorrect current password");
+    if (!isSettingSocialPassword) {
+        const isCorrect = await user.isPasswordCorrect(currentPassword);
+        if (!isCorrect) {
+            throw new ApiError(400, "Incorrect current password");
+        }
     }
 
     // Update password
     user.password = newPassword;
+    user.passwordLoginEnabled = true;
     await user.save();
 
     return res.status(200).json(
-        new ApiResponse(200, {}, "Password changed successfully")
+        new ApiResponse(200, {}, isSettingSocialPassword ? "Password login enabled successfully" : "Password changed successfully")
     );
 });
 
@@ -654,34 +676,64 @@ const getUserById = asyncHandler(async (req, res) => {
 
 const updateUserProfile = asyncHandler(async (req, res) => {
     const user = req.user
-    const { username, gamename, gameid, dateOfBirth, gender, password } = req.body;
+    const { username, phone_number, gamename, gameid, dateOfBirth, gender, password } = req.body;
     // console.log(username, gamename, gameid, dateOfBirth, gender, password)
+    const isSocialUser = Boolean(user.socialProvider);
+    const wantsPhoneUpdate = Object.prototype.hasOwnProperty.call(req.body, "phone_number");
+    const nextPhoneNumber = wantsPhoneUpdate ? normalizePhoneNumber(phone_number) : undefined;
+    const currentPhoneNumber = isProviderPhoneNumber(user.phone_number) ? "" : normalizePhoneNumber(user.phone_number);
+    const phoneChanged = wantsPhoneUpdate && nextPhoneNumber !== currentPhoneNumber;
+    const usernameChanged = Boolean(username?.trim()) && username.trim() !== user.username;
+    const gamenameChanged = Boolean(gamename?.trim()) && gamename.trim() !== user.gamename;
+    const gameidChanged = Boolean(gameid?.trim()) && gameid.trim() !== user.gameid;
+    const nextDateOfBirth = toDateInputString(dateOfBirth);
+    if (dateOfBirth?.trim() && !nextDateOfBirth) {
+        throw new ApiError(400, "Invalid date of birth");
+    }
+    const dateOfBirthChanged = Boolean(dateOfBirth?.trim()) && nextDateOfBirth !== toDateInputString(user.dateOfBirth);
+    const genderChanged = Boolean(gender?.trim()) && gender.trim() !== user.gender;
+    const wantsOtherUpdate = usernameChanged || gamenameChanged || gameidChanged || dateOfBirthChanged || genderChanged;
+    const hasAnyUpdate = phoneChanged || wantsOtherUpdate;
 
     // Validate current password
-    if (!password || password.trim() === "") {
+    if (hasAnyUpdate && (!isSocialUser || wantsOtherUpdate) && (!password || password.trim() === "")) {
         throw new ApiError(400, "Password is required to update profile");
     }
 
-    const isCorrect = await user.isPasswordCorrect(password);
-    if (!isCorrect) {
-        throw new ApiError(400, "Incorrect password");
+    if (hasAnyUpdate && (!isSocialUser || wantsOtherUpdate)) {
+        const isCorrect = await user.isPasswordCorrect(password);
+        if (!isCorrect) {
+            throw new ApiError(400, "Incorrect password");
+        }
     }
 
     // Build update object dynamically
     const updates = {};
 
-    if (username && username.trim() !== "") {
-        const existingUser = await User.findOne({ username });
+    if (usernameChanged) {
+        const existingUser = await User.findOne({ username: username.trim() });
         if (existingUser && existingUser._id.toString() !== user._id.toString()) {
             throw new ApiError(400, "Username already exists, choose another one");
         }
         updates.username = username.trim();
     }
 
-    if (gamename && gamename.trim() !== "") updates.gamename = gamename.trim();
-    if (gameid && gameid.trim() !== "") updates.gameid = gameid.trim();
-    if (dateOfBirth && dateOfBirth.trim() !== "") updates.dateOfBirth = new Date(dateOfBirth);
-    if (gender && gender.trim() !== "") updates.gender = gender.trim();
+    if (phoneChanged) {
+        if (!nextPhoneNumber) {
+            updates.phone_number = undefined;
+        } else {
+            const existingPhoneUser = await User.findOne({ phone_number: nextPhoneNumber });
+            if (existingPhoneUser && existingPhoneUser._id.toString() !== user._id.toString()) {
+                throw new ApiError(400, "Phone number already exists");
+            }
+            updates.phone_number = nextPhoneNumber;
+        }
+    }
+
+    if (gamenameChanged) updates.gamename = gamename.trim();
+    if (gameidChanged) updates.gameid = gameid.trim();
+    if (dateOfBirthChanged) updates.dateOfBirth = new Date(dateOfBirth);
+    if (genderChanged) updates.gender = gender.trim();
 
     // Update user in DB
     const updatedUser = await User.findByIdAndUpdate(
@@ -691,7 +743,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     ).select("-password -refreshToken -accessToken");
 
     return res.status(200).json(
-        new ApiResponse(200, updatedUser, "User profile updated successfully")
+        new ApiResponse(200, { user: await buildUserProfileResponse(updatedUser) }, "User profile updated successfully")
     );
 });
 const becomeCreator = asyncHandler(async (req, res) => {

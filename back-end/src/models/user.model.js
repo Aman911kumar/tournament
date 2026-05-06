@@ -56,6 +56,10 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: [true, "Password is required"],
     },
+    passwordLoginEnabled: {
+        type: Boolean,
+        default: false,
+    },
     avatar: {
         public_id: { type: String, trim: true },
         url: { type: String, trim: true }
