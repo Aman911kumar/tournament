@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "serve:dist": "vite preview --host 0.0.0.0",
+    "serve": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:watch": "vitest"
   },

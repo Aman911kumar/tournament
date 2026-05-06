@@ -90,7 +90,7 @@ const App = () => (
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
-          <Analytics />
+          {/* <Analytics /> */}
         </GoogleOAuthProvider>
       </BrowserRouter>
     </TooltipProvider>
