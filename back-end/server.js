@@ -62,9 +62,9 @@ app.use((req, res, next) => {
 // All routes
 app.use('/api/v1', routes);
 
-// app.use("/", (req, res) => {
-//     res.json("server is live")
-// })
+app.use("/", (req, res) => {
+    res.json("server is live")
+})
 
 
 app.use((req, res, next) => {
