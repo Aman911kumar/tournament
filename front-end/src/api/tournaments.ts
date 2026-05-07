@@ -19,6 +19,7 @@ export const ENDPOINTS = {
   create: "/tournaments",
   update: (id: string) => `/tournaments/${id}`,
   remove: (id: string) => `/tournaments/${id}`,
+  cancel: (id: string) => `/tournaments/${id}/cancel`,
   join: (id: string) => `/tournaments/${id}/join`,
   participants: (id: string) => `/tournaments/${id}/participants`,
   distributePrizes: (id: string) => `/tournaments/${id}/distribute-prizes`,
@@ -73,6 +74,7 @@ export interface Tournament {
   }[];
   rules?: string;
   status: "draft" | "open" | "running" | "completed" | "cancelled";
+  visibility?: "public" | "private";
   room_details?: {
     roomId?: string;
     roomPass?: string;
@@ -122,6 +124,20 @@ export interface PrizePayoutInput {
   position?: number;
   kills?: number;
   points?: number;
+}
+
+export interface CancelTournamentPayload {
+  username: string;
+  confirmation: string;
+}
+
+export interface CancelTournamentResult {
+  tournament: Tournament;
+  refundTotal: number;
+  refundCount: number;
+  platformFeeCoveredByCreator: number;
+  organizerDebitTransaction?: unknown;
+  refundTransactions?: unknown[];
 }
 
 interface TournamentListData {
@@ -199,8 +215,21 @@ export async function updateTournamentStatus(id: string, status: Tournament["sta
   return res.data;
 }
 
+export async function updateTournamentVisibility(id: string, visibility: NonNullable<Tournament["visibility"]>) {
+  const res = await updateTournament(id, { visibility });
+  return res.data;
+}
+
 export async function deleteTournament(id: string) {
   return apiFetch(ENDPOINTS.remove(id), { method: "DELETE" });
+}
+
+export async function cancelTournament(id: string, payload: CancelTournamentPayload) {
+  const res = await apiFetch<ApiResponse<CancelTournamentResult>>(ENDPOINTS.cancel(id), {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return res.data;
 }
 
 export async function joinTournament(id: string, payload: { slotNumber?: number; teamName?: string; players?: string[] } = {}) {

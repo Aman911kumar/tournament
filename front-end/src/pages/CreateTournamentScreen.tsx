@@ -147,6 +147,7 @@ interface TournamentPayload {
   entryFee: number;
   prizeMode: PrizeMode;
   killPrizeAmount: number;
+  visibility: "public" | "private";
   registrationStart: string;
   registrationEnd: string;
   startAt: string;
@@ -225,6 +226,7 @@ const CreateTournamentScreen = () => {
   const isEditing = Boolean(id);
   const [published, setPublished] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [currentVisibility, setCurrentVisibility] = useState<"public" | "private">("public");
   const [form, setForm] = useState<FormState>(() => makeEmptyForm());
 
   const preset = GAME_PRESETS[form.game];
@@ -247,6 +249,7 @@ const CreateTournamentScreen = () => {
   useEffect(() => {
     if (!id) {
       setForm(makeEmptyForm());
+      setCurrentVisibility("public");
       return;
     }
 
@@ -256,6 +259,7 @@ const CreateTournamentScreen = () => {
         if (!active || !tournament) return;
         const game = getGameKey(tournament.game);
         const nextPreset = GAME_PRESETS[game];
+        setCurrentVisibility(tournament.visibility === "private" ? "private" : "public");
         setForm({
           game,
           title: tournament.title,
@@ -358,6 +362,7 @@ const CreateTournamentScreen = () => {
       entryFee: Number(form.entryFee || 0),
       prizeMode: form.prizeMode,
       killPrizeAmount: usesKillPrize ? killPrizeAmount : 0,
+      visibility: currentVisibility,
       registrationStart: toIsoDateTime(form.registrationStart || nowLocal()),
       registrationEnd: toIsoDateTime(form.registrationEnd),
       startAt: toIsoDateTime(form.startAt),

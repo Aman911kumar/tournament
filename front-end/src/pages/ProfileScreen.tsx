@@ -27,6 +27,13 @@ import { toast } from "@/components/ui/sonner";
 import { logout } from "@/api/auth";
 import { becomeCreator, getMyProfile, leaveCreator, User as ProfileUser } from "@/api/profile";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   CACHE_KEYS,
   getSavedDataLabel,
   getSavedDataNotice,
@@ -53,6 +60,8 @@ const creatorMenu = [
   { icon: BarChart3, label: "Create Tournament", route: "/create-tournament" },
   { icon: Users, label: "My Subscribers", route: "/subscriptions" },
 ];
+
+const LEAVE_CREATOR_CONFIRM_TEXT = "Leave create";
 
 const getDisplayPhoneNumber = (phoneNumber?: string) => {
   const value = String(phoneNumber || "").trim();
@@ -82,6 +91,9 @@ const ProfileScreen = () => {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [creatorLoading, setCreatorLoading] = useState(false);
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [leaveUsernameInput, setLeaveUsernameInput] = useState("");
+  const [leavePhraseInput, setLeavePhraseInput] = useState("");
 
   const stats = [
     { label: "Balance", value: formatCurrency(profile?.walletBalance ?? 0) },
@@ -159,23 +171,61 @@ const ProfileScreen = () => {
     ...menuItems.slice(1),
   ];
 
-  const handleCreatorToggle = async () => {
+  const handleCreatorRequest = async () => {
+    if (creatorRequestPending || isCreator) return;
+
     try {
       setCreatorLoading(true);
-      const res = isCreator ? await leaveCreator() : await becomeCreator();
+      const res = await becomeCreator();
       setProfile(res.data.user);
       writeAuthenticatedCache(CACHE_KEYS.profile, res.data.user, res);
       toast.success(res.message);
     } catch (error) {
       const errorToast = getErrorToast(error, {
-        action: isCreator ? "Leave creator mode" : "Become creator",
-        fallback: isCreator ? "Could not leave creator mode." : "Could not enable creator mode.",
+        action: "Become creator",
+        fallback: "Could not request creator access.",
       });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
       setCreatorLoading(false);
     }
   };
+
+  const resetLeaveDialog = () => {
+    setLeaveUsernameInput("");
+    setLeavePhraseInput("");
+  };
+
+  const handleLeaveCreator = async () => {
+    if (!profile || leaveUsernameInput.trim() !== profile.username || leavePhraseInput.trim() !== LEAVE_CREATOR_CONFIRM_TEXT) {
+      toast.error("Confirmation does not match.", {
+        description: `Type your username and "${LEAVE_CREATOR_CONFIRM_TEXT}" to continue.`,
+      });
+      return;
+    }
+
+    try {
+      setCreatorLoading(true);
+      const res = await leaveCreator();
+      setProfile(res.data.user);
+      writeAuthenticatedCache(CACHE_KEYS.profile, res.data.user, res);
+      toast.success(res.message);
+      setLeaveDialogOpen(false);
+      resetLeaveDialog();
+    } catch (error) {
+      const errorToast = getErrorToast(error, {
+        action: "Leave creator mode",
+        fallback: "Could not leave creator mode.",
+      });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setCreatorLoading(false);
+    }
+  };
+
+  const leaveCreatorConfirmReady = Boolean(profile)
+    && leaveUsernameInput.trim() === profile.username
+    && leavePhraseInput.trim() === LEAVE_CREATOR_CONFIRM_TEXT;
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -259,22 +309,27 @@ const ProfileScreen = () => {
           Creator Tools
         </h2>
         <div className="space-y-2">
-          <GlassCard className="flex items-center justify-between cursor-pointer" onClick={handleCreatorToggle}>
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
-                {isCreator ? <UserMinus className="w-4 h-4 text-secondary" /> : <UserPlus className="w-4 h-4 text-secondary" />}
+          {!isCreator && (
+            <GlassCard
+              className={`flex items-center justify-between ${creatorRequestPending ? "opacity-75" : "cursor-pointer"}`}
+              onClick={handleCreatorRequest}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
+                  <UserPlus className="w-4 h-4 text-secondary" />
+                </div>
+                <div className="min-w-0 text-left">
+                  <span className="text-sm font-heading font-medium truncate block">
+                    {creatorLoading ? "Updating..." : creatorRequestPending ? "Creator Request Pending" : "Request Creator Access"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {creatorRequestPending ? "Admin approval is required before creating tournaments" : "Admin approval is required"}
+                  </span>
+                </div>
               </div>
-              <div className="min-w-0 text-left">
-                <span className="text-sm font-heading font-medium truncate block">
-                  {creatorLoading ? "Updating..." : isCreator ? "Leave Creator" : creatorRequestPending ? "Creator Request Pending" : "Request Creator Access"}
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  {isCreator ? "Platform keeps 10% from paid entries" : creatorRequestPending ? "Admin approval is required before creating tournaments" : "Admin approval is required"}
-                </span>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-          </GlassCard>
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            </GlassCard>
+          )}
 
           {isCreator &&
             creatorMenu.map((item, i) => (
@@ -342,20 +397,6 @@ const ProfileScreen = () => {
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
             </GlassCard>
           ))}
-
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={handleLogout}
-            disabled={logoutLoading}
-            className="w-full glass rounded-xl p-4 flex items-center gap-3 mt-2 border border-destructive/20 disabled:opacity-60"
-          >
-            <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center">
-              <LogOut className="w-4 h-4 text-destructive" />
-            </div>
-            <span className="text-sm font-heading font-medium text-destructive">
-              {logoutLoading ? "Logging out..." : "Logout"}
-            </span>
-          </motion.button>
         </div>
       </div>
 
@@ -381,6 +422,118 @@ const ProfileScreen = () => {
           ))}
         </div>
       </div>
+
+      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mt-8 pb-4">
+        <h2 className="font-heading text-xs font-bold text-destructive mb-2 uppercase tracking-wider">
+          Critical Section
+        </h2>
+        <div className="space-y-2">
+          {isCreator && (
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setLeaveDialogOpen(true)}
+              disabled={creatorLoading}
+              className="w-full glass rounded-xl p-4 flex items-center justify-between gap-3 border border-destructive/30 bg-destructive/5 disabled:opacity-60"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                  <UserMinus className="w-4 h-4 text-destructive" />
+                </div>
+                <div className="text-left min-w-0">
+                  <span className="text-sm font-heading font-medium text-destructive truncate block">
+                    Leave Creator
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    Removes creator access after confirmation
+                  </span>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-destructive shrink-0" />
+            </motion.button>
+          )}
+
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={handleLogout}
+            disabled={logoutLoading}
+            className="w-full glass rounded-xl p-4 flex items-center justify-between gap-3 border border-destructive/30 bg-destructive/5 disabled:opacity-60"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                <LogOut className="w-4 h-4 text-destructive" />
+              </div>
+              <span className="text-sm font-heading font-medium text-destructive">
+                {logoutLoading ? "Logging out..." : "Logout"}
+              </span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-destructive shrink-0" />
+          </motion.button>
+        </div>
+      </div>
+
+      <Dialog
+        open={leaveDialogOpen}
+        onOpenChange={(open) => {
+          setLeaveDialogOpen(open);
+          if (!open) resetLeaveDialog();
+        }}
+      >
+        <DialogContent className="w-[calc(100%-2rem)] rounded-xl border-destructive/30 bg-background sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-destructive">Leave Creator</DialogTitle>
+            <DialogDescription>
+              This removes creator access from your account. Existing platform records remain saved.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1 block text-xs font-heading text-muted-foreground">
+                Type your username
+              </label>
+              <input
+                type="text"
+                value={leaveUsernameInput}
+                onChange={(event) => setLeaveUsernameInput(event.target.value)}
+                placeholder={profile?.username || "username"}
+                className="w-full rounded-lg border border-glass-border bg-transparent px-3 py-2.5 text-sm font-heading focus:border-destructive focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-heading text-muted-foreground">
+                Type "{LEAVE_CREATOR_CONFIRM_TEXT}"
+              </label>
+              <input
+                type="text"
+                value={leavePhraseInput}
+                onChange={(event) => setLeavePhraseInput(event.target.value)}
+                placeholder={LEAVE_CREATOR_CONFIRM_TEXT}
+                className="w-full rounded-lg border border-glass-border bg-transparent px-3 py-2.5 text-sm font-heading focus:border-destructive focus:outline-none"
+              />
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setLeaveDialogOpen(false)}
+                disabled={creatorLoading}
+                className="rounded-lg border border-glass-border px-4 py-2 text-sm font-heading text-foreground disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLeaveCreator}
+                disabled={!leaveCreatorConfirmReady || creatorLoading}
+                className="rounded-lg bg-destructive px-4 py-2 text-sm font-heading text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {creatorLoading ? "Leaving..." : "Leave Creator"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

@@ -6,8 +6,11 @@ import {
   BarChart3,
   Calendar,
   CheckCircle2,
+  CircleX,
   DollarSign,
   Edit,
+  Eye,
+  EyeOff,
   PieChart,
   PlayCircle,
   Plus,
@@ -20,28 +23,39 @@ import {
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import { deleteTournament, getTournaments, Tournament, updateTournamentStatus } from "@/api/tournaments";
-import { getMyProfile } from "@/api/profile";
+import { cancelTournament, deleteTournament, getTournaments, Tournament, updateTournamentStatus, updateTournamentVisibility } from "@/api/tournaments";
+import { getMyProfile, User as ProfileUser } from "@/api/profile";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { formatCurrency, formatPrizeSummary, getErrorToast } from "@/lib/page-utils";
 import { toast } from "@/components/ui/sonner";
 import { CACHE_KEYS, readCache, writeAuthenticatedCache } from "@/lib/offline-cache";
 
-const statusFilters = ["all", "live", "upcoming", "completed", "draft"] as const;
+const statusFilters = ["all", "live", "upcoming", "completed", "cancelled", "draft"] as const;
 type DashboardStatus = Exclude<(typeof statusFilters)[number], "all">;
 
 const statusClass: Record<DashboardStatus, string> = {
   live: "bg-destructive/20 text-destructive",
   upcoming: "bg-secondary/20 text-secondary",
   completed: "bg-accent/20 text-accent",
+  cancelled: "bg-destructive/15 text-destructive",
   draft: "bg-muted text-muted-foreground",
 };
 
 const toDashboardStatus = (status: Tournament["status"]): DashboardStatus => {
   if (status === "running") return "live";
-  if (status === "completed" || status === "cancelled") return "completed";
+  if (status === "completed") return "completed";
+  if (status === "cancelled") return "cancelled";
   if (status === "draft") return "draft";
   return "upcoming";
 };
+
+const CANCEL_TOURNAMENT_CONFIRM_TEXT = "cancel";
 
 const formatDateTime = (value?: string) => {
   if (!value) return "No start date";
@@ -61,13 +75,46 @@ const getPaidMoney = (tournament: Tournament) =>
 const getNetEarnings = (tournament: Tournament) =>
   getReceivedMoney(tournament) - getPaidMoney(tournament);
 
+const getCancellationRefundEstimate = (tournament: Tournament) =>
+  Number(tournament.receivedMoney ?? tournament.organizerEarnings ?? 0) + Number(tournament.platformFeeAmount || 0);
+
+const getTournamentVisibility = (tournament: Tournament) =>
+  tournament.visibility === "private" ? "private" : "public";
+
+const getJoinedCount = (tournament: Tournament) =>
+  Number(tournament.participantCount || tournament.registrationCount || tournament.joinedPlayers?.length || 0);
+
+const actionButtonClass = {
+  primary: "border-primary/30 bg-primary/10 text-primary hover:bg-primary/20",
+  secondary: "border-secondary/30 bg-secondary/10 text-secondary hover:bg-secondary/20",
+  accent: "border-accent/30 bg-accent/10 text-accent hover:bg-accent/20",
+  destructive: "border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20",
+  muted: "border-glass-border bg-muted/40 text-muted-foreground hover:bg-muted/70",
+};
+const tournamentActionButtonBase =
+  "inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[10px] font-heading font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+
+const getStatusActionToast = (status: Tournament["status"]) => {
+  if (status === "open") return "Tournament published";
+  if (status === "draft") return "Tournament moved to private";
+  if (status === "completed") return "Tournament completed";
+  if (status === "running") return "Tournament started";
+  return "Tournament updated";
+};
+
 const CreatorDashboardScreen = () => {
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [creatorProfile, setCreatorProfile] = useState<ProfileUser | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof statusFilters)[number]>("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [updatingVisibilityId, setUpdatingVisibilityId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Tournament | null>(null);
+  const [cancelUsernameInput, setCancelUsernameInput] = useState("");
+  const [cancelPhraseInput, setCancelPhraseInput] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -76,7 +123,9 @@ const CreatorDashboardScreen = () => {
     const loadTournaments = async () => {
       try {
         const profileRes = await getMyProfile();
-        const userId = profileRes.data.user._id;
+        const user = profileRes.data.user;
+        const userId = user._id;
+        if (active) setCreatorProfile(user);
         const cachedTournaments = readCache<Tournament[]>(CACHE_KEYS.creatorDashboard(userId));
         if (cachedTournaments && active) {
           setTournaments(cachedTournaments.data);
@@ -190,11 +239,26 @@ const CreatorDashboardScreen = () => {
   }, [query, status, tournaments]);
 
   const recentTournaments = tournaments.slice(0, 4);
+  const cancelRefundEstimate = cancelTarget ? getCancellationRefundEstimate(cancelTarget) : 0;
+  const cancelPlatformFeeEstimate = cancelTarget ? Number(cancelTarget.platformFeeAmount || 0) : 0;
+  const cancelConfirmReady = Boolean(cancelTarget && creatorProfile)
+    && cancelUsernameInput.trim() === creatorProfile?.username
+    && cancelPhraseInput.trim().toLowerCase() === CANCEL_TOURNAMENT_CONFIRM_TEXT;
 
   const skeletonCards = (count: number, className = "h-20") =>
     Array.from({ length: count }).map((_, index) => (
       <div key={index} className={`${className} animate-pulse rounded-lg bg-muted`} />
     ));
+
+  const resetCancelDialog = () => {
+    setCancelUsernameInput("");
+    setCancelPhraseInput("");
+  };
+
+  const openCancelDialog = (tournament: Tournament) => {
+    setCancelTarget(tournament);
+    resetCancelDialog();
+  };
 
   const handleDelete = async (tournament: Tournament) => {
     if (Number(tournament.receivedMoney ?? tournament.organizerEarnings ?? 0) > 0) {
@@ -228,13 +292,77 @@ const CreatorDashboardScreen = () => {
       if (updated) {
         setTournaments((current) => current.map((item) => (item._id === tournament._id ? updated : item)));
       }
-      toast.success(nextStatus === "completed" ? "Tournament completed" : "Tournament started", { description: tournament.title });
+      toast.success(getStatusActionToast(nextStatus), { description: tournament.title });
     } catch (error) {
       setTournaments(previous);
       const errorToast = getErrorToast(error, { action: "Update tournament", fallback: "Status update failed." });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
       setUpdatingStatusId(null);
+    }
+  };
+
+  const handleVisibilityChange = async (tournament: Tournament, visibility: NonNullable<Tournament["visibility"]>) => {
+    const joinedCount = getJoinedCount(tournament);
+    if (visibility === "private" && joinedCount > 0) {
+      toast.error("Cannot make private", { description: "Players have already joined this tournament." });
+      return;
+    }
+
+    const previous = tournaments;
+
+    try {
+      setUpdatingVisibilityId(tournament._id);
+      setTournaments((current) => current.map((item) => (item._id === tournament._id ? { ...item, visibility } : item)));
+      const updated = await updateTournamentVisibility(tournament._id, visibility);
+      if (updated) {
+        setTournaments((current) => current.map((item) => (item._id === tournament._id ? updated : item)));
+      }
+      toast.success(visibility === "public" ? "Tournament published" : "Tournament moved to private", {
+        description: tournament.title,
+      });
+    } catch (error) {
+      setTournaments(previous);
+      const errorToast = getErrorToast(error, { action: "Update visibility", fallback: "Visibility update failed." });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setUpdatingVisibilityId(null);
+    }
+  };
+
+  const handleCancelTournament = async () => {
+    if (!cancelTarget || !creatorProfile) return;
+
+    if (!cancelConfirmReady) {
+      toast.error("Confirmation does not match.", {
+        description: `Type your username and "${CANCEL_TOURNAMENT_CONFIRM_TEXT}" to cancel.`,
+      });
+      return;
+    }
+
+    const previous = tournaments;
+
+    try {
+      setCancellingId(cancelTarget._id);
+      const result = await cancelTournament(cancelTarget._id, {
+        username: cancelUsernameInput.trim(),
+        confirmation: cancelPhraseInput.trim(),
+      });
+      const updatedTournament = result?.tournament ?? { ...cancelTarget, status: "cancelled" as const };
+      const nextTournaments = tournaments.map((item) => (item._id === cancelTarget._id ? updatedTournament : item));
+      setTournaments(nextTournaments);
+      writeAuthenticatedCache(CACHE_KEYS.creatorDashboard(creatorProfile._id), nextTournaments);
+      toast.success("Tournament cancelled", {
+        description: `${result?.refundCount ?? 0} joined entries refunded. Creator paid ${formatCurrency(result?.refundTotal ?? 0)} including ${formatCurrency(result?.platformFeeCoveredByCreator ?? 0)} platform fee.`,
+      });
+      setCancelTarget(null);
+      resetCancelDialog();
+    } catch (error) {
+      setTournaments(previous);
+      const errorToast = getErrorToast(error, { action: "Cancel tournament", fallback: "Tournament cancellation failed." });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -491,16 +619,34 @@ const CreatorDashboardScreen = () => {
           )}
 
           {!loading && filteredTournaments.map((tournament, index) => {
-            const hasPaidEntries = Number(tournament.receivedMoney ?? tournament.organizerEarnings ?? 0) > 0;
+            const hasPaidEntries = getCancellationRefundEstimate(tournament) > 0;
+            const canCancelTournament = tournament.status !== "cancelled" && getPaidMoney(tournament) === 0;
+            const isUpdatingTournament = updatingStatusId === tournament._id;
+            const isUpdatingVisibility = updatingVisibilityId === tournament._id;
+            const visibility = getTournamentVisibility(tournament);
+            const joinedCount = getJoinedCount(tournament);
+            const canMakePrivate = joinedCount === 0;
             return (
             <GlassCard key={tournament._id} delay={index * 0.04} className="relative overflow-hidden">
-              <div className="flex items-start justify-between gap-3">
+              <div className="space-y-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-heading font-bold text-sm truncate">{tournament.title}</p>
                     <span className={`text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full ${statusClass[toDashboardStatus(tournament.status)]}`}>
                       {toDashboardStatus(tournament.status)}
                     </span>
+                    {visibility === "private" && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-heading font-semibold text-muted-foreground">
+                        <EyeOff className="h-3 w-3" />
+                        Private
+                      </span>
+                    )}
+                    {visibility === "public" && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-secondary/10 px-2 py-0.5 text-[10px] font-heading font-semibold text-secondary">
+                        <Eye className="h-3 w-3" />
+                        Published
+                      </span>
+                    )}
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
                     {tournament.game} - {formatPrizeSummary(tournament)} prize
@@ -515,55 +661,96 @@ const CreatorDashboardScreen = () => {
                   </div>
                 </div>
 
-                <div className="flex gap-1.5 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 border-t border-glass-border/60 pt-3">
+                  {visibility === "private" && tournament.status !== "completed" && tournament.status !== "cancelled" && (
+                    <motion.button
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => handleVisibilityChange(tournament, "public")}
+                      disabled={isUpdatingVisibility}
+                      className={`${tournamentActionButtonBase} ${actionButtonClass.secondary}`}
+                      title="Publish tournament"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Publish
+                    </motion.button>
+                  )}
+                  {visibility === "public" && tournament.status !== "completed" && tournament.status !== "cancelled" && (
+                    <motion.button
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => canMakePrivate && handleVisibilityChange(tournament, "private")}
+                      disabled={isUpdatingVisibility || !canMakePrivate}
+                      className={`${tournamentActionButtonBase} ${actionButtonClass.muted}`}
+                      title={canMakePrivate ? "Move tournament to private" : "Cannot make private after players join"}
+                    >
+                      <EyeOff className="w-3.5 h-3.5" />
+                      Private
+                    </motion.button>
+                  )}
                   {tournament.status === "completed" && (
                     <motion.button
-                      whileTap={{ scale: 0.9 }}
+                      whileTap={{ scale: 0.96 }}
                       onClick={() => navigate(`/tournament/${tournament._id}/distribute-prizes`)}
-                      className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center hover:bg-accent/20 transition-colors"
+                      className={`${tournamentActionButtonBase} ${actionButtonClass.accent}`}
                       title={getPaidMoney(tournament) > 0 ? "View results" : "Prize distribution"}
                     >
-                      <Trophy className="w-3.5 h-3.5 text-accent" />
+                      <Trophy className="w-3.5 h-3.5" />
+                      Results
                     </motion.button>
                   )}
                   {tournament.status !== "running" && tournament.status !== "completed" && tournament.status !== "cancelled" && (
                     <motion.button
-                      whileTap={{ scale: 0.9 }}
+                      whileTap={{ scale: 0.96 }}
                       onClick={() => handleStatusChange(tournament, "running")}
-                      disabled={updatingStatusId === tournament._id}
-                      className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center hover:bg-secondary/20 transition-colors disabled:opacity-50"
+                      disabled={isUpdatingTournament}
+                      className={`${tournamentActionButtonBase} ${actionButtonClass.secondary}`}
                       title="Start tournament"
                     >
-                      <PlayCircle className="w-3.5 h-3.5 text-secondary" />
+                      <PlayCircle className="w-3.5 h-3.5" />
+                      Start
                     </motion.button>
                   )}
                   {tournament.status !== "completed" && tournament.status !== "cancelled" && (
                     <motion.button
-                      whileTap={{ scale: 0.9 }}
+                      whileTap={{ scale: 0.96 }}
                       onClick={() => handleStatusChange(tournament, "completed")}
-                      disabled={updatingStatusId === tournament._id}
-                      className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center hover:bg-accent/20 transition-colors disabled:opacity-50"
+                      disabled={isUpdatingTournament}
+                      className={`${tournamentActionButtonBase} ${actionButtonClass.accent}`}
                       title="Complete tournament"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5 text-accent" />
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Complete
+                    </motion.button>
+                  )}
+                  {canCancelTournament && (
+                    <motion.button
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => openCancelDialog(tournament)}
+                      disabled={cancellingId === tournament._id}
+                      className={`${tournamentActionButtonBase} ${actionButtonClass.destructive}`}
+                      title="Cancel tournament and refund joined players"
+                    >
+                      <CircleX className="w-3.5 h-3.5" />
+                      Cancel
                     </motion.button>
                   )}
                   <motion.button
-                    whileTap={{ scale: 0.9 }}
+                    whileTap={{ scale: 0.96 }}
                     onClick={() => navigate(`/edit-tournament/${tournament._id}`)}
-                    className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors"
+                    className={`${tournamentActionButtonBase} ${actionButtonClass.primary}`}
                     title="Edit tournament"
                   >
-                    <Edit className="w-3.5 h-3.5 text-primary" />
+                    <Edit className="w-3.5 h-3.5" />
+                    Edit
                   </motion.button>
                   <motion.button
-                    whileTap={{ scale: 0.9 }}
+                    whileTap={{ scale: 0.96 }}
                     onClick={() => !hasPaidEntries && handleDelete(tournament)}
                     disabled={deletingId === tournament._id || hasPaidEntries}
-                    className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors disabled:opacity-50"
+                    className={`${tournamentActionButtonBase} ${actionButtonClass.destructive}`}
                     title={hasPaidEntries ? "Cannot delete after paid registrations" : "Delete tournament"}
                   >
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
                   </motion.button>
                 </div>
               </div>
@@ -571,6 +758,94 @@ const CreatorDashboardScreen = () => {
           )})}
         </div>
       </div>
+
+      <Dialog
+        open={Boolean(cancelTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelTarget(null);
+            resetCancelDialog();
+          }
+        }}
+      >
+        <DialogContent className="w-[calc(100%-2rem)] rounded-xl border-destructive/30 bg-background sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-destructive">Cancel Tournament</DialogTitle>
+            <DialogDescription>
+              Joined entries will receive a full refund. The creator wallet pays the entry refunds plus the platform fee difference.
+            </DialogDescription>
+          </DialogHeader>
+
+          {cancelTarget && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                <p className="font-heading text-sm font-bold text-destructive">{cancelTarget.title}</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
+                  <div className="rounded-lg border border-glass-border bg-background/50 p-2">
+                    <p className="text-muted-foreground">Refund estimate</p>
+                    <p className="font-heading text-sm font-bold">{formatCurrency(cancelRefundEstimate)}</p>
+                  </div>
+                  <div className="rounded-lg border border-glass-border bg-background/50 p-2">
+                    <p className="text-muted-foreground">Fee covered</p>
+                    <p className="font-heading text-sm font-bold text-destructive">{formatCurrency(cancelPlatformFeeEstimate)}</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-[10px] text-muted-foreground">
+                  Final refund is calculated by backend from saved registration payments.
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-heading text-muted-foreground">
+                  Type your username
+                </label>
+                <input
+                  type="text"
+                  value={cancelUsernameInput}
+                  onChange={(event) => setCancelUsernameInput(event.target.value)}
+                  placeholder={creatorProfile?.username || "username"}
+                  className="w-full rounded-lg border border-glass-border bg-transparent px-3 py-2.5 text-sm font-heading focus:border-destructive focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-heading text-muted-foreground">
+                  Type "{CANCEL_TOURNAMENT_CONFIRM_TEXT}"
+                </label>
+                <input
+                  type="text"
+                  value={cancelPhraseInput}
+                  onChange={(event) => setCancelPhraseInput(event.target.value)}
+                  placeholder={CANCEL_TOURNAMENT_CONFIRM_TEXT}
+                  className="w-full rounded-lg border border-glass-border bg-transparent px-3 py-2.5 text-sm font-heading focus:border-destructive focus:outline-none"
+                />
+              </div>
+
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCancelTarget(null);
+                    resetCancelDialog();
+                  }}
+                  disabled={cancellingId === cancelTarget._id}
+                  className="rounded-lg border border-glass-border px-4 py-2 text-sm font-heading text-foreground disabled:opacity-60"
+                >
+                  Keep Tournament
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelTournament}
+                  disabled={!cancelConfirmReady || cancellingId === cancelTarget._id}
+                  className="rounded-lg bg-destructive px-4 py-2 text-sm font-heading text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {cancellingId === cancelTarget._id ? "Cancelling..." : "Cancel Tournament"}
+                </button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

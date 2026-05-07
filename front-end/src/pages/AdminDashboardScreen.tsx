@@ -22,6 +22,7 @@ import {
   LayoutDashboard,
   ListChecks,
   RefreshCcw,
+  Search,
   ShieldCheck,
   Ticket,
   Trophy,
@@ -75,7 +76,10 @@ const formatShortDate = (value: string) => {
 
 const cleanLabel = (value: string | null | undefined) => {
   if (!value) return "Unknown";
-  return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return value
+    .replace(/_/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 };
 
 const formatDateTime = (value?: string) => {
@@ -88,7 +92,7 @@ const formatDateTime = (value?: string) => {
 const statusClass = (value?: string) => {
   const status = String(value || "").toLowerCase();
   if (["success", "completed", "active", "finished", "verified"].includes(status)) return "border-accent/30 bg-accent/10 text-accent";
-  if (["pending", "open", "running", "in_progress"].includes(status)) return "border-secondary/30 bg-secondary/10 text-secondary";
+  if (["pending", "open", "running", "in_progress", "initiated"].includes(status)) return "border-secondary/30 bg-secondary/10 text-secondary";
   if (["failed", "rejected", "removed", "banned", "cancelled"].includes(status)) return "border-destructive/30 bg-destructive/10 text-destructive";
   return "border-muted bg-muted/40 text-muted-foreground";
 };
@@ -179,9 +183,20 @@ const DistributionList = ({ data }: { data: CountBucket[] }) => (
   </div>
 );
 
-const getRecordTitle = (record: Record<string, unknown>) => {
-  const value = record.username || record.title || record.name || record.email || record.phone_number || record._id;
-  return typeof value === "string" ? value : JSON.stringify(value);
+const InsightBar = ({ label, count, total }: { label: string; count: number; total: number }) => {
+  const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-3 text-[10px] font-heading">
+        <span className="capitalize text-muted-foreground">{label}</span>
+        <span>{formatNumber(count)} - {percent}%</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(percent, count ? 8 : 0)}%` }} />
+      </div>
+    </div>
+  );
 };
 
 const getRecordSubtitle = (record: Record<string, unknown>) => {
@@ -205,8 +220,63 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 const getNestedValue = (record: Record<string, unknown>, path: string) =>
   path.split(".").reduce<unknown>((current, key) => asRecord(current)?.[key], record);
 
+const isRedactedAdminValue = (value: unknown) => value === "[REDACTED]";
+
+const isEmptyAdminValue = (value: unknown) => {
+  if (value === undefined || value === null || value === "" || isRedactedAdminValue(value)) return true;
+  if (Array.isArray(value)) return value.every(isEmptyAdminValue);
+  if (value instanceof Date) return false;
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    return entries.length === 0 || entries.every(([, child]) => isEmptyAdminValue(child));
+  }
+  return false;
+};
+
+const hiddenDetailFields = new Set(["__v"]);
+
+const shouldShowDetailField = ([key, value]: [string, unknown]) =>
+  !hiddenDetailFields.has(key) && !isEmptyAdminValue(value);
+
+const summarizeAdminValue = (value: unknown): string => {
+  if (value === undefined || value === null || value === "") return "Not set";
+  if (isRedactedAdminValue(value)) return "Hidden";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return formatNumber(value);
+  if (typeof value === "string") {
+    const date = new Date(value);
+    if (/^\d{4}-\d{2}-\d{2}T/.test(value) && !Number.isNaN(date.getTime())) return formatDateTime(value);
+    return value;
+  }
+  if (Array.isArray(value)) return value.length ? `${value.length} items` : "No items";
+  if (typeof value === "object") return getRecordTitle(value as Record<string, unknown>);
+  return String(value);
+};
+
+const getRecordTitle = (record: Record<string, unknown>) => {
+  const value = record.username
+    || record.title
+    || record.name
+    || record.email
+    || record.phone_number
+    || record.transactionId
+    || record.url
+    || record.status
+    || record._id;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return summarizeAdminValue(value);
+  }
+
+  const summary = Object.entries(record)
+    .filter(shouldShowDetailField)
+    .slice(0, 4)
+    .map(([key, child]) => `${cleanLabel(key)}: ${summarizeAdminValue(child)}`);
+
+  return summary.length ? summary.join(", ") : "Not set";
+};
+
 const formatFieldValue = (value: unknown, type?: "date" | "money" | "status" | "user" | "count" | "prize") => {
-  if (value === undefined || value === null || value === "") return "—";
+  if (value === undefined || value === null || value === "") return "Not set";
   if (type === "money" && typeof value === "number") return formatCurrency(value);
   if (type === "date" && typeof value === "string") return formatDateTime(value);
   if (type === "count" && typeof value === "number") return formatNumber(value);
@@ -215,7 +285,11 @@ const formatFieldValue = (value: unknown, type?: "date" | "money" | "status" | "
     const user = asRecord(value);
     if (user) return String(user.username || user.email || user.phone_number || user._id || "User");
   }
-  if (Array.isArray(value)) return value.map((item) => (typeof item === "object" ? getRecordTitle(item as Record<string, unknown>) : String(item))).join(", ");
+  if (Array.isArray(value)) {
+    return value.length
+      ? value.map(summarizeAdminValue).join(", ")
+      : "No items";
+  }
   if (typeof value === "object") return getRecordTitle(value as Record<string, unknown>);
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
@@ -349,11 +423,11 @@ const importantFieldOrder = [
 ];
 
 const formatDetailValue = (value: unknown) => {
-  if (value === undefined || value === null || value === "") return "—";
+  if (value === undefined || value === null || value === "") return "Not set";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "number") return String(value);
   if (typeof value === "string") return value;
-  if (Array.isArray(value)) return value.length ? `${value.length} item${value.length === 1 ? "" : "s"}` : "Empty";
+  if (Array.isArray(value)) return value.length ? `${value.length} item${value.length === 1 ? "" : "s"}` : "No items";
   if (typeof value === "object") return getRecordTitle(value as Record<string, unknown>);
   return String(value);
 };
@@ -368,6 +442,7 @@ const AdminDashboardScreen = () => {
   const [collectionData, setCollectionData] = useState<AdminCollectionRecords | null>(null);
   const [collectionPage, setCollectionPage] = useState(1);
   const [collectionSearch, setCollectionSearch] = useState("");
+  const [adminTournamentSearch, setAdminTournamentSearch] = useState("");
   const [selectedRecord, setSelectedRecord] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [withdrawalsLoading, setWithdrawalsLoading] = useState(true);
@@ -409,8 +484,10 @@ const AdminDashboardScreen = () => {
     try {
       const res = await getAdminCollections();
       setCollections(res.data);
-      if (!res.data.some((item) => item.key === selectedCollection) && res.data[0]) {
-        setSelectedCollection(res.data[0].key);
+      const nonEmptyCollections = res.data.filter((item) => item.count > 0);
+      const selectableCollections = nonEmptyCollections.length > 0 ? nonEmptyCollections : res.data;
+      if (!selectableCollections.some((item) => item.key === selectedCollection) && selectableCollections[0]) {
+        setSelectedCollection(selectableCollections[0].key);
       }
     } catch (err) {
       const errorToast = getErrorToast(err, { action: "Load database collections", fallback: "Failed to load database collections." });
@@ -576,9 +653,53 @@ const AdminDashboardScreen = () => {
     }));
   }, [dashboard]);
 
+  const tournamentMixRows = useMemo(() => {
+    if (!dashboard) return [];
+    const byStatus = new Map(dashboard.charts.tournamentsByStatus.map((item) => [String(item._id || "unknown"), item.count]));
+    return ["running", "open", "completed", "cancelled", "draft"].map((status) => ({
+      label: status === "running" ? "Live" : cleanLabel(status),
+      count: byStatus.get(status) || 0,
+    }));
+  }, [dashboard]);
+
+  const tournamentGameRows = useMemo(() => {
+    if (!dashboard) return [];
+    const max = Math.max(...dashboard.charts.tournamentsByGame.map((item) => item.count), 1);
+    return dashboard.charts.tournamentsByGame.map((item) => ({
+      label: cleanLabel(item._id),
+      count: item.count,
+      width: Math.max(8, Math.round((item.count / max) * 100)),
+    }));
+  }, [dashboard]);
+
+  const filteredAdminTournaments = useMemo(() => {
+    if (!dashboard) return [];
+    const query = adminTournamentSearch.trim().toLowerCase();
+    if (!query) return dashboard.tables.recentTournaments;
+
+    return dashboard.tables.recentTournaments.filter((tournament) => {
+      const values = [
+        tournament.title,
+        tournament.game,
+        tournament.type,
+        tournament.status,
+        tournament.visibility,
+        tournament.organizer?.username,
+        tournament.channel?.name,
+        tournament.channel?.handle,
+      ];
+      return values.some((value) => String(value || "").toLowerCase().includes(query));
+    });
+  }, [adminTournamentSearch, dashboard]);
+
+  const visibleCollections = useMemo(() => {
+    const nonEmptyCollections = collections.filter((collection) => collection.count > 0);
+    return nonEmptyCollections.length > 0 ? nonEmptyCollections : collections;
+  }, [collections]);
+
   const activeCollectionColumns = collectionColumns[selectedCollection] ?? defaultColumns;
   const selectedRecordEntries = selectedRecord
-    ? Object.entries(selectedRecord).sort(([a], [b]) => {
+    ? Object.entries(selectedRecord).filter(shouldShowDetailField).sort(([a], [b]) => {
         const aIndex = importantFieldOrder.indexOf(a);
         const bIndex = importantFieldOrder.indexOf(b);
         if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
@@ -689,6 +810,14 @@ const AdminDashboardScreen = () => {
       onClick: () => navigate("/admin/details/support"),
     },
   ];
+  const tournamentFinance = dashboard.tournamentAnalytics?.finance ?? {};
+  const tournamentReceived = Number(tournamentFinance.receivedMoney || 0);
+  const tournamentPrizePaid = Number(tournamentFinance.prizePaid || 0);
+  const tournamentPlatformFees = Number(tournamentFinance.platformFees || 0);
+  const tournamentPendingPrizes = Number(tournamentFinance.pendingPrizes || 0);
+  const payoutRate = tournamentReceived > 0
+    ? Math.min(100, Math.round((tournamentPrizePaid / tournamentReceived) * 100))
+    : 0;
 
   return (
     <div className="min-h-screen bg-background px-3 py-5 pb-10 sm:px-5 sm:py-6">
@@ -799,6 +928,143 @@ const AdminDashboardScreen = () => {
           {kpis.map((item) => (
             <StatCard key={item.label} {...item} />
           ))}
+        </div>
+
+        <div className="mb-5 space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="font-heading text-lg font-bold">Tournament Control</h2>
+              <p className="text-xs text-muted-foreground">Overall stats, payouts, visibility, and quick search</p>
+            </div>
+            <div className="flex w-full items-center gap-2 rounded-lg border border-glass-border bg-background px-3 py-2 lg:max-w-md">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <input
+                value={adminTournamentSearch}
+                onChange={(event) => setAdminTournamentSearch(event.target.value)}
+                placeholder="Search tournament, creator, game, status"
+                className="min-w-0 flex-1 bg-transparent text-sm font-heading outline-none placeholder:text-muted-foreground/60"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <GlassCard>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="flex items-center gap-2 font-heading text-sm font-bold">
+                    <Trophy className="h-4 w-4 text-primary" />
+                    Tournament Mix
+                  </h3>
+                  <p className="text-xs text-muted-foreground">Lifecycle and visibility summary</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-heading text-sm text-primary">{formatNumber(dashboard.totals.tournaments)} total</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {formatNumber(dashboard.totals.publicTournaments)} public, {formatNumber(dashboard.totals.privateTournaments)} private
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {tournamentMixRows.map((row) => (
+                  <InsightBar key={row.label} label={row.label} count={row.count} total={dashboard.totals.tournaments} />
+                ))}
+              </div>
+            </GlassCard>
+
+            <GlassCard>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="flex items-center gap-2 font-heading text-sm font-bold">
+                    <ShieldCheck className="h-4 w-4 text-secondary" />
+                    Payout Health
+                  </h3>
+                  <p className="text-xs text-muted-foreground">Entry fees, deductions, and prize distribution</p>
+                </div>
+                <span className="font-heading text-xs text-secondary">{payoutRate}% paid</span>
+              </div>
+              <div className="mb-4 h-2 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-secondary" style={{ width: `${payoutRate}%` }} />
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg border border-glass-border bg-background/35 p-3">
+                  <p className="text-[10px] text-muted-foreground">Entry collected</p>
+                  <p className="font-heading font-bold text-accent">{formatCurrency(tournamentReceived)}</p>
+                </div>
+                <div className="rounded-lg border border-glass-border bg-background/35 p-3">
+                  <p className="text-[10px] text-muted-foreground">Prize paid</p>
+                  <p className="font-heading font-bold text-secondary">{formatCurrency(tournamentPrizePaid)}</p>
+                </div>
+                <div className="rounded-lg border border-glass-border bg-background/35 p-3">
+                  <p className="text-[10px] text-muted-foreground">Platform fees</p>
+                  <p className="font-heading font-bold text-primary">{formatCurrency(tournamentPlatformFees)}</p>
+                </div>
+                <div className="rounded-lg border border-glass-border bg-background/35 p-3">
+                  <p className="text-[10px] text-muted-foreground">Pending prizes</p>
+                  <p className="font-heading font-bold text-destructive">{formatCurrency(tournamentPendingPrizes)}</p>
+                </div>
+              </div>
+            </GlassCard>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <GlassCard>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="font-heading text-sm font-bold">Game Performance</h3>
+                <span className="text-[10px] text-muted-foreground">By created tournaments</span>
+              </div>
+              {tournamentGameRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No tournament game data yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {tournamentGameRows.map((row) => (
+                    <div key={row.label}>
+                      <div className="mb-1 flex items-center justify-between text-[10px] font-heading">
+                        <span className="text-muted-foreground">{row.label}</span>
+                        <span>{formatNumber(row.count)}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-accent" style={{ width: `${row.width}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </GlassCard>
+
+            <GlassCard>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="font-heading text-sm font-bold">Quick Search</h3>
+                <Button size="sm" variant="outline" onClick={() => navigate("/admin/details/tournaments")}>All</Button>
+              </div>
+              <div className="space-y-2">
+                {filteredAdminTournaments.length === 0 ? (
+                  <p className="rounded-lg border border-glass-border py-8 text-center text-sm text-muted-foreground">
+                    No tournament records match this search.
+                  </p>
+                ) : (
+                  filteredAdminTournaments.slice(0, 5).map((tournament) => (
+                    <button
+                      key={tournament._id}
+                      type="button"
+                      onClick={() => navigate("/admin/details/tournaments")}
+                      className="flex w-full items-center justify-between gap-3 rounded-lg border border-glass-border bg-background/35 px-3 py-2 text-left transition-colors hover:bg-muted/30"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-heading text-sm font-semibold">{tournament.title}</p>
+                        <p className="truncate text-[10px] text-muted-foreground">
+                          {cleanLabel(tournament.game)} - {tournament.organizer?.username || "Unknown creator"}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <StatusBadge value={tournament.status} />
+                        {tournament.visibility === "private" && <p className="mt-1 text-[10px] text-muted-foreground">Private</p>}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </GlassCard>
+          </div>
         </div>
 
         <Tabs defaultValue="overview" className="space-y-5">
@@ -1335,7 +1601,7 @@ const AdminDashboardScreen = () => {
                   }}
                   className="rounded-lg border border-glass-border bg-background px-3 py-2.5 text-sm font-heading outline-none"
                 >
-                  {collections.map((collection) => (
+                  {visibleCollections.map((collection) => (
                     <option key={collection.key} value={collection.key}>
                       {collection.label} ({formatNumber(collection.count)})
                     </option>
@@ -1445,23 +1711,30 @@ const AdminDashboardScreen = () => {
             <DialogHeader className="border-b border-glass-border px-6 pb-4 pt-6 pr-12">
               <DialogTitle className="font-heading">Record Details</DialogTitle>
               <DialogDescription>
-                Sensitive fields are redacted. Raw data is available at the bottom for debugging.
+                Only populated fields are shown. Sensitive fields are redacted before display.
               </DialogDescription>
             </DialogHeader>
 
             {selectedRecord && (
               <div className="min-h-0 overflow-y-auto px-6 pb-6 pr-4">
-                <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {selectedRecordEntries.map(([key, value]) => (
-                    <div key={key} className="rounded-lg border border-glass-border bg-card/50 p-3">
-                      <p className="mb-1 font-heading text-[10px] uppercase text-muted-foreground">{cleanLabel(key)}</p>
-                      <p className="break-words text-sm text-foreground">{formatDetailValue(value)}</p>
-                    </div>
-                  ))}
-                </div>
+                {selectedRecordEntries.length === 0 ? (
+                  <div className="mb-4 rounded-lg border border-glass-border py-10 text-center">
+                    <p className="font-heading text-sm">No displayable fields</p>
+                    <p className="mt-1 text-xs text-muted-foreground">This record only contains empty or redacted values.</p>
+                  </div>
+                ) : (
+                  <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {selectedRecordEntries.map(([key, value]) => (
+                      <div key={key} className="rounded-lg border border-glass-border bg-card/50 p-3">
+                        <p className="mb-1 font-heading text-[10px] uppercase text-muted-foreground">{cleanLabel(key)}</p>
+                        <p className="break-words text-sm text-foreground">{formatDetailValue(value)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <details className="rounded-lg border border-glass-border bg-background/60 p-3">
-                  <summary className="cursor-pointer font-heading text-xs text-muted-foreground">Raw redacted data</summary>
+                  <summary className="cursor-pointer font-heading text-xs text-muted-foreground">Advanced redacted data</summary>
                   <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap text-[10px] text-muted-foreground">
                     {JSON.stringify(selectedRecord, null, 2)}
                   </pre>

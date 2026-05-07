@@ -89,15 +89,23 @@ const findUserByIdentifier = async (rawIdentifier, projection) => {
     const exactUsername = new RegExp(`^${escapeRegex(identifier)}$`, "i");
     const exactEmail = new RegExp(`^${escapeRegex(normalizedEmail)}$`, "i");
     const digits = identifier.replace(/\D/g, "");
-    const candidates = [
-        { phone_number: identifier },
-        { phone_number: normalizedPhone },
-        { email: normalizedEmail },
-        { email: exactEmail },
-        { username: exactUsername },
-        ...(digits ? [{ phone_number: digits }] : [])
-    ];
-
+    const looksLikeEmail = isValidEmail(identifier);
+    const looksLikePhone = /^\+?\d[\d\s()-]{7,}$/.test(identifier) && (digits.length === 10 || (digits.length === 12 && digits.startsWith("91")));
+    const candidates = looksLikeEmail
+        ? [
+            { email: normalizedEmail },
+            { email: exactEmail },
+        ]
+        : looksLikePhone
+            ? [
+                { phone_number: identifier },
+                { phone_number: normalizedPhone },
+                ...(digits ? [{ phone_number: digits }] : []),
+            ]
+            : [
+                { username: exactUsername },
+            ];
+    // console.log("Finding user with candidates:", candidates);
     const directMatch = await User.findOne({
         $or: candidates
     })
@@ -108,14 +116,14 @@ const findUserByIdentifier = async (rawIdentifier, projection) => {
 
     const loosePattern = new RegExp(escapeRegex(identifier), "i");
     const loosePhonePattern = digits ? new RegExp(escapeRegex(digits), "i") : null;
+    const looseCandidates = looksLikeEmail
+        ? [{ email: loosePattern }, { email: new RegExp(escapeRegex(normalizedEmail), "i") }]
+        : looksLikePhone
+            ? (loosePhonePattern ? [{ phone_number: loosePhonePattern }] : [])
+            : [{ username: loosePattern }];
 
     return User.findOne({
-        $or: [
-            { username: loosePattern },
-            { email: loosePattern },
-            { email: new RegExp(escapeRegex(normalizedEmail), "i") },
-            ...(loosePhonePattern ? [{ phone_number: loosePhonePattern }] : []),
-        ]
+        $or: looseCandidates,
     }).select(projection || "");
 };
 
@@ -545,7 +553,7 @@ const loginUser = asyncHandler(async (req, res) => {
     const { phone_number, identifier, username, email, password } = req.body;
     const loginIdentifier = phone_number || identifier || username || email;
 
-    console.log(phone_number, "\n", password)
+    // console.log(phone_number, "\n", password)
     // Validate input
     [{ field: loginIdentifier, name: "username, email, or phone number" },
     { field: password, name: "password" }].forEach(item => {
@@ -620,7 +628,7 @@ const logoutUser = asyncHandler(async (req, res) => {
     );
 });
 const renewTokens = asyncHandler(async (req, res) => {
-    const receivedRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
+    const receivedRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken || req.body?.refresh_token;
     if (!receivedRefreshToken) {
         throw new ApiError(401, "Unauthorized request");
     }
@@ -660,15 +668,20 @@ const renewTokens = asyncHandler(async (req, res) => {
 });
 
 const forgotPassword = asyncHandler(async (req, res) => {
+    const primaryIdentifier = String(req.body?.identifier || "").trim();
+    const primaryIsEmail = isValidEmail(primaryIdentifier);
+    const primaryDigits = primaryIdentifier.replace(/\D/g, "");
+    const primaryIsPhone = !primaryIsEmail && /^\+?\d[\d\s()-]{7,}$/.test(primaryIdentifier) && (primaryDigits.length === 10 || (primaryDigits.length === 12 && primaryDigits.startsWith("91")));
     const identifiers = [
-        req.body?.identifier,
-        req.body?.phone_number,
-        req.body?.email,
-        req.body?.username,
+        primaryIdentifier,
+        ...(primaryIsEmail ? [req.body?.email] : []),
+        ...(primaryIsPhone ? [req.body?.phone_number] : []),
+        ...(!primaryIsEmail && !primaryIsPhone ? [req.body?.username] : []),
     ]
         .map((value) => String(value || "").trim())
         .filter(Boolean)
         .filter((value, index, values) => values.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index);
+    // console.log(req.body)
 
     if (identifiers.length === 0) {
         throw new ApiError(400, "Username, email, or phone number is required");
@@ -677,7 +690,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
     let user = null;
     for (const identifier of identifiers) {
         user = await findUserByIdentifier(identifier);
-        console.log("Found user:", user);
+        // console.log("Found user:", user, "for identifier:", identifier);
         if (user) break;
     }
 

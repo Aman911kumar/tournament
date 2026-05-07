@@ -45,6 +45,8 @@ export interface AdminDashboardData {
     openTournaments: number;
     runningTournaments: number;
     completedTournaments: number;
+    publicTournaments?: number;
+    privateTournaments?: number;
     teams: number;
     registrations: number;
     verifiedGameAccounts: number;
@@ -71,6 +73,14 @@ export interface AdminDashboardData {
     paymentsByStatus: CountBucket[];
     usersByRole: CountBucket[];
     platformFeesByCategory: AmountBucket[];
+  };
+  tournamentAnalytics?: {
+    finance?: {
+      receivedMoney?: number;
+      platformFees?: number;
+      prizePaid?: number;
+      pendingPrizes?: number;
+    };
   };
   tables: {
     topCreators: TopCreator[];
@@ -134,6 +144,64 @@ export interface AdminCollectionRecords {
   records: Record<string, unknown>[];
 }
 
+export interface AdminUserTransactionRecord {
+  _id: string;
+  source: "wallet" | "payment" | "ledger";
+  title?: string;
+  transactionId?: string;
+  category?: string;
+  direction?: "CREDIT" | "DEBIT" | "INFO" | string;
+  amount?: number;
+  grossAmount?: number;
+  platformFee?: number;
+  netAmount?: number;
+  balanceBefore?: number;
+  balanceAfter?: number;
+  status?: string;
+  referenceId?: string;
+  provider?: string;
+  providerPaymentId?: string;
+  providerOrderId?: string;
+  debitAccount?: string;
+  creditAccount?: string;
+  fromUser?: {
+    _id?: string;
+    username?: string;
+    email?: string;
+    phone_number?: string;
+  } | null;
+  toUser?: {
+    _id?: string;
+    username?: string;
+    email?: string;
+    phone_number?: string;
+  } | null;
+  createdAt?: string;
+}
+
+export interface AdminUserTransactionHistory {
+  user: Record<string, unknown>;
+  wallet: {
+    _id?: string;
+    balance: number;
+    lockedBalance: number;
+    availableBalance: number;
+    currency?: string;
+    updatedAt?: string;
+  };
+  totals: {
+    walletTransactions: number;
+    payments: number;
+    ledgerEntries: number;
+    all: number;
+  };
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+  records: AdminUserTransactionRecord[];
+}
+
 export interface AdminAuditLog {
   _id: string;
   actor?: {
@@ -195,6 +263,7 @@ export interface RecentTournament {
   game?: string;
   type?: string;
   status: string;
+  visibility?: "public" | "private";
   entryFee?: number;
   prizePool?: number;
   prizeMode?: "position" | "kill" | "both";
@@ -273,6 +342,21 @@ export async function updateCreatorPermission(id: string, payload: { status: "ap
     method: "PATCH",
     credentials: "include",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function getAdminUserTransactionHistory(
+  id: string,
+  params: { page?: number; limit?: number } = {},
+) {
+  const searchParams = new URLSearchParams({
+    page: String(params.page ?? 1),
+    limit: String(params.limit ?? 20),
+  });
+
+  return apiFetch<ApiResponse<AdminUserTransactionHistory>>(`/admin/users/${id}/transactions?${searchParams.toString()}`, {
+    method: "GET",
+    credentials: "include",
   });
 }
 

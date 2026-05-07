@@ -7,6 +7,7 @@ import {
   Database,
   ListChecks,
   RefreshCcw,
+  Search,
   ShieldCheck,
   Ticket,
   Trophy,
@@ -24,7 +25,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getAdminCollectionRecords, updateCreatorPermission, type AdminCollectionRecords } from "@/api/admin";
+import {
+  getAdminCollectionRecords,
+  getAdminUserTransactionHistory,
+  updateCreatorPermission,
+  type AdminCollectionRecords,
+  type AdminUserTransactionHistory,
+  type AdminUserTransactionRecord,
+} from "@/api/admin";
 import { formatCurrency, formatPrizeSummary, getErrorToast } from "@/lib/page-utils";
 import { toast } from "@/components/ui/sonner";
 
@@ -32,7 +40,10 @@ const formatNumber = (value: number | undefined) => Number(value || 0).toLocaleS
 
 const cleanLabel = (value: string | null | undefined) => {
   if (!value) return "Unknown";
-  return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return value
+    .replace(/_/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 };
 
 const formatDateTime = (value?: string) => {
@@ -48,9 +59,59 @@ const asRecord = (value: unknown): Record<string, unknown> | null =>
 const getNestedValue = (record: Record<string, unknown>, path: string) =>
   path.split(".").reduce<unknown>((current, key) => asRecord(current)?.[key], record);
 
+const isRedactedAdminValue = (value: unknown) => value === "[REDACTED]";
+
+const isEmptyAdminValue = (value: unknown) => {
+  if (value === undefined || value === null || value === "" || isRedactedAdminValue(value)) return true;
+  if (Array.isArray(value)) return value.every(isEmptyAdminValue);
+  if (value instanceof Date) return false;
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    return entries.length === 0 || entries.every(([, child]) => isEmptyAdminValue(child));
+  }
+  return false;
+};
+
+const hiddenDetailFields = new Set(["__v"]);
+
+const shouldShowDetailField = ([key, value]: [string, unknown]) =>
+  !hiddenDetailFields.has(key) && !isEmptyAdminValue(value);
+
+const summarizeAdminValue = (value: unknown): string => {
+  if (value === undefined || value === null || value === "") return "Not set";
+  if (isRedactedAdminValue(value)) return "Hidden";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return formatNumber(value);
+  if (typeof value === "string") {
+    const date = new Date(value);
+    if (/^\d{4}-\d{2}-\d{2}T/.test(value) && !Number.isNaN(date.getTime())) return formatDateTime(value);
+    return value;
+  }
+  if (Array.isArray(value)) return value.length ? `${value.length} items` : "No items";
+  if (typeof value === "object") return getRecordTitle(value as Record<string, unknown>);
+  return String(value);
+};
+
 const getRecordTitle = (record: Record<string, unknown>) => {
-  const value = record.username || record.title || record.name || record.email || record.phone_number || record.transactionId || record._id;
-  return typeof value === "string" ? value : JSON.stringify(value);
+  const value = record.username
+    || record.title
+    || record.name
+    || record.email
+    || record.phone_number
+    || record.transactionId
+    || record.url
+    || record.status
+    || record._id;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return summarizeAdminValue(value);
+  }
+
+  const summary = Object.entries(record)
+    .filter(shouldShowDetailField)
+    .slice(0, 4)
+    .map(([key, child]) => `${cleanLabel(key)}: ${summarizeAdminValue(child)}`);
+
+  return summary.length ? summary.join(", ") : "Not set";
 };
 
 const statusClass = (value?: string) => {
@@ -71,7 +132,7 @@ type FieldType = "date" | "money" | "status" | "user" | "count" | "prize";
 type RecordColumn = { label: string; path: string; type?: FieldType };
 
 const formatFieldValue = (value: unknown, type?: FieldType) => {
-  if (value === undefined || value === null || value === "") return "-";
+  if (value === undefined || value === null || value === "") return "Not set";
   if (type === "money" && typeof value === "number") return formatCurrency(value);
   if (type === "date" && typeof value === "string") return formatDateTime(value);
   if (type === "count" && typeof value === "number") return formatNumber(value);
@@ -80,7 +141,7 @@ const formatFieldValue = (value: unknown, type?: FieldType) => {
     const user = asRecord(value);
     if (user) return String(user.username || user.email || user.phone_number || user._id || "User");
   }
-  if (Array.isArray(value)) return value.length ? `${value.length} items` : "Empty";
+  if (Array.isArray(value)) return value.length ? value.map(summarizeAdminValue).join(", ") : "No items";
   if (typeof value === "object") return getRecordTitle(value as Record<string, unknown>);
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
@@ -88,7 +149,13 @@ const formatFieldValue = (value: unknown, type?: FieldType) => {
 
 const getObjectId = (value: unknown) => {
   if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "toString" in value && typeof value.toString === "function") {
+    const text = value.toString();
+    if (/^[a-f\d]{24}$/i.test(text)) return text;
+  }
   const record = asRecord(value);
+  const oid = record?.$oid;
+  if (typeof oid === "string") return oid;
   const id = record?._id;
   return typeof id === "string" ? id : "";
 };
@@ -120,6 +187,29 @@ const getTournamentPaidTotal = (record: Record<string, unknown>) => {
     return sum + Number(row?.prizeWon || 0);
   }, 0);
 };
+
+const importantFieldOrder = [
+  "_id",
+  "username",
+  "email",
+  "phone_number",
+  "role",
+  "title",
+  "name",
+  "status",
+  "type",
+  "game",
+  "visibility",
+  "amount",
+  "balance",
+  "entryFee",
+  "prizePool",
+  "provider",
+  "providerOrderId",
+  "providerPaymentId",
+  "createdAt",
+  "updatedAt",
+];
 
 const defaultColumns: RecordColumn[] = [
   { label: "Record", path: "_id" },
@@ -316,7 +406,7 @@ const TournamentPayoutDetails = ({
       </div>
 
       <details className="rounded-lg border border-glass-border bg-background/60 p-3">
-        <summary className="cursor-pointer font-heading text-xs text-muted-foreground">Raw redacted data</summary>
+        <summary className="cursor-pointer font-heading text-xs text-muted-foreground">Advanced redacted data</summary>
         <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap text-[10px] text-muted-foreground">
           {JSON.stringify(record, null, 2)}
         </pre>
@@ -339,6 +429,113 @@ const sectionConfig: Record<string, { title: string; description: string; icon: 
   database: { title: "Database", description: "All redacted database records available to admin users", icon: Database, collections: ["users", "wallets", "payments", "walletTransactions", "ledgers", "tournaments", "registrations", "teams", "channels", "subscriptions", "gameAccounts", "leaderboards", "tickets", "reports", "notifications", "adminAuditLogs"] },
 };
 
+const TransactionAmount = ({ record }: { record: AdminUserTransactionRecord }) => {
+  const isCredit = String(record.direction || "").toUpperCase() === "CREDIT";
+  const isDebit = String(record.direction || "").toUpperCase() === "DEBIT";
+  const sign = isCredit ? "+" : isDebit ? "-" : "";
+  const color = isCredit ? "text-accent" : isDebit ? "text-destructive" : "text-foreground";
+
+  return (
+    <p className={`font-heading text-sm font-bold ${color}`}>
+      {sign}{formatCurrency(Number(record.amount || 0))}
+    </p>
+  );
+};
+
+const UserTransactionHistoryPanel = ({
+  history,
+  loading,
+  page,
+  onPageChange,
+}: {
+  history: AdminUserTransactionHistory | null;
+  loading: boolean;
+  page: number;
+  onPageChange: (page: number) => void;
+}) => {
+  const records = history?.records ?? [];
+  const wallet = history?.wallet;
+
+  return (
+    <div className="mb-4 rounded-lg border border-glass-border bg-background/50 p-4">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h4 className="font-heading text-sm font-bold">Wallet & Transaction History</h4>
+          <p className="mt-1 text-xs text-muted-foreground">Payments, wallet movements, and ledger entries for this account.</p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-xs sm:min-w-[360px]">
+          <div className="rounded-lg border border-glass-border bg-card/50 p-2">
+            <p className="text-[10px] text-muted-foreground">Balance</p>
+            <p className="font-heading font-bold text-accent">{formatCurrency(wallet?.balance || 0)}</p>
+          </div>
+          <div className="rounded-lg border border-glass-border bg-card/50 p-2">
+            <p className="text-[10px] text-muted-foreground">Locked</p>
+            <p className="font-heading font-bold text-secondary">{formatCurrency(wallet?.lockedBalance || 0)}</p>
+          </div>
+          <div className="rounded-lg border border-glass-border bg-card/50 p-2">
+            <p className="text-[10px] text-muted-foreground">Entries</p>
+            <p className="font-heading font-bold">{formatNumber(history?.totals.all || 0)}</p>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[0, 1, 2].map((item) => (
+            <div key={item} className="h-16 animate-pulse rounded-lg bg-muted" />
+          ))}
+        </div>
+      ) : records.length === 0 ? (
+        <div className="rounded-lg border border-glass-border py-8 text-center">
+          <p className="font-heading text-sm">No transactions found</p>
+          <p className="mt-1 text-xs text-muted-foreground">This user has no payments, wallet moves, or ledger entries yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {records.map((record) => (
+            <div key={`${record.source}-${record._id}`} className="grid gap-3 rounded-lg border border-glass-border bg-card/40 px-3 py-3 md:grid-cols-[1fr_auto]">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-glass-border px-2 py-0.5 font-heading text-[10px] text-muted-foreground">
+                    {cleanLabel(record.source)}
+                  </span>
+                  <StatusBadge value={record.status} />
+                </div>
+                <p className="mt-2 truncate font-heading text-sm font-semibold">{cleanLabel(record.title || record.category || "Transaction")}</p>
+                <p className="mt-1 break-all text-[10px] text-muted-foreground">{record.transactionId || record.referenceId || record._id}</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">{formatDateTime(record.createdAt)}</p>
+              </div>
+              <div className="text-left md:min-w-32 md:text-right">
+                <TransactionAmount record={record} />
+                {record.platformFee ? (
+                  <p className="mt-1 text-[10px] text-muted-foreground">Fee {formatCurrency(record.platformFee)}</p>
+                ) : null}
+                {record.balanceAfter !== undefined ? (
+                  <p className="mt-1 text-[10px] text-muted-foreground">After {formatCurrency(record.balanceAfter)}</p>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {history && history.pages > 1 && (
+        <div className="mt-4 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>Page {history.page} / {history.pages}</span>
+          <div className="flex gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => onPageChange(Math.max(page - 1, 1))} disabled={page <= 1 || loading}>
+              Previous
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => onPageChange(page + 1)} disabled={page >= history.pages || loading}>
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AdminDetailScreen = () => {
   const navigate = useNavigate();
   const { section = "database" } = useParams<{ section: string }>();
@@ -349,6 +546,10 @@ const AdminDetailScreen = () => {
   const [data, setData] = useState<AdminCollectionRecords | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState<Record<string, unknown> | null>(null);
+  const [updatingPermission, setUpdatingPermission] = useState(false);
+  const [transactionHistory, setTransactionHistory] = useState<AdminUserTransactionHistory | null>(null);
+  const [transactionLoading, setTransactionLoading] = useState(false);
+  const [transactionPage, setTransactionPage] = useState(1);
   const Icon = config.icon;
 
   useEffect(() => {
@@ -374,19 +575,76 @@ const AdminDetailScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeCollection, page, search]);
+  }, [activeCollection, page, search, section]);
 
   useEffect(() => {
     loadRecords();
   }, [loadRecords]);
 
   const columns = collectionColumns[activeCollection] ?? defaultColumns;
-  const detailEntries = selectedRecord ? Object.entries(selectedRecord) : [];
+  const detailEntries = selectedRecord
+    ? Object.entries(selectedRecord).filter(shouldShowDetailField).sort(([a], [b]) => {
+        const aIndex = importantFieldOrder.indexOf(a);
+        const bIndex = importantFieldOrder.indexOf(b);
+        if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
+      })
+    : [];
   const selectedCreatorRequest = asRecord(selectedRecord?.creatorRequest);
   const selectedUserId = getObjectId(selectedRecord?._id);
+  const selectedWalletUserId = getObjectId(selectedRecord?.user);
+  const transactionUserId = activeCollection === "users"
+    ? selectedUserId
+    : activeCollection === "wallets"
+      ? selectedWalletUserId
+      : "";
+  const selectedRoles = Array.isArray(selectedRecord?.role)
+    ? selectedRecord.role.map(String)
+    : selectedRecord?.role
+      ? [String(selectedRecord.role)]
+      : [];
+  const isSelectedCreator = selectedRoles.includes("creator");
+  const creatorRequestStatus = String(selectedCreatorRequest?.status || "none").toLowerCase();
+
+  useEffect(() => {
+    setTransactionPage(1);
+    setTransactionHistory(null);
+  }, [transactionUserId]);
+
+  useEffect(() => {
+    if (!transactionUserId) {
+      setTransactionHistory(null);
+      return;
+    }
+
+    let cancelled = false;
+    setTransactionLoading(true);
+
+    getAdminUserTransactionHistory(transactionUserId, { page: transactionPage, limit: 10 })
+      .then((res) => {
+        if (!cancelled) setTransactionHistory(res.data);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const errorToast = getErrorToast(error, { action: "Load transactions", fallback: "Could not load transaction history." });
+        toast.error(errorToast.title, { description: errorToast.description });
+      })
+      .finally(() => {
+        if (!cancelled) setTransactionLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [transactionPage, transactionUserId]);
 
   const handleCreatorPermission = async (status: "approved" | "rejected" | "removed") => {
-    if (!selectedUserId) return;
+    if (!selectedUserId) {
+      toast.error("User ID missing", { description: "Reload this page and open the user again." });
+      return;
+    }
     const note = window.prompt(
       status === "approved"
         ? "Approval message for user (optional)"
@@ -397,6 +655,7 @@ const AdminDetailScreen = () => {
     if (note === undefined) return;
 
     try {
+      setUpdatingPermission(true);
       const res = await updateCreatorPermission(selectedUserId, { status, note });
       const updatedUser = asRecord(res.data.user);
       if (updatedUser) {
@@ -412,6 +671,8 @@ const AdminDetailScreen = () => {
     } catch (error) {
       const errorToast = getErrorToast(error, { action: "Update creator permission", fallback: "Could not update creator permission." });
       toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setUpdatingPermission(false);
     }
   };
 
@@ -460,15 +721,18 @@ const AdminDetailScreen = () => {
           </div>
 
           <div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]">
-            <input
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-              placeholder="Search username, title, name, email, phone, or status"
-              className="rounded-lg border border-glass-border bg-background px-3 py-2.5 text-sm font-heading outline-none"
-            />
+            <div className="flex items-center gap-2 rounded-lg border border-glass-border bg-background px-3 py-2.5">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search username, title, name, email, phone, status"
+                className="min-w-0 flex-1 bg-transparent text-sm font-heading outline-none placeholder:text-muted-foreground/60"
+              />
+            </div>
             <Button type="button" variant="outline" onClick={loadRecords} disabled={loading}>
               Load
             </Button>
@@ -548,7 +812,7 @@ const AdminDetailScreen = () => {
           <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-4xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0">
             <DialogHeader className="border-b border-glass-border px-6 pb-4 pt-6 pr-12">
               <DialogTitle className="font-heading">Record Details</DialogTitle>
-              <DialogDescription>All sensitive fields are redacted by the backend before display.</DialogDescription>
+              <DialogDescription>Only populated fields are shown. Sensitive fields are redacted before display.</DialogDescription>
             </DialogHeader>
             {selectedRecord && activeCollection === "tournaments" ? (
               <TournamentPayoutDetails
@@ -565,35 +829,78 @@ const AdminDetailScreen = () => {
                   <div className="mb-4 rounded-lg border border-glass-border bg-background/50 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <p className="font-heading text-sm font-bold">Creator Permission</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-heading text-sm font-bold">Creator Permission</p>
+                          <StatusBadge value={isSelectedCreator ? "active" : creatorRequestStatus} />
+                        </div>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Current request: {cleanLabel(String(selectedCreatorRequest?.status || "none"))}
+                          {isSelectedCreator
+                            ? "This user can create tournaments."
+                            : `Current request: ${cleanLabel(creatorRequestStatus)}`}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Button type="button" size="sm" onClick={() => handleCreatorPermission("approved")}>
-                          Approve Creator
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={() => handleCreatorPermission("rejected")}>
-                          Reject
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={() => handleCreatorPermission("removed")}>
-                          Remove Creator
-                        </Button>
+                        {!isSelectedCreator && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => handleCreatorPermission("approved")}
+                            disabled={updatingPermission}
+                          >
+                            {updatingPermission ? "Updating..." : "Approve Creator"}
+                          </Button>
+                        )}
+                        {!isSelectedCreator && creatorRequestStatus === "pending" && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleCreatorPermission("rejected")}
+                            disabled={updatingPermission}
+                          >
+                            Reject
+                          </Button>
+                        )}
+                        {isSelectedCreator && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleCreatorPermission("removed")}
+                            disabled={updatingPermission}
+                          >
+                            {updatingPermission ? "Updating..." : "Remove Creator"}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
                 )}
-                <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {detailEntries.map(([key, value]) => (
-                    <div key={key} className="rounded-lg border border-glass-border bg-card/50 p-3">
-                      <p className="mb-1 font-heading text-[10px] uppercase text-muted-foreground">{cleanLabel(key)}</p>
-                      <p className="break-words text-sm text-foreground">{formatFieldValue(value)}</p>
-                    </div>
-                  ))}
-                </div>
+                {transactionUserId && (
+                  <UserTransactionHistoryPanel
+                    history={transactionHistory}
+                    loading={transactionLoading}
+                    page={transactionPage}
+                    onPageChange={setTransactionPage}
+                  />
+                )}
+                {detailEntries.length === 0 ? (
+                  <div className="mb-4 rounded-lg border border-glass-border py-10 text-center">
+                    <p className="font-heading text-sm">No displayable fields</p>
+                    <p className="mt-1 text-xs text-muted-foreground">This record only contains empty or redacted values.</p>
+                  </div>
+                ) : (
+                  <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {detailEntries.map(([key, value]) => (
+                      <div key={key} className="rounded-lg border border-glass-border bg-card/50 p-3">
+                        <p className="mb-1 font-heading text-[10px] uppercase text-muted-foreground">{cleanLabel(key)}</p>
+                        <p className="break-words text-sm text-foreground">{formatFieldValue(value)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <details className="rounded-lg border border-glass-border bg-background/60 p-3">
-                  <summary className="cursor-pointer font-heading text-xs text-muted-foreground">Raw redacted data</summary>
+                  <summary className="cursor-pointer font-heading text-xs text-muted-foreground">Advanced redacted data</summary>
                   <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap text-[10px] text-muted-foreground">
                     {JSON.stringify(selectedRecord, null, 2)}
                   </pre>

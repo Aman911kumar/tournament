@@ -138,21 +138,23 @@ export async function changePassword(payload: ChangePasswordPayload):Promise<Api
 
 export async function forgotPassword(identifier: string): Promise<ApiResponse<ForgotPasswordResponse>> {
   const trimmedIdentifier = identifier.trim();
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedIdentifier);
   const digitsOnly = trimmedIdentifier.replace(/\D/g, "");
-  const phoneNumber = digitsOnly.length === 12 && digitsOnly.startsWith("91")
-    ? digitsOnly.slice(2)
-    : digitsOnly.length === 10
-      ? digitsOnly
-      : trimmedIdentifier;
-  const email = trimmedIdentifier.includes("@") ? trimmedIdentifier.toLowerCase() : trimmedIdentifier;
+  const isPhone = !isEmail && (digitsOnly.length === 10 || (digitsOnly.length === 12 && digitsOnly.startsWith("91")));
+  const phoneNumber = isPhone
+    ? digitsOnly.length === 12 && digitsOnly.startsWith("91")
+      ? digitsOnly.slice(2)
+      : digitsOnly
+    : undefined;
+  const email = isEmail ? trimmedIdentifier.toLowerCase() : undefined;
 
   return apiFetch(ENDPOINTS.forgotPassword, {
     method: "POST",
     body: JSON.stringify({
       identifier: trimmedIdentifier,
-      phone_number: phoneNumber,
-      email,
-      username: trimmedIdentifier,
+      ...(phoneNumber ? { phone_number: phoneNumber } : {}),
+      ...(email ? { email } : {}),
+      ...(!isEmail && !isPhone ? { username: trimmedIdentifier } : {}),
     }),
   });
 }

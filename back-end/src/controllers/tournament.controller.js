@@ -48,6 +48,11 @@ const normalizeStatus = (status) => {
     return statusMap[status] || status;
 };
 
+const normalizeVisibility = (visibility) => {
+    const value = String(visibility || "").trim().toLowerCase();
+    return ["public", "private"].includes(value) ? value : undefined;
+};
+
 const formatDateTime = (date) =>
     new Intl.DateTimeFormat("en-IN", {
         dateStyle: "medium",
@@ -293,6 +298,20 @@ const notifyJoinedUsersAboutRoom = async (tournament) => {
     );
 };
 
+const CANCEL_TOURNAMENT_CONFIRM_TEXT = "cancel";
+
+const getRegistrationUsers = (registration) => [
+    registration.user,
+    ...(registration.team || [])
+].filter(Boolean);
+
+const getCancellationRecipient = (registration, entryTransactionByRef) => {
+    const paymentRef = registration.paymentRef ? String(registration.paymentRef) : "";
+    const entryTransaction = paymentRef ? entryTransactionByRef.get(paymentRef) : null;
+
+    return entryTransaction?.user || registration.user || registration.team?.[0] || null;
+};
+
 const serializeTournament = (tournament, participantStats = new Map(), resultDetails = new Map(), options = {}) => {
     const plain = tournament?.toObject?.() || tournament;
     const stats = participantStats.get(plain._id?.toString?.() || String(plain._id)) || {};
@@ -314,6 +333,7 @@ const serializeTournament = (tournament, participantStats = new Map(), resultDet
     const serialized = {
         ...plain,
         results,
+        visibility: plain.visibility || "public",
         organizerEarnings: receivedMoney,
         platformFeeAmount,
         receivedMoney,
@@ -397,6 +417,7 @@ const buildTournamentPayload = (body, organizerId, channelId = null) => {
         prizePool: 0,
         rules: body.rules,
         status: normalizeStatus(body.status) || (registrationStart > now ? "draft" : "open"),
+        visibility: normalizeVisibility(body.visibility) || (body.published === false ? "private" : "public"),
         room_details: roomDetails
     };
 
@@ -424,16 +445,32 @@ const getAllTournaments = asyncHandler(async (req, res) => {
     const safePage = Math.max(Number(page) || 1, 1);
     const safeSkip = page ? (safePage - 1) * safeLimit : Math.max(Number(skip) || 0, 0);
     const query = {};
+    const organizerId = organizer && mongoose.Types.ObjectId.isValid(organizer)
+        ? new mongoose.Types.ObjectId(organizer)
+        : null;
+    const isOwnOrganizerView = Boolean(
+        req.user && organizerId && organizerId.toString() === req.user._id.toString()
+    );
+    const canViewPrivateTournaments = isOwnOrganizerView;
 
     if (search && search.trim() !== "") {
         query.title = { $regex: search.trim(), $options: "i" };
     }
 
-    if (status) query.status = normalizeStatus(status);
-    if (!status && req.query.excludeCompleted === "true") query.status = { $ne: "completed" };
+    if (status) {
+        const normalizedStatus = normalizeStatus(status);
+        query.status = !canViewPrivateTournaments && normalizedStatus === "draft" ? "__hidden__" : normalizedStatus;
+    } else if (req.query.excludeCompleted === "true") {
+        query.status = canViewPrivateTournaments ? { $ne: "completed" } : { $nin: ["completed", "draft"] };
+    } else if (!canViewPrivateTournaments) {
+        query.status = { $ne: "draft" };
+    }
+    if (!canViewPrivateTournaments) {
+        query.$or = [{ visibility: { $exists: false } }, { visibility: "public" }];
+    }
     if (game) query.game = normalizeGame(game);
     if (req.query.entryFee === "0") query.entryFee = 0;
-    if (organizer && mongoose.Types.ObjectId.isValid(organizer)) query.organizer = new mongoose.Types.ObjectId(organizer);
+    if (organizerId) query.organizer = organizerId;
     if (channel && mongoose.Types.ObjectId.isValid(channel)) query.channel = new mongoose.Types.ObjectId(channel);
 
     const sortMode = String(sort || "latest");
@@ -505,15 +542,26 @@ const getTournamentById = asyncHandler(async (req, res) => {
 
     if (!tournament) throw new ApiError(404, "Tournament not found");
     await syncTournamentLifecycle(tournament, { save: true });
+    const canManageTournament = Boolean(
+        req.user &&
+        (
+            hasRole(req.user, "admin") ||
+            tournament.organizer?._id?.toString?.() === req.user._id.toString() ||
+            tournament.organizer?.toString?.() === req.user._id.toString()
+        )
+    );
+
+    if (tournament.visibility === "private" && !canManageTournament) {
+        throw new ApiError(404, "Tournament not found");
+    }
+
     const participantStats = await getParticipantStats([tournament._id]);
     const resultDetails = await getResultRegistrationDetails([tournament._id]);
     let canViewRoomCredentials = false;
 
     if (req.user) {
         canViewRoomCredentials =
-            hasRole(req.user, "admin") ||
-            tournament.organizer?._id?.toString?.() === req.user._id.toString() ||
-            tournament.organizer?.toString?.() === req.user._id.toString() ||
+            canManageTournament ||
             Boolean(await Registration.exists({
                 tournament: tournamentId,
                 status: { $in: ["paid", "confirmed"] },
@@ -566,6 +614,10 @@ const updateTournament = asyncHandler(async (req, res) => {
     if (updates.startDate && !updates.startAt) updates.startAt = updates.startDate;
     if (updates.endDate && !updates.endAt) updates.endAt = updates.endDate;
     if (updates.status) updates.status = normalizeStatus(updates.status);
+    if (Object.prototype.hasOwnProperty.call(updates, "visibility")) {
+        updates.visibility = normalizeVisibility(updates.visibility);
+        if (!updates.visibility) throw new ApiError(400, "Visibility must be public or private");
+    }
     if (updates.game) updates.game = normalizeGame(updates.game);
     if (Object.prototype.hasOwnProperty.call(updates, "room_details")) updates.room_details = normalizeRoomDetails(updates.room_details);
     if (Object.prototype.hasOwnProperty.call(updates, "startAt")) updates.startAt = parseDate(updates.startAt, "startAt");
@@ -611,6 +663,16 @@ const updateTournament = asyncHandler(async (req, res) => {
         updates.startAt || tournament.startAt
     );
 
+    if (updates.visibility === "private") {
+        const joinedCount = await Registration.countDocuments({
+            tournament: tournamentId,
+            status: { $in: ["paid", "confirmed"] }
+        });
+        if (joinedCount > 0) {
+            throw new ApiError(400, "Tournament has joined players and cannot be made private");
+        }
+    }
+
     const allowedFields = [
         "title",
         "description",
@@ -631,6 +693,7 @@ const updateTournament = asyncHandler(async (req, res) => {
         "platformFeePercent",
         "rules",
         "status",
+        "visibility",
         "room_details"
     ];
 
@@ -690,6 +753,265 @@ const deleteTournament = asyncHandler(async (req, res) => {
 });
 
 // ---------------------------------
+// CANCEL TOURNAMENT AND REFUND ENTRY FEES
+// ---------------------------------
+const cancelTournament = asyncHandler(async (req, res) => {
+    const tournamentId = getParamId(req, "tournamentId");
+    const confirmation = String(req.body?.confirmation || "").trim().toLowerCase();
+    const username = String(req.body?.username || "").trim();
+    const expectedUsername = String(req.user?.username || "").trim();
+
+    if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
+        throw new ApiError(400, "Invalid tournament ID");
+    }
+
+    if (!expectedUsername || username !== expectedUsername || confirmation !== CANCEL_TOURNAMENT_CONFIRM_TEXT) {
+        throw new ApiError(400, `Type your username and "${CANCEL_TOURNAMENT_CONFIRM_TEXT}" to cancel this tournament`);
+    }
+
+    const tournament = await Tournament.findById(tournamentId);
+    if (!tournament) throw new ApiError(404, "Tournament not found");
+
+    if (!userCanManageTournament(req.user, tournament)) {
+        throw new ApiError(403, "Not authorized to cancel this tournament");
+    }
+
+    if (tournament.status === "cancelled") {
+        throw new ApiError(400, "Tournament is already cancelled");
+    }
+
+    if ((tournament.results || []).some((result) => Number(result.prizeWon || 0) > 0)) {
+        throw new ApiError(400, "Tournament prize payouts already exist and cannot be cancelled");
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const activeRegistrations = await Registration.find({
+            tournament: tournamentId,
+            status: { $in: ["pending", "paid", "confirmed"] }
+        }).session(session);
+
+        const paymentRefs = activeRegistrations
+            .map((registration) => registration.paymentRef)
+            .filter(Boolean)
+            .map(String);
+        const entryTransactions = paymentRefs.length > 0
+            ? await WalletTransaction.find({
+                transactionId: { $in: paymentRefs },
+                type: "DEBIT",
+                category: "TOURNAMENT_ENTRY"
+            }).select("transactionId user").session(session)
+            : [];
+        const entryTransactionByRef = new Map(
+            entryTransactions.map((transaction) => [transaction.transactionId, transaction])
+        );
+
+        const refundRows = activeRegistrations
+            .map((registration) => {
+                const refundAmount = roundCurrency(registration.paidAmount || 0);
+                const platformFee = roundCurrency(registration.platformFee || 0);
+                const organizerAmount = roundCurrency(
+                    registration.organizerAmount ?? Math.max(refundAmount - platformFee, 0)
+                );
+                const recipient = getCancellationRecipient(registration, entryTransactionByRef);
+
+                return {
+                    registration,
+                    recipient,
+                    refundAmount,
+                    platformFee,
+                    organizerAmount
+                };
+            })
+            .filter((row) => row.refundAmount > 0);
+
+        const missingRecipient = refundRows.find((row) => !row.recipient);
+        if (missingRecipient) {
+            throw new ApiError(400, "Could not find the original payer for one or more registrations");
+        }
+
+        const totalRefund = roundCurrency(refundRows.reduce((sum, row) => sum + row.refundAmount, 0));
+        const totalPlatformFee = roundCurrency(refundRows.reduce((sum, row) => sum + row.platformFee, 0));
+        const totalOrganizerAmount = roundCurrency(refundRows.reduce((sum, row) => sum + row.organizerAmount, 0));
+        const cancellationRef = uuidv4();
+        const now = new Date();
+        let organizerDebitTransaction = null;
+        const refundTransactions = [];
+
+        if (totalRefund > 0) {
+            const organizerWallet = await Wallet.findOne({ user: tournament.organizer }).session(session);
+            if (!organizerWallet) throw new ApiError(404, "Organizer wallet not found");
+            if (organizerWallet.balance < totalRefund) {
+                throw new ApiError(400, "Creator wallet does not have enough balance to refund joined players");
+            }
+
+            const organizerBefore = organizerWallet.balance;
+            organizerWallet.balance = roundCurrency(organizerBefore - totalRefund);
+            organizerWallet.lastTransactionAt = now;
+            await organizerWallet.save({ session });
+
+            const organizerDebitArr = await WalletTransaction.create([{
+                transactionId: uuidv4(),
+                user: tournament.organizer,
+                walletId: organizerWallet._id,
+                type: "DEBIT",
+                category: "REFUND",
+                amount: totalRefund,
+                grossAmount: totalRefund,
+                platformFee: totalPlatformFee,
+                netAmount: totalRefund,
+                balanceBefore: organizerBefore,
+                balanceAfter: organizerWallet.balance,
+                status: "SUCCESS",
+                referenceId: tournamentId,
+                fromUser: tournament.organizer,
+                description: `Tournament cancellation refunds for ${tournament.title}`,
+                metadata: {
+                    tournament: tournamentId,
+                    cancellationRef,
+                    refundCount: refundRows.length,
+                    platformFeeCoveredByCreator: totalPlatformFee,
+                    originalOrganizerAmount: totalOrganizerAmount
+                }
+            }], { session, ordered: true });
+            organizerDebitTransaction = organizerDebitArr[0];
+
+            const recipientIds = Array.from(new Set(refundRows.map((row) => row.recipient.toString())));
+            const recipientWallets = await Wallet.find({ user: { $in: recipientIds } }).session(session);
+            const walletByUser = new Map(recipientWallets.map((wallet) => [wallet.user.toString(), wallet]));
+
+            if (walletByUser.size !== recipientIds.length) {
+                throw new ApiError(404, "One or more player wallets were not found");
+            }
+
+            const ledgerEntries = [];
+            for (const row of refundRows) {
+                const recipientId = row.recipient.toString();
+                const playerWallet = walletByUser.get(recipientId);
+                const playerBefore = playerWallet.balance;
+                playerWallet.balance = roundCurrency(playerBefore + row.refundAmount);
+                playerWallet.lastTransactionAt = now;
+                await playerWallet.save({ session });
+
+                const refundTxArr = await WalletTransaction.create([{
+                    transactionId: uuidv4(),
+                    user: row.recipient,
+                    walletId: playerWallet._id,
+                    type: "CREDIT",
+                    category: "REFUND",
+                    amount: row.refundAmount,
+                    grossAmount: row.refundAmount,
+                    platformFee: 0,
+                    netAmount: row.refundAmount,
+                    balanceBefore: playerBefore,
+                    balanceAfter: playerWallet.balance,
+                    status: "SUCCESS",
+                    referenceId: tournamentId,
+                    fromUser: tournament.organizer,
+                    toUser: row.recipient,
+                    description: `Refund for cancelled tournament ${tournament.title}`,
+                    metadata: {
+                        tournament: tournamentId,
+                        registration: row.registration._id,
+                        cancellationRef,
+                        originalPaymentRef: row.registration.paymentRef,
+                        originalPlatformFee: row.platformFee,
+                        originalOrganizerAmount: row.organizerAmount,
+                        organizerDebitTransactionId: organizerDebitTransaction.transactionId
+                    }
+                }], { session, ordered: true });
+
+                const refundTx = refundTxArr[0];
+                refundTransactions.push(refundTx);
+                ledgerEntries.push({
+                    transactionId: refundTx.transactionId,
+                    debitAccount: "ORGANIZER_WALLET",
+                    creditAccount: "USER_WALLET",
+                    fromUser: tournament.organizer,
+                    toUser: row.recipient,
+                    category: "TOURNAMENT_REFUND",
+                    referenceId: tournamentId,
+                    amount: row.refundAmount,
+                    currency: "INR",
+                    platformFee: row.platformFee,
+                    netAmount: row.refundAmount,
+                    status: "SUCCESS",
+                    metadata: {
+                        tournament: tournamentId,
+                        registration: row.registration._id,
+                        cancellationRef,
+                        originalPaymentRef: row.registration.paymentRef,
+                        organizerDebitTransactionId: organizerDebitTransaction.transactionId,
+                        platformFeeCoveredByCreator: row.platformFee,
+                        originalOrganizerAmount: row.organizerAmount
+                    }
+                });
+            }
+
+            if (ledgerEntries.length > 0) {
+                await Ledger.create(ledgerEntries, { session, ordered: true });
+            }
+        }
+
+        const registrationIds = activeRegistrations.map((registration) => registration._id);
+        if (registrationIds.length > 0) {
+            await Registration.updateMany(
+                { _id: { $in: registrationIds } },
+                { $set: { status: "cancelled" } },
+                { session }
+            );
+        }
+
+        const notificationRecipients = new Set();
+        activeRegistrations.forEach((registration) => {
+            getRegistrationUsers(registration).forEach((userId) => notificationRecipients.add(userId.toString()));
+        });
+        if (notificationRecipients.size > 0) {
+            await Notification.insertMany(
+                [...notificationRecipients].map((user) => ({
+                    user,
+                    title: "Tournament cancelled",
+                    body: totalRefund > 0
+                        ? `${tournament.title} was cancelled. Entry fee refunds were sent to the original payer wallets.`
+                        : `${tournament.title} was cancelled by the creator.`,
+                    type: "tournament_update"
+                })),
+                { session, ordered: false }
+            );
+        }
+
+        tournament.status = "cancelled";
+        tournament.joinedPlayers = [];
+        tournament.organizerEarnings = Math.max(0, roundCurrency(Number(tournament.organizerEarnings || 0) - totalOrganizerAmount));
+        tournament.platformFeeAmount = Math.max(0, roundCurrency(Number(tournament.platformFeeAmount || 0) - totalPlatformFee));
+        await tournament.save({ session });
+
+        await session.commitTransaction();
+
+        const participantStats = await getParticipantStats([tournament._id]);
+        const resultDetails = await getResultRegistrationDetails([tournament._id]);
+
+        return res.status(200).json(
+            new ApiResponse(200, {
+                tournament: serializeTournament(tournament, participantStats, resultDetails),
+                refundTotal: totalRefund,
+                refundCount: refundRows.length,
+                platformFeeCoveredByCreator: totalPlatformFee,
+                organizerDebitTransaction,
+                refundTransactions
+            }, "Tournament cancelled and joined players refunded")
+        );
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+});
+
+// ---------------------------------
 // REGISTER USER TO TOURNAMENT
 // ---------------------------------
 const joinTournament = asyncHandler(async (req, res) => {
@@ -707,6 +1029,9 @@ const joinTournament = asyncHandler(async (req, res) => {
     const tournament = await Tournament.findById(tournamentId);
     if (!tournament) throw new ApiError(404, "Tournament not found");
     await syncTournamentLifecycle(tournament, { save: true });
+    if (tournament.visibility === "private" && !userCanManageTournament(req.user, tournament)) {
+        throw new ApiError(400, "Tournament is private");
+    }
     if (tournament.status !== "open") throw new ApiError(400, "Tournament registration is not open");
 
     const registrationWindow = getRegistrationWindow(tournament);
@@ -1323,6 +1648,7 @@ export {
     createTournament,
     updateTournament,
     deleteTournament,
+    cancelTournament,
     joinTournament,
     getTournamentParticipants,
     getMyTournamentRegistrations,

@@ -5,6 +5,7 @@ import {
   loginWithGoogle,
   loginWithFacebook,
   logoutUser,
+  renewTokens,
   forgotPassword,
   resetPassword,
   changePassword,
@@ -19,6 +20,8 @@ router.post("/google", authLimiter, loginWithGoogle);
 router.post("/facebook", authLimiter, loginWithFacebook);
 router.post("/register", authLimiter, registerUser);
 router.post("/login", authLimiter, loginUser);
+router.post("/refresh-token", renewTokens);
+router.post("/renew-token", renewTokens);
 router.post("/forgot-password", passwordResetLimiter, forgotPassword);
 router.put("/reset-password/:token", passwordResetLimiter, resetPassword);
 

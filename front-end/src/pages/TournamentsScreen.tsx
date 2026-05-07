@@ -45,6 +45,8 @@ const getRegistrationTournamentId = (registration: Awaited<ReturnType<typeof get
   typeof registration.tournament === "string" ? registration.tournament : registration.tournament?._id;
 
 const getPrizeSummary = (tournament: Tournament) => formatPrizeSummary(tournament, { killPrefix: true });
+const isPublicTournament = (tournament: Tournament) =>
+  tournament.visibility !== "private" && tournament.status !== "draft";
 const PAGE_SIZE = 12;
 
 const TournamentsScreen = () => {
@@ -86,7 +88,7 @@ const TournamentsScreen = () => {
       : null;
 
     if (cachedPage) {
-      setTournaments(cachedPage.data.tournaments);
+      setTournaments(cachedPage.data.tournaments.filter(isPublicTournament));
       setPage(cachedPage.data.page);
       setHasMore(cachedPage.data.hasMore);
       setJoinedTournamentIds(new Set(cachedPage.data.joinedIds));
@@ -112,14 +114,15 @@ const TournamentsScreen = () => {
         }),
         getMyTournamentRegistrations().catch(() => []),
       ]);
-      setTournaments((previous) => nextPage === 1 ? data.tournaments : [...previous, ...data.tournaments]);
+      const publicTournaments = data.tournaments.filter(isPublicTournament);
+      setTournaments((previous) => nextPage === 1 ? publicTournaments : [...previous, ...publicTournaments]);
       setPage(data.page ?? nextPage);
       setHasMore(Boolean(data.hasMore));
       const joinedIds = registrations.map(getRegistrationTournamentId).filter(Boolean);
       setJoinedTournamentIds(new Set(joinedIds));
       if (nextPage === 1) {
         writeCache(cacheKey, {
-          tournaments: data.tournaments,
+          tournaments: publicTournaments,
           page: data.page ?? nextPage,
           hasMore: Boolean(data.hasMore),
           joinedIds,
@@ -144,8 +147,9 @@ const TournamentsScreen = () => {
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     let list = activeGame === "All"
-      ? tournaments.filter((t) => t.status !== "completed")
+      ? tournaments.filter((t) => isPublicTournament(t) && t.status !== "completed")
       : tournaments.filter((t) => {
+        if (!isPublicTournament(t)) return false;
         if (t.status === "completed") return false;
         const gameName = gameLabels[t.game] ?? t.game;
         return gameName === activeGame || gameName === gameMap[activeGame];

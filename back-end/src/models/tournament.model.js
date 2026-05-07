@@ -224,6 +224,12 @@ const TournamentSchema = new mongoose.Schema({
         default: 'draft',
         index: true
     },
+    visibility: {
+        type: String,
+        enum: ["public", "private"],
+        default: "public",
+        index: true
+    },
     room_details: {
         roomId: { type: String, trim: true },
         roomPass: { type: String, trim: true },
@@ -236,6 +242,7 @@ TournamentSchema.index({ title: 1, startAt: -1 });
 TournamentSchema.index({ organizer: 1, startAt: -1 });
 TournamentSchema.index({ channel: 1, startAt: -1 });
 TournamentSchema.index({ status: 1, startAt: 1 });
+TournamentSchema.index({ visibility: 1, status: 1, createdAt: -1 });
 TournamentSchema.index({ createdAt: -1 });
 TournamentSchema.index({ game: 1, status: 1, createdAt: -1 });
 TournamentSchema.index({ organizer: 1, createdAt: -1 });

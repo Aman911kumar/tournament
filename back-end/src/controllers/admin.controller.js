@@ -1,4 +1,5 @@
 import asyncHandler from "../utils/AsyncHandler.js";
+import mongoose from "mongoose";
 import ApiResponse from "../utils/ApiResponse.js";
 import { User } from "../models/user.model.js";
 import { Channel } from "../models/channel.model.js";
@@ -137,7 +138,19 @@ const redactSensitiveFields = (value) => {
         return value.map(redactSensitiveFields);
     }
 
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+
     if (value && typeof value === "object") {
+        if (typeof value.toHexString === "function") {
+            return value.toHexString();
+        }
+
+        if (value._bsontype && typeof value.toString === "function") {
+            return value.toString();
+        }
+
         return Object.entries(value).reduce((record, [key, child]) => {
             record[key] = sensitiveKeyPattern.test(key) ? "[REDACTED]" : redactSensitiveFields(child);
             return record;
@@ -223,6 +236,118 @@ const buildPaidToDetails = async (tournamentRecords) => {
             }),
         };
     });
+};
+
+const buildUserWalletDetails = async (userRecords) => {
+    if (!userRecords.length) return userRecords;
+
+    const userIds = userRecords.map((record) => record._id).filter(Boolean);
+    const wallets = await Wallet.find({ user: { $in: userIds } })
+        .select("_id user balance lockedBalance currency createdAt updatedAt")
+        .lean();
+    const walletByUser = new Map(wallets.map((wallet) => [getRefId(wallet.user), wallet]));
+
+    return userRecords.map((record) => {
+        const wallet = walletByUser.get(getRefId(record._id));
+        if (!wallet) return record;
+
+        return {
+            ...record,
+            walletBalance: Number(wallet.balance || 0),
+            walletSummary: {
+                walletId: wallet._id,
+                balance: Number(wallet.balance || 0),
+                lockedBalance: Number(wallet.lockedBalance || 0),
+                availableBalance: Number(wallet.balance || 0) - Number(wallet.lockedBalance || 0),
+                currency: wallet.currency || "INR",
+                updatedAt: wallet.updatedAt,
+            },
+        };
+    });
+};
+
+const getUserTransactionDirection = (record, userId) => {
+    const fromUser = getRefId(record.fromUser);
+    const toUser = getRefId(record.toUser);
+    if (fromUser === userId) return "DEBIT";
+    if (toUser === userId) return "CREDIT";
+    return record.type || "INFO";
+};
+
+const mapAdminTransactionUser = (user) => {
+    if (!user || typeof user !== "object") return null;
+    return {
+        _id: getRefId(user),
+        username: user.username,
+        email: user.email,
+        phone_number: user.phone_number,
+    };
+};
+
+const mapAdminUserTransaction = (source, record, userId) => {
+    if (source === "wallet") {
+        return {
+            _id: getRefId(record._id),
+            source: "wallet",
+            title: record.description || record.category || record.type || "Wallet transaction",
+            transactionId: record.transactionId,
+            category: record.category,
+            direction: getUserTransactionDirection(record, userId),
+            amount: Number(record.amount || 0),
+            grossAmount: Number(record.grossAmount || 0),
+            platformFee: Number(record.platformFee || 0),
+            netAmount: Number(record.netAmount || 0),
+            balanceBefore: Number(record.balanceBefore || 0),
+            balanceAfter: Number(record.balanceAfter || 0),
+            status: record.status,
+            referenceId: record.referenceId,
+            fromUser: mapAdminTransactionUser(record.fromUser),
+            toUser: mapAdminTransactionUser(record.toUser),
+            createdAt: record.createdAt,
+        };
+    }
+
+    if (source === "payment") {
+        const purpose = record.meta?.purpose || record.provider || "payment";
+        return {
+            _id: getRefId(record._id),
+            source: "payment",
+            title: purpose,
+            transactionId: record.providerPaymentId || record.providerOrderId || getRefId(record._id),
+            category: purpose,
+            direction: purpose === "withdrawal" ? "DEBIT" : "CREDIT",
+            amount: Number(record.amount || 0),
+            grossAmount: Number(record.amount || 0),
+            platformFee: 0,
+            netAmount: Number(record.amount || 0),
+            status: record.status,
+            referenceId: record.providerOrderId,
+            provider: record.provider,
+            providerPaymentId: record.providerPaymentId,
+            providerOrderId: record.providerOrderId,
+            createdAt: record.createdAt,
+        };
+    }
+
+    return {
+        _id: getRefId(record._id),
+        source: "ledger",
+        title: record.category || "Ledger entry",
+        transactionId: record.transactionId,
+        category: record.category,
+        direction: getUserTransactionDirection(record, userId),
+        amount: Number(record.amount || 0),
+        grossAmount: Number(record.amount || 0),
+        platformFee: Number(record.platformFee || 0),
+        netAmount: Number(record.netAmount || 0),
+        status: record.status,
+        referenceId: record.referenceId,
+        debitAccount: record.debitAccount,
+        creditAccount: record.creditAccount,
+        fromUser: mapAdminTransactionUser(record.fromUser),
+        toUser: mapAdminTransactionUser(record.toUser),
+        createdAt: record.createdAt,
+    };
 };
 
 const getWindowStart = (days) => {
@@ -371,6 +496,60 @@ const getTournamentDashboardData = (start) => Tournament.aggregate([
                 { $group: { _id: "$game", count: { $sum: 1 } } },
                 { $sort: { count: -1 } }
             ],
+            finance: [
+                {
+                    $project: {
+                        status: 1,
+                        visibility: { $ifNull: ["$visibility", "public"] },
+                        organizerEarnings: { $ifNull: ["$organizerEarnings", 0] },
+                        platformFeeAmount: { $ifNull: ["$platformFeeAmount", 0] },
+                        prizePool: { $ifNull: ["$prizePool", 0] },
+                        grossEntryAmount: {
+                            $add: [
+                                { $ifNull: ["$organizerEarnings", 0] },
+                                { $ifNull: ["$platformFeeAmount", 0] }
+                            ]
+                        },
+                        paidMoney: {
+                            $sum: {
+                                $map: {
+                                    input: { $ifNull: ["$results", []] },
+                                    as: "result",
+                                    in: { $ifNull: ["$$result.prizeWon", 0] }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    $addFields: {
+                        pendingPrizeAmount: {
+                            $cond: [
+                                { $eq: ["$status", "completed"] },
+                                {
+                                    $cond: [
+                                        { $gt: [{ $subtract: ["$prizePool", "$paidMoney"] }, 0] },
+                                        { $subtract: ["$prizePool", "$paidMoney"] },
+                                        0
+                                    ]
+                                },
+                                0
+                            ]
+                        }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        receivedMoney: { $sum: "$grossEntryAmount" },
+                        platformFees: { $sum: "$platformFeeAmount" },
+                        prizePaid: { $sum: "$paidMoney" },
+                        pendingPrizes: { $sum: "$pendingPrizeAmount" },
+                        publicTournaments: { $sum: { $cond: [{ $eq: ["$visibility", "public"] }, 1, 0] } },
+                        privateTournaments: { $sum: { $cond: [{ $eq: ["$visibility", "private"] }, 1, 0] } }
+                    }
+                }
+            ],
             recent: [
                 { $sort: { createdAt: -1 } },
                 { $limit: 6 },
@@ -394,7 +573,7 @@ const getTournamentDashboardData = (start) => Tournament.aggregate([
                 },
                 { $unwind: { path: "$organizer", preserveNullAndEmptyArrays: true } },
                 { $unwind: { path: "$channel", preserveNullAndEmptyArrays: true } },
-                { $project: { title: 1, game: 1, type: 1, status: 1, entryFee: 1, prizePool: 1, prizeMode: 1, killPrizeAmount: 1, prizeDistribution: 1, maxPlayers: 1, startAt: 1, organizer: 1, channel: 1, createdAt: 1 } }
+                { $project: { title: 1, game: 1, type: 1, status: 1, visibility: 1, entryFee: 1, prizePool: 1, prizeMode: 1, killPrizeAmount: 1, prizeDistribution: 1, maxPlayers: 1, startAt: 1, organizer: 1, channel: 1, createdAt: 1 } }
             ]
         }
     }
@@ -636,6 +815,7 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
 
     const userTotals = firstFacetRow(userDashboard.totals, {});
     const tournamentTotals = firstFacetRow(tournamentDashboard.totals, {});
+    const tournamentFinance = firstFacetRow(tournamentDashboard.finance, {});
     const paymentTotals = firstFacetRow(paymentDashboard.revenue, {});
     const razorpayTotals = firstFacetRow(paymentDashboard.razorpay, {});
     const ledgerTotals = firstFacetRow(ledgerDashboard.platformFeeTotals, {});
@@ -667,6 +847,8 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
                     openTournaments: Number(tournamentTotals.openTournaments || 0),
                     runningTournaments: Number(tournamentTotals.runningTournaments || 0),
                     completedTournaments: Number(tournamentTotals.completedTournaments || 0),
+                    publicTournaments: Number(tournamentFinance.publicTournaments || 0),
+                    privateTournaments: Number(tournamentFinance.privateTournaments || 0),
                     teams: totalTeams,
                     registrations: totalRegistrations,
                     verifiedGameAccounts,
@@ -693,6 +875,14 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
                     paymentsByStatus: paymentDashboard.byStatus || [],
                     usersByRole: userDashboard.byRole || [],
                     platformFeesByCategory: ledgerDashboard.platformFeesByCategory || []
+                },
+                tournamentAnalytics: {
+                    finance: {
+                        receivedMoney: Number(tournamentFinance.receivedMoney || 0),
+                        platformFees: Number(tournamentFinance.platformFees || 0),
+                        prizePaid: Number(tournamentFinance.prizePaid || 0),
+                        pendingPrizes: Number(tournamentFinance.pendingPrizes || 0),
+                    }
                 },
                 tables: {
                     topCreators: channelDashboard.topCreators || [],
@@ -933,6 +1123,16 @@ const getAdminCollectionRecords = asyncHandler(async (req, res) => {
                 { email: { $regex: search, $options: "i" } },
                 { phone_number: { $regex: search, $options: "i" } },
                 { status: { $regex: search, $options: "i" } },
+                { type: { $regex: search, $options: "i" } },
+                { game: { $regex: search, $options: "i" } },
+                { gameId: { $regex: search, $options: "i" } },
+                { handle: { $regex: search, $options: "i" } },
+                { category: { $regex: search, $options: "i" } },
+                { action: { $regex: search, $options: "i" } },
+                { transactionId: { $regex: search, $options: "i" } },
+                { providerOrderId: { $regex: search, $options: "i" } },
+                { providerPaymentId: { $regex: search, $options: "i" } },
+                { "meta.purpose": { $regex: search, $options: "i" } },
             ],
         }
         : {};
@@ -951,7 +1151,13 @@ const getAdminCollectionRecords = asyncHandler(async (req, res) => {
         recordQuery.lean(),
     ]);
 
-    const visibleRecords = collection === "tournaments" ? await buildPaidToDetails(records) : records;
+    let visibleRecords = records;
+    if (collection === "tournaments") {
+        visibleRecords = await buildPaidToDetails(records);
+    }
+    if (collection === "users") {
+        visibleRecords = await buildUserWalletDetails(records);
+    }
 
     return res.status(200).json(
         new ApiResponse(200, {
@@ -966,6 +1172,110 @@ const getAdminCollectionRecords = asyncHandler(async (req, res) => {
     );
 });
 
+const getAdminUserTransactionHistory = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new ApiError(400, "Valid user ID is required");
+    }
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const fetchSize = page * limit;
+    const userObjectId = new mongoose.Types.ObjectId(id);
+    const userQuery = {
+        $or: [
+            { user: userObjectId },
+            { fromUser: userObjectId },
+            { toUser: userObjectId },
+        ],
+    };
+    const ledgerQuery = {
+        $or: [
+            { fromUser: userObjectId },
+            { toUser: userObjectId },
+        ],
+    };
+    const paymentQuery = { user: userObjectId };
+
+    const [
+        user,
+        wallet,
+        walletTotal,
+        paymentTotal,
+        ledgerTotal,
+        walletTransactions,
+        payments,
+        ledgerEntries,
+    ] = await Promise.all([
+        User.findById(userObjectId).select("username email phone_number role walletBalance").lean(),
+        Wallet.findOne({ user: userObjectId }).select("_id balance lockedBalance currency updatedAt").lean(),
+        WalletTransaction.countDocuments(userQuery),
+        Payment.countDocuments(paymentQuery),
+        Ledger.countDocuments(ledgerQuery),
+        WalletTransaction.find(userQuery)
+            .populate("fromUser", "username email phone_number")
+            .populate("toUser", "username email phone_number")
+            .sort({ createdAt: -1 })
+            .limit(fetchSize)
+            .lean(),
+        Payment.find(paymentQuery)
+            .sort({ createdAt: -1 })
+            .limit(fetchSize)
+            .lean(),
+        Ledger.find(ledgerQuery)
+            .populate("fromUser", "username email phone_number")
+            .populate("toUser", "username email phone_number")
+            .sort({ createdAt: -1 })
+            .limit(fetchSize)
+            .lean(),
+    ]);
+
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    const allRecords = [
+        ...walletTransactions.map((record) => mapAdminUserTransaction("wallet", record, id)),
+        ...payments.map((record) => mapAdminUserTransaction("payment", record, id)),
+        ...ledgerEntries.map((record) => mapAdminUserTransaction("ledger", record, id)),
+    ].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+    const total = walletTotal + paymentTotal + ledgerTotal;
+    const records = allRecords.slice((page - 1) * limit, page * limit);
+    const walletBalance = Number(wallet?.balance ?? user.walletBalance ?? 0);
+    const lockedBalance = Number(wallet?.lockedBalance || 0);
+
+    return res.status(200).json(
+        new ApiResponse(200, {
+            user: redactSensitiveFields(user),
+            wallet: wallet ? {
+                _id: wallet._id,
+                balance: walletBalance,
+                lockedBalance,
+                availableBalance: walletBalance - lockedBalance,
+                currency: wallet.currency || "INR",
+                updatedAt: wallet.updatedAt,
+            } : {
+                balance: Number(user.walletBalance || 0),
+                lockedBalance: 0,
+                availableBalance: Number(user.walletBalance || 0),
+                currency: "INR",
+            },
+            totals: {
+                walletTransactions: walletTotal,
+                payments: paymentTotal,
+                ledgerEntries: ledgerTotal,
+                all: total,
+            },
+            page,
+            limit,
+            total,
+            pages: Math.ceil(total / limit),
+            records,
+        }, "Admin user transaction history fetched successfully")
+    );
+});
+
 export {
     getAdminDashboard,
     getWithdrawalRequests,
@@ -973,4 +1283,5 @@ export {
     updateCreatorPermission,
     getAdminCollections,
     getAdminCollectionRecords,
+    getAdminUserTransactionHistory,
 };
