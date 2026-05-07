@@ -11,11 +11,6 @@ const SupportTicketSchema = new mongoose.Schema({
         ref: 'Tournament',
         default: null
     },
-    match: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Match',
-        default: null
-    },
     title: {
         type: String,
         required: true,
@@ -44,7 +39,7 @@ const SupportTicketSchema = new mongoose.Schema({
     resolvedAt: { type: Date, default: null }
 }, { timestamps: true });
 
-SupportTicketSchema.index({ user: 1, tournament: 1, match: 1 });
+SupportTicketSchema.index({ user: 1, tournament: 1 });
 SupportTicketSchema.index({ status: 1 });
 
 export const SupportTicket = mongoose.model("SupportTicket", SupportTicketSchema);

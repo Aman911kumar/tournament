@@ -5,11 +5,13 @@ import {
   AlertCircle,
   ArrowDownLeft,
   ArrowUpRight,
+  CreditCard,
   Crown,
   History,
   Plus,
   RefreshCcw,
   Send,
+  Timer,
   Trophy,
   TrendingUp,
   Wallet,
@@ -35,12 +37,76 @@ interface WalletSummary {
   playerMonthlyChange: number;
 }
 
-const statusColors: Record<string, string> = {
-  success: "text-accent",
-  successful: "text-accent",
-  pending: "text-neon-blue",
-  failed: "text-destructive",
-  rejected: "text-destructive",
+const statusStyles: Record<string, { text: string; bg: string; iconBg: string; icon: string; amount: string }> = {
+  success: {
+    text: "text-accent",
+    bg: "bg-accent/10 border-accent/20",
+    iconBg: "bg-accent/10",
+    icon: "text-accent",
+    amount: "text-accent",
+  },
+  successful: {
+    text: "text-accent",
+    bg: "bg-accent/10 border-accent/20",
+    iconBg: "bg-accent/10",
+    icon: "text-accent",
+    amount: "text-accent",
+  },
+  initiated: {
+    text: "text-secondary",
+    bg: "bg-secondary/10 border-secondary/20",
+    iconBg: "bg-secondary/10",
+    icon: "text-secondary",
+    amount: "text-secondary",
+  },
+  pending: {
+    text: "text-secondary",
+    bg: "bg-secondary/10 border-secondary/20",
+    iconBg: "bg-secondary/10",
+    icon: "text-secondary",
+    amount: "text-secondary",
+  },
+  failed: {
+    text: "text-destructive",
+    bg: "bg-destructive/10 border-destructive/20",
+    iconBg: "bg-destructive/10",
+    icon: "text-destructive",
+    amount: "text-destructive",
+  },
+  rejected: {
+    text: "text-destructive",
+    bg: "bg-destructive/10 border-destructive/20",
+    iconBg: "bg-destructive/10",
+    icon: "text-destructive",
+    amount: "text-destructive",
+  },
+  cancelled: {
+    text: "text-muted-foreground",
+    bg: "bg-muted/30 border-muted/40",
+    iconBg: "bg-muted/40",
+    icon: "text-muted-foreground",
+    amount: "text-muted-foreground",
+  },
+  reversed: {
+    text: "text-primary",
+    bg: "bg-primary/10 border-primary/20",
+    iconBg: "bg-primary/10",
+    icon: "text-primary",
+    amount: "text-primary",
+  },
+};
+
+const getStatusStyle = (status: string) => statusStyles[status.toLowerCase()] ?? {
+  text: "text-muted-foreground",
+  bg: "bg-muted/30 border-muted/40",
+  iconBg: "bg-muted/40",
+  icon: "text-muted-foreground",
+  amount: "text-muted-foreground",
+};
+
+const formatTransactionStatus = (status: string) => {
+  const normalized = status.toLowerCase();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 };
 
 const formatMonthlyChange = (value: number) => `${value > 0 ? "+" : ""}${value}% this month`;
@@ -48,6 +114,7 @@ const formatMonthlyChange = (value: number) => `${value > 0 ? "+" : ""}${value}%
 const WalletScreen = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"all" | "player" | "creator">("all");
+  const [historyView, setHistoryView] = useState<"wallet" | "payments">("wallet");
   const [balance, setBalance] = useState(0);
   const [creatorEarnings, setCreatorEarnings] = useState(0);
   const [playerEarnings, setPlayerEarnings] = useState(0);
@@ -129,6 +196,22 @@ const WalletScreen = () => {
     if (activeTab === "creator") return transactions.filter((t) => t.label.includes("Creator"));
     return transactions.filter((t) => !t.label.includes("Creator"));
   }, [activeTab, transactions]);
+
+  const walletTransactions = useMemo(
+    () => filtered.filter((transaction) => transaction.kind !== "PAYMENT"),
+    [filtered],
+  );
+
+  const paymentTransactions = useMemo(
+    () => (activeTab === "creator" ? [] : filtered.filter((transaction) => transaction.kind === "PAYMENT")),
+    [activeTab, filtered],
+  );
+
+  useEffect(() => {
+    if (activeTab === "creator" && historyView === "payments") {
+      setHistoryView("wallet");
+    }
+  }, [activeTab, historyView]);
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -253,53 +336,128 @@ const WalletScreen = () => {
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-5">
-        <div className="flex items-center justify-between mb-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="font-heading text-base font-bold flex items-center gap-2">
-            <History className="w-4 h-4 text-primary" />
-            Transactions
+            {historyView === "wallet" ? (
+              <History className="w-4 h-4 text-primary" />
+            ) : (
+              <CreditCard className="w-4 h-4 text-secondary" />
+            )}
+            {historyView === "wallet" ? "Wallet Transactions" : "Payment Activity"}
           </h2>
+          <div className="grid grid-cols-2 rounded-lg border border-glass-border bg-card/60 p-1">
+            <button
+              type="button"
+              onClick={() => setHistoryView("wallet")}
+              className={`rounded-md px-3 py-1.5 font-heading text-[10px] transition-colors ${
+                historyView === "wallet" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Wallet
+            </button>
+            <button
+              type="button"
+              onClick={() => setHistoryView("payments")}
+              disabled={activeTab === "creator"}
+              className={`rounded-md px-3 py-1.5 font-heading text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                historyView === "payments" ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Payments
+            </button>
+          </div>
         </div>
         <div className="space-y-2">
-          {filtered.length === 0 ? (
+          {historyView === "wallet" && walletTransactions.length === 0 && (
             <GlassCard className="text-center py-8">
-              <p className="text-sm font-heading">No transactions found</p>
+              <p className="text-sm font-heading">No wallet transactions found</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {error ? "Connect once to save wallet data for offline use." : "Try a different filter."}
+                {error ? "Connect once to save wallet data for offline use." : "Wallet credits and debits will appear here."}
               </p>
             </GlassCard>
-          ) : (
-            filtered.map((t, i) => (
-              <GlassCard
-                key={t.id}
-                delay={i * 0.05}
-                className="flex items-center justify-between cursor-pointer hover:neon-border transition-all"
-                onClick={() => { console.log(t); navigate(`/wallet/transaction/${t.id}`) }}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${t.type === "CREDIT" ? "bg-accent/10" : "bg-destructive/10"
+          )}
+
+          {historyView === "wallet" && walletTransactions.length > 0 && (
+            walletTransactions.map((t, i) => {
+              const style = getStatusStyle(t.status);
+              return (
+                <GlassCard
+                  key={t.id}
+                  delay={i * 0.05}
+                  className="flex items-center justify-between cursor-pointer hover:neon-border transition-all"
+                  onClick={() => navigate(`/wallet/transaction/${t.id}`)}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                        t.type === "CREDIT" ? "bg-accent/10" : "bg-destructive/10"
                       }`}
-                  >
-                    {t.type === "CREDIT" ? (
-                      <ArrowDownLeft className="w-4 h-4 text-accent" />
-                    ) : (
-                      <ArrowUpRight className="w-4 h-4 text-destructive" />
-                    )}
+                    >
+                      {t.type === "CREDIT" ? (
+                        <ArrowDownLeft className="w-4 h-4 text-accent" />
+                      ) : (
+                        <ArrowUpRight className="w-4 h-4 text-destructive" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-heading font-semibold truncate">{t.label}</p>
+                      <p className="text-[10px] text-muted-foreground">{t.date}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-heading font-semibold truncate">{t.label}</p>
-                    <p className="text-[10px] text-muted-foreground">{t.date}</p>
+                  <div className="text-right shrink-0">
+                    <p className={`text-xs font-heading font-bold ${t.type === "CREDIT" ? "text-accent" : "text-foreground"}`}>
+                      {t.amount > 0 ? "+" : ""}
+                      {formatCurrency(t.amount)}
+                    </p>
+                    <p className={`text-[10px] font-heading ${style.text}`}>{formatTransactionStatus(t.status)}</p>
                   </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className={`text-xs font-heading font-bold ${t.type === "CREDIT" ? "text-accent" : "text-foreground"}`}>
-                    {t.amount > 0 ? "+" : ""}
-                    {formatCurrency(t.amount)}
-                  </p>
-                  <p className={`text-[10px] font-heading capitalize ${statusColors[t.status]}`}>{t.status}</p>
-                </div>
-              </GlassCard>
-            ))
+                </GlassCard>
+              );
+            })
+          )}
+
+          {historyView === "payments" && paymentTransactions.length === 0 && (
+            <GlassCard className="text-center py-8">
+              <p className="text-sm font-heading">No payment activity found</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Razorpay checkout updates will appear here.
+              </p>
+            </GlassCard>
+          )}
+
+          {historyView === "payments" && paymentTransactions.length > 0 && (
+            paymentTransactions.map((t, i) => {
+              const style = getStatusStyle(t.status);
+              const isWaiting = ["initiated", "pending"].includes(t.status.toLowerCase());
+              return (
+                <GlassCard
+                  key={t.id}
+                  delay={i * 0.05}
+                  className={`flex cursor-pointer items-center justify-between border transition-all hover:neon-border ${style.bg}`}
+                  onClick={() => navigate(`/wallet/payment/${t.id}`)}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${style.iconBg}`}>
+                      {isWaiting ? (
+                        <Timer className={`w-4 h-4 ${style.icon}`} />
+                      ) : (
+                        <CreditCard className={`w-4 h-4 ${style.icon}`} />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-heading font-semibold truncate">{t.label}</p>
+                      <p className="text-[10px] text-muted-foreground">{t.date}</p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className={`text-xs font-heading font-bold ${style.amount}`}>
+                      {formatCurrency(t.amount)}
+                    </p>
+                    <p className={`text-[10px] font-heading ${style.text}`}>{formatTransactionStatus(t.status)}</p>
+                  </div>
+                </GlassCard>
+              );
+            })
           )}
         </div>
       </div>

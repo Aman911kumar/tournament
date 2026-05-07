@@ -5,14 +5,28 @@ export const ENDPOINTS = {
   balance: "/wallet/balance",
   transactions: "/wallet/transactions",
   transactionDetail: (id: string) => `/wallet/transaction/${id}`,
+  paymentDetail: (id: string) => `/wallet/payment/${id}`,
   addMoney: "/wallet/add",
+  verifyAddMoney: "/wallet/add/verify",
+  updateAddMoneyStatus: "/wallet/add/status",
   withdraw: "/wallet/withdraw",
   transfer: "/wallet/transfer",
   creatorEarnings: "/wallet/creator-earnings",
   playerEarnings: "/wallet/player-earnings",
 };
 
-export interface AddMoneyPayload { amount: number; method: "upi" | "card" | "bank" }
+export interface AddMoneyPayload { amount: number; method?: "razorpay" }
+export interface VerifyAddMoneyPayload {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}
+export interface UpdateAddMoneyStatusPayload {
+  orderId: string;
+  status: "failed" | "cancelled";
+  reason?: string;
+  response?: unknown;
+}
 export interface WithdrawPayload { amount: number; method: "upi" | "bank"; destination: string; password: string }
 export interface TransferPayload { recipient: string; amount: number; note?: string }
 
@@ -24,11 +38,13 @@ export interface WalletUserRef {
 
 export interface WalletTransaction {
   id: string | number;
+  kind?: "WALLET" | "PAYMENT";
   type: "CREDIT" | "DEBIT";
   label: string;
   amount: number;
   date: string;
   status: string;
+  clickable?: boolean;
 }
 
 interface ApiData<T> {
@@ -59,12 +75,53 @@ export interface TransactionDetail {
   updatedAt: string;
 }
 
+export interface PaymentDetail {
+  _id: string;
+  user: string;
+  tournament?: string | null;
+  amount: number;
+  currency: string;
+  provider: "Razorpay" | "Stripe" | "Paytm" | "Other";
+  providerPaymentId?: string | null;
+  providerOrderId?: string | null;
+  status: "initiated" | "pending" | "success" | "failed" | "cancelled" | "refunded";
+  meta?: {
+    method?: string;
+    purpose?: "deposit" | "withdrawal" | string;
+    destination?: string;
+    requestedAt?: string;
+    adminPaidAt?: string;
+    payoutReference?: string;
+    note?: string;
+    walletTransactionId?: string;
+    walletTransactionRef?: string;
+    reason?: string;
+    verifiedAt?: string;
+    verificationFailedAt?: string;
+    clientStatusUpdatedAt?: string;
+    razorpayOrder?: {
+      id?: string;
+      receipt?: string;
+      status?: string;
+      amount?: number;
+      currency?: string;
+    };
+    razorpayResponse?: unknown;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface WalletTransactionDto {
   _id?: string;
   id?: string | number;
+  kind?: "PAYMENT" | "WALLET";
   type: "CREDIT" | "DEBIT";
   amount: number;
   category?: string;
+  provider?: string;
+  providerOrderId?: string;
+  providerPaymentId?: string;
   grossAmount?: number;
   platformFee?: number;
   netAmount?: number;
@@ -76,11 +133,13 @@ interface WalletTransactionDto {
   balanceApplied?: boolean;
   meta?: {
     method?: string;
+    purpose?: string;
     destination?: string;
   };
 }
 
 const sourceLabels: Record<string, string> = {
+  PAYMENT: "Razorpay Payment",
   added: "Money Added",
   refund: "Refund",
   joined: "Tournament Entry",
@@ -102,6 +161,37 @@ const getUserName = (user?: WalletUserRef | string | null) =>
   typeof user === "object" && user ? user.username || user.phone_number || "User" : "User";
 
 const mapTransaction = (transaction: WalletTransactionDto): WalletTransaction => {
+  if (transaction.kind === "PAYMENT" || transaction.category === "PAYMENT") {
+    const status = (transaction.status ?? "INITIATED").toLowerCase();
+    const isWithdrawal = transaction.meta?.purpose === "withdrawal";
+    const paymentLabels: Record<string, string> = isWithdrawal ? {
+      pending: "Withdrawal payout pending",
+      success: "Withdrawal payout successful",
+      failed: "Withdrawal payout failed",
+      cancelled: "Withdrawal cancelled",
+      refunded: "Withdrawal refunded",
+      initiated: "Withdrawal requested",
+    } : {
+      initiated: "Razorpay payment initiated",
+      pending: "Razorpay payment pending",
+      success: "Razorpay payment successful",
+      failed: "Razorpay payment failed",
+      cancelled: "Razorpay payment cancelled",
+      refunded: "Razorpay payment refunded",
+    };
+
+    return {
+      id: transaction._id ?? transaction.id ?? `PAYMENT-${transaction.providerOrderId ?? transaction.createdAt ?? Date.now()}`,
+      kind: "PAYMENT",
+      type: "CREDIT",
+      label: paymentLabels[status] ?? "Razorpay payment update",
+      amount: Math.abs(transaction.amount),
+      date: transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Just now",
+      status,
+      clickable: true,
+    };
+  }
+
   const label =
     transaction.category === "WALLET_TRANSFER"
       ? transaction.type === "DEBIT"
@@ -113,11 +203,13 @@ const mapTransaction = (transaction: WalletTransactionDto): WalletTransaction =>
 
   return {
     id: transaction._id ?? transaction.id ?? `${transaction.type}-${transaction.createdAt ?? Date.now()}`,
+    kind: "WALLET",
     type: transaction.type,
     label,
     amount: transaction.type === "DEBIT" ? -Math.abs(transaction.amount) : Math.abs(transaction.amount),
     date: transaction.createdAt ? new Date(transaction.createdAt).toLocaleString() : "Just now",
     status: transaction.status ?? (transaction.balanceApplied ? "successful" : "pending"),
+    clickable: true,
   };
 };
 
@@ -142,6 +234,14 @@ export interface WalletMutationResponse {
       referenceId: string;
     };
   };
+}
+
+export interface RazorpayOrder {
+  keyId: string;
+  orderId: string;
+  amount: number;
+  currency: "INR";
+  receipt?: string;
 }
 
 export async function getBalance() {
@@ -170,8 +270,36 @@ export async function getTransactionDetail(id: string): Promise<ApiResponse<Tran
   return apiFetch(ENDPOINTS.transactionDetail(id), { method:"GET",credentials: "include" });
 }
 
+export async function getPaymentDetail(id: string): Promise<ApiResponse<PaymentDetail>> {
+  return apiFetch(ENDPOINTS.paymentDetail(id), { method: "GET", credentials: "include" });
+}
+
 export async function addMoney(payload: AddMoneyPayload): Promise<WalletMutationResponse> {
   return apiFetch<WalletMutationResponse>(ENDPOINTS.addMoney, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+}
+
+export async function createAddMoneyOrder(payload: AddMoneyPayload): Promise<ApiResponse<RazorpayOrder>> {
+  return apiFetch<ApiResponse<RazorpayOrder>>(ENDPOINTS.addMoney, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+}
+
+export async function verifyAddMoney(payload: VerifyAddMoneyPayload): Promise<ApiResponse<WalletMutationResponse["data"]>> {
+  return apiFetch<ApiResponse<WalletMutationResponse["data"]>>(ENDPOINTS.verifyAddMoney, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+}
+
+export async function updateAddMoneyStatus(payload: UpdateAddMoneyStatusPayload): Promise<ApiResponse<unknown>> {
+  return apiFetch<ApiResponse<unknown>>(ENDPOINTS.updateAddMoneyStatus, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",

@@ -65,6 +65,10 @@ const createChannel = asyncHandler(async (req, res) => {
     const userId = req.user._id;
     const { name, handle, description = "", avatar, banner, socialLinks } = req.body;
 
+    if (!hasRole(req.user, "creator", "admin")) {
+        throw new ApiError(403, "Admin approval is required before creating a creator channel");
+    }
+
     if (!name || name.trim() === "") {
         throw new ApiError(400, "Channel name is required");
     }
@@ -93,8 +97,6 @@ const createChannel = asyncHandler(async (req, res) => {
         banner,
         socialLinks
     });
-
-    await User.findByIdAndUpdate(userId, { $addToSet: { role: "creator" } });
 
     return res.status(201).json(
         new ApiResponse(201, channel, "Channel created successfully")

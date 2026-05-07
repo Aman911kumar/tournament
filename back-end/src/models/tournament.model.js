@@ -229,10 +229,6 @@ const TournamentSchema = new mongoose.Schema({
         roomPass: { type: String, trim: true },
         roomJoinTime: { type: Date }
     },
-    matches: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Match'
-    }]
 }, { timestamps: true });
 
 // Compound index for sorting tournaments by name and date

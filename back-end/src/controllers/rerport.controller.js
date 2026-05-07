@@ -2,25 +2,17 @@ import asyncHandler from '../utils/AsyncHandler.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import { Report } from '../models/report.model.js';
-import { Match } from '../models/match.model.js';
 import { hasRole } from '../middlewares/auth.middleware.js';
 import mongoose from 'mongoose';
 
 const getParamId = (req, key) => req.params[key] || req.params.id;
 
 // ---------------------------------
-// GET ALL REPORTS (Optional: By Match/Tournament)
+// GET ALL REPORTS (Optional: By Tournament)
 // ---------------------------------
 const getAllReports = asyncHandler(async (req, res) => {
-    const { matchId, tournamentId, limit = 50, skip = 0 } = req.query;
+    const { tournamentId, limit = 50, skip = 0 } = req.query;
     const query = {};
-
-    if (matchId) {
-        if (!mongoose.Types.ObjectId.isValid(matchId)) {
-            throw new ApiError(400, "Invalid match ID");
-        }
-        query.match = matchId;
-    }
 
     if (tournamentId) {
         if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
@@ -63,17 +55,13 @@ const getReportById = asyncHandler(async (req, res) => {
 // CREATE REPORT (Creator/Admin or Player)
 // ---------------------------------
 const createReport = asyncHandler(async (req, res) => {
-    const { matchId, tournamentId, content, scores } = req.body;
+    const { tournamentId, content, scores } = req.body;
 
-    if (!matchId || !tournamentId || !content) {
-        throw new ApiError(400, "Match, tournament, and content are required");
+    if (!tournamentId || !content) {
+        throw new ApiError(400, "Tournament and content are required");
     }
 
-    const match = await Match.findById(matchId);
-    if (!match) throw new ApiError(404, "Match not found");
-
     const report = await Report.create({
-        match: matchId,
         tournament: tournamentId,
         content,
         scores: scores || [],

@@ -4,6 +4,7 @@ import ApiResponse from '../utils/ApiResponse.js'
 import { User } from '../models/user.model.js'
 import { WalletTransaction } from '../models/walletTransaction.model.js'
 import { Wallet } from '../models/wallet.model.js'
+import { Payment } from '../models/payment.model.js'
 import { Notification } from '../models/notification.model.js'
 import { Tournament } from '../models/tournament.model.js'
 import { Registration } from '../models/registration.model.js'
@@ -19,6 +20,7 @@ import {
     GOOGLE_CLIENT_ID,
     REFRESH_TOKEN_SECRET
 } from '../../env.js'
+import { expireStaleRazorpayPayments } from '../services/paymentExpiry.service.js'
 
 const generateAccessTokenAndRefreshToken = async (userId) => {
     try {
@@ -92,7 +94,7 @@ const getPlayerStats = async (userId) => {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const [wallet, allTimeWinnings, monthlyWinnings, matchesPlayed] = await Promise.all([
+    const [wallet, allTimeWinnings, monthlyWinnings, tournamentsPlayed] = await Promise.all([
         Wallet.findOne({ user: userId }).select("balance"),
         WalletTransaction.aggregate([
             { $match: { user: new mongoose.Types.ObjectId(userId), type: "CREDIT", category: "WINNING", status: "SUCCESS" } },
@@ -114,7 +116,8 @@ const getPlayerStats = async (userId) => {
     return {
         walletBalance: Number(wallet?.balance || 0),
         stats: {
-            matchesPlayed,
+            matchesPlayed: tournamentsPlayed,
+            tournamentsPlayed,
             kills: 0,
             amount_won: amountWon,
         },
@@ -750,15 +753,28 @@ const becomeCreator = asyncHandler(async (req, res) => {
     const user = req.user;
     const roles = Array.isArray(user.role) ? user.role : [user.role].filter(Boolean);
 
-    if (!roles.includes("creator")) {
-        user.role = [...new Set([...roles, "user", "creator"])];
+    if (roles.includes("creator")) {
+        const updatedUser = await User.findById(user._id).select("-password -refreshToken");
+        return res.status(200).json(
+            new ApiResponse(200, { user: updatedUser }, "Creator access is already approved")
+        );
+    }
+
+    if (user.creatorRequest?.status !== "pending") {
+        user.creatorRequest = {
+            status: "pending",
+            requestedAt: new Date(),
+            reviewedAt: null,
+            reviewedBy: null,
+            note: "",
+        };
         await user.save({ validateBeforeSave: false });
     }
 
     const updatedUser = await User.findById(user._id).select("-password -refreshToken");
 
     return res.status(200).json(
-        new ApiResponse(200, { user: updatedUser }, "Creator mode enabled")
+        new ApiResponse(200, { user: updatedUser }, "Creator request sent to admin")
     );
 });
 
@@ -910,6 +926,8 @@ const getWalletTransaction = asyncHandler(async (req, res) => {
         ];
     }
 
+    await expireStaleRazorpayPayments({ user: userId });
+
     const transactions = await WalletTransaction.find(query)
         .populate("fromUser", "username phone_number avatar role")
         .populate("toUser", "username phone_number avatar role")
@@ -917,8 +935,40 @@ const getWalletTransaction = asyncHandler(async (req, res) => {
         .skip(Number(skip))
         .limit(Number(limit));
 
+    if (filter === "creator") {
+        return res.status(200).json(
+            new ApiResponse(200, transactions, "Wallet transactions fetched successfully")
+        );
+    }
+
+    const paymentQuery = { user: userId };
+    const payments = await Payment.find(paymentQuery)
+        .sort({ createdAt: -1 })
+        .skip(Number(skip))
+        .limit(Number(limit))
+        .lean();
+
+    const paymentTransactions = payments.map((payment) => ({
+        _id: payment._id,
+        kind: "PAYMENT",
+        type: "CREDIT",
+        category: "PAYMENT",
+        amount: payment.amount,
+        status: String(payment.status || "initiated").toUpperCase(),
+        provider: payment.provider,
+        providerOrderId: payment.providerOrderId,
+        providerPaymentId: payment.providerPaymentId,
+        createdAt: payment.createdAt,
+        updatedAt: payment.updatedAt,
+        meta: payment.meta,
+    }));
+
+    const mergedTransactions = [...transactions.map((transaction) => transaction.toObject()), ...paymentTransactions]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, Number(limit));
+
     return res.status(200).json(
-        new ApiResponse(200, transactions, "Wallet transactions fetched successfully")
+        new ApiResponse(200, mergedTransactions, "Wallet transactions fetched successfully")
     );
 });
 const getTransactionDetails = asyncHandler(async (req, res) => {
@@ -957,6 +1007,29 @@ const getCreatorEarnings = asyncHandler(async (req, res) => {
             monthlyReceived: monthlyTotals.credits,
             monthlyDeducted: monthlyTotals.debits,
         }, "Creator earnings fetched successfully")
+    );
+});
+
+const getPaymentDetails = asyncHandler(async (req, res) => {
+    const paymentId = req.params.id;
+
+    if (!mongoose.Types.ObjectId.isValid(paymentId)) {
+        throw new ApiError(400, "Invalid payment ID");
+    }
+
+    await expireStaleRazorpayPayments({ user: req.user._id });
+
+    const payment = await Payment.findOne({
+        _id: paymentId,
+        user: req.user._id,
+    }).lean();
+
+    if (!payment) {
+        throw new ApiError(404, "Payment not found");
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, payment, "Payment details fetched successfully")
     );
 });
 
@@ -1157,6 +1230,7 @@ export {
     getWalletBalance,
     getWalletTransaction,
     getTransactionDetails,
+    getPaymentDetails,
     getCreatorEarnings,
     getPlayerEarnings,
     getUserNotifications,

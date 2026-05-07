@@ -16,7 +16,7 @@ const NotificationSchema = new Schema({
     },
     type: {
         type: String,
-        enum: ["match_update", "payment", "system"],
+        enum: ["tournament_update", "payment", "system"],
         default: "system",
     },
     read: {

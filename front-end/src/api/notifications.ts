@@ -11,7 +11,7 @@ export interface NotificationItem {
   _id: string;
   title: string;
   body: string;
-  type: "match_update" | "payment" | "system";
+  type: "tournament_update" | "payment" | "system";
   read: boolean;
   createdAt: string;
 }

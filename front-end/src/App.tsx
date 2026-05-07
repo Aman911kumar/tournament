@@ -16,6 +16,7 @@ import AddMoneyScreen from "./pages/AddMoneyScreen.tsx";
 import WithdrawScreen from "./pages/WithdrawScreen.tsx";
 import TransferMoneyScreen from "./pages/TransferMoneyScreen.tsx";
 import TransactionDetailScreen from "./pages/TransactionDetailScreen.tsx";
+import PaymentDetailScreen from "./pages/PaymentDetailScreen.tsx";
 import ProfileScreen from "./pages/ProfileScreen.tsx";
 import EditProfileScreen from "./pages/EditProfileScreen.tsx";
 import ChangePasswordScreen from "./pages/ChangePasswordScreen.tsx";
@@ -25,6 +26,7 @@ import CreateTournamentScreen from "./pages/CreateTournamentScreen.tsx";
 import CreatorDashboardScreen from "./pages/CreatorDashboardScreen.tsx";
 import PrizeDistributionScreen from "./pages/PrizeDistributionScreen.tsx";
 import AdminDashboardScreen from "./pages/AdminDashboardScreen.tsx";
+import AdminDetailScreen from "./pages/AdminDetailScreen.tsx";
 import NotificationsScreen from "./pages/NotificationsScreen.tsx";
 import SubscriptionsScreen from "./pages/SubscriptionsScreen.tsx";
 import TournamentCommentsScreen from "./pages/TournamentCommentsScreen.tsx";
@@ -73,6 +75,7 @@ const App = () => (
               <Route path="/tournament/:id/distribute-prizes" element={<PrizeDistributionScreen />} />
               <Route path="/wallet" element={<WalletScreen />} />
               <Route path="/wallet/transaction/:id" element={<TransactionDetailScreen />} />
+              <Route path="/wallet/payment/:id" element={<PaymentDetailScreen />} />
               <Route path="/wallet/add" element={<AddMoneyScreen />} />
               <Route path="/wallet/withdraw" element={<WithdrawScreen />} />
               <Route path="/wallet/transfer" element={<TransferMoneyScreen />} />
@@ -85,6 +88,7 @@ const App = () => (
               <Route path="/edit-tournament/:id" element={<CreateTournamentScreen />} />
               <Route path="/creator-dashboard" element={<CreatorDashboardScreen />} />
               <Route path="/admin" element={<AdminDashboardScreen />} />
+              <Route path="/admin/details/:section" element={<AdminDetailScreen />} />
               <Route path="/notifications" element={<NotificationsScreen />} />
               <Route path="/subscriptions" element={<SubscriptionsScreen />} />
             </Route>

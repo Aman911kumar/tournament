@@ -11,7 +11,7 @@ const getParamId = (req, key) => req.params[key] || req.params.id;
 // CREATE SUPPORT TICKET
 // ---------------------------------
 const createTicket = asyncHandler(async (req, res) => {
-    const { title, subject, description, type, tournament, match } = req.body;
+    const { title, subject, description, type, tournament } = req.body;
     const ticketTitle = title || subject;
 
     if (!ticketTitle || !description) {
@@ -23,7 +23,6 @@ const createTicket = asyncHandler(async (req, res) => {
         description,
         type,
         tournament,
-        match,
         user: req.user._id,
         status: "open"
     });

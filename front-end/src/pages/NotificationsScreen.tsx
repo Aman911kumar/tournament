@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { AlertCircle, ArrowLeft, Bell, Megaphone, RefreshCcw, Swords, Wallet } from "lucide-react";
+import { AlertCircle, ArrowLeft, Bell, Megaphone, RefreshCcw, Trophy, Wallet } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import { toast } from "@/components/ui/sonner";
 import {
@@ -13,13 +13,13 @@ import {
 import { getErrorMessage, getErrorToast } from "@/lib/page-utils";
 
 const iconColorMap: Record<string, string> = {
-  match_update: "text-destructive",
+  tournament_update: "text-destructive",
   payment: "text-accent",
   system: "text-neon-pink",
 };
 
 const iconMap = {
-  match_update: Swords,
+  tournament_update: Trophy,
   payment: Wallet,
   system: Megaphone,
 };

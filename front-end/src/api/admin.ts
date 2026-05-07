@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import type { ApiResponse } from "./client";
 
 export interface AdminApiResponse {
   statusCode: number;
@@ -23,6 +24,10 @@ export interface CountBucket {
   count: number;
 }
 
+export interface AmountBucket extends CountBucket {
+  amount: number;
+}
+
 export interface AdminDashboardData {
   range: {
     days: number;
@@ -41,8 +46,6 @@ export interface AdminDashboardData {
     runningTournaments: number;
     completedTournaments: number;
     teams: number;
-    matches: number;
-    finishedMatches: number;
     registrations: number;
     verifiedGameAccounts: number;
     openTickets: number;
@@ -51,6 +54,13 @@ export interface AdminDashboardData {
     walletCredits: number;
     walletDebits: number;
     netWalletFlow: number;
+    platformFees: number;
+    platformFeeTransactionCount: number;
+    ledgerTransactions: number;
+    pendingRazorpayPayments: number;
+    failedRazorpayPayments: number;
+    pendingCreatorRequests: number;
+    adminAuditCount: number;
   };
   charts: {
     usersByDay: DailyCount[];
@@ -60,13 +70,111 @@ export interface AdminDashboardData {
     tournamentsByGame: CountBucket[];
     paymentsByStatus: CountBucket[];
     usersByRole: CountBucket[];
+    platformFeesByCategory: AmountBucket[];
   };
   tables: {
     topCreators: TopCreator[];
     recentTournaments: RecentTournament[];
     recentUsers: RecentUser[];
     recentTickets: RecentTicket[];
+    creatorRequests: RecentUser[];
+    recentAdminAuditLogs: AdminAuditLog[];
+    recentFinanceTransactions: AdminFinanceTransaction[];
   };
+}
+
+export interface AdminWithdrawalRequest {
+  _id: string;
+  user?: {
+    _id: string;
+    username?: string;
+    phone_number?: string;
+    email?: string;
+  };
+  amount: number;
+  currency: string;
+  provider: string;
+  providerPaymentId?: string;
+  providerOrderId?: string;
+  status: "pending" | "success" | "failed" | "cancelled" | "refunded" | "initiated";
+  meta?: {
+    purpose?: string;
+    method?: string;
+    destination?: string;
+    walletTransactionId?: string;
+    walletTransactionRef?: string;
+    requestedAt?: string;
+    adminPaidAt?: string;
+    adminUpdatedAt?: string;
+    payoutReference?: string;
+    payoutStatus?: string;
+    failureReason?: string;
+    refundTransactionId?: string;
+    note?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AdminWithdrawalUpdateStatus = "success" | "failed" | "cancelled";
+
+export interface AdminCollectionSummary {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export interface AdminCollectionRecords {
+  collection: string;
+  label: string;
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+  records: Record<string, unknown>[];
+}
+
+export interface AdminAuditLog {
+  _id: string;
+  actor?: {
+    username?: string;
+    phone_number?: string;
+    email?: string;
+  };
+  targetUser?: {
+    username?: string;
+    phone_number?: string;
+    email?: string;
+  };
+  action: string;
+  entity: string;
+  note?: string;
+  createdAt?: string;
+}
+
+export interface AdminFinanceTransaction {
+  _id: string;
+  transactionId: string;
+  debitAccount?: string;
+  creditAccount?: string;
+  category?: string;
+  referenceId?: string;
+  amount?: number;
+  platformFee?: number;
+  netAmount?: number;
+  status?: string;
+  fromUser?: {
+    username?: string;
+    phone_number?: string;
+    email?: string;
+  } | null;
+  toUser?: {
+    username?: string;
+    phone_number?: string;
+    email?: string;
+  } | null;
+  createdAt?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TopCreator {
@@ -89,6 +197,9 @@ export interface RecentTournament {
   status: string;
   entryFee?: number;
   prizePool?: number;
+  prizeMode?: "position" | "kill" | "both";
+  killPrizeAmount?: number;
+  prizeDistribution?: { position: number; prizeAmount: number }[];
   maxPlayers?: number;
   startAt?: string;
   organizer?: {
@@ -106,6 +217,12 @@ export interface RecentUser {
   phone_number?: string;
   email?: string;
   role?: string[];
+  creatorRequest?: {
+    status?: "none" | "pending" | "approved" | "rejected" | "removed";
+    requestedAt?: string;
+    reviewedAt?: string;
+    note?: string;
+  };
   isActive?: boolean;
   createdAt?: string;
 }
@@ -124,6 +241,60 @@ export interface RecentTicket {
 
 export async function getAdminDashboard(days = 30): Promise<AdminApiResponse> {
   return apiFetch(`/admin/dashboard?days=${days}`, {
+    method: "GET",
+    credentials: "include",
+  });
+}
+
+export async function getAdminWithdrawals(status: "pending" | "all" = "pending") {
+  return apiFetch<ApiResponse<AdminWithdrawalRequest[]>>(`/admin/withdrawals?status=${status}`, {
+    method: "GET",
+    credentials: "include",
+  });
+}
+
+export async function updateWithdrawalStatus(
+  id: string,
+  payload: { status: AdminWithdrawalUpdateStatus; payoutReference?: string; note?: string; reason?: string },
+) {
+  return apiFetch<ApiResponse<AdminWithdrawalRequest>>(`/admin/withdrawals/${id}/status`, {
+    method: "PATCH",
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function markWithdrawalPaid(id: string, payload: { payoutReference?: string; note?: string }) {
+  return updateWithdrawalStatus(id, { status: "success", ...payload });
+}
+
+export async function updateCreatorPermission(id: string, payload: { status: "approved" | "rejected" | "removed"; note?: string }) {
+  return apiFetch<ApiResponse<{ user: Record<string, unknown> }>>(`/admin/users/${id}/creator`, {
+    method: "PATCH",
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAdminCollections() {
+  return apiFetch<ApiResponse<AdminCollectionSummary[]>>("/admin/collections", {
+    method: "GET",
+    credentials: "include",
+  });
+}
+
+export async function getAdminCollectionRecords(
+  collection: string,
+  params: { page?: number; limit?: number; search?: string; creatorRequestStatus?: string } = {},
+) {
+  const searchParams = new URLSearchParams({
+    page: String(params.page ?? 1),
+    limit: String(params.limit ?? 25),
+  });
+  if (params.search) searchParams.set("search", params.search);
+  if (params.creatorRequestStatus) searchParams.set("creatorRequestStatus", params.creatorRequestStatus);
+
+  return apiFetch<ApiResponse<AdminCollectionRecords>>(`/admin/collections/${collection}?${searchParams.toString()}`, {
     method: "GET",
     credentials: "include",
   });

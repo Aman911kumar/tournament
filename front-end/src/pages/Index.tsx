@@ -6,7 +6,7 @@ import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { getMyTournamentRegistrations, getTournaments, Tournament } from "@/api/tournaments";
 import { getCreators, CreatorChannel } from "@/api/creators";
-import { formatCurrency } from "@/lib/page-utils";
+import { formatPrizeSummary } from "@/lib/page-utils";
 
 import gameFreefire from "@/assets/game-freefire.jpg";
 import gameBgmi from "@/assets/game-bgmi.jpg";
@@ -30,16 +30,7 @@ const gameLabels: Record<string, string> = {
 const getRegistrationTournamentId = (registration: Awaited<ReturnType<typeof getMyTournamentRegistrations>>[number]) =>
   typeof registration.tournament === "string" ? registration.tournament : registration.tournament?._id;
 
-const getPrizeSummary = (tournament?: Tournament) => {
-  if (!tournament) return formatCurrency(0);
-  const prizeMode = tournament.prizeMode ?? "position";
-  const positionPrize = Number(tournament.prizePool || 0);
-  const killPrize = Number(tournament.killPrizeAmount || 0);
-
-  if (prizeMode === "kill") return `${formatCurrency(killPrize)}/kill`;
-  if (prizeMode === "both") return `${formatCurrency(positionPrize)} + ${formatCurrency(killPrize)}/kill`;
-  return formatCurrency(positionPrize);
-};
+const getPrizeSummary = (tournament?: Tournament) => formatPrizeSummary(tournament);
 
 const Index = () => {
   const navigate = useNavigate();

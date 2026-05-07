@@ -11,6 +11,37 @@ export const formatCurrency = (value: number | string) => {
   return `${sign}₹${Math.abs(numberValue).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 };
 
+type PrizeSummaryInput = {
+  prizePool?: unknown;
+  prizeMode?: unknown;
+  killPrizeAmount?: unknown;
+};
+
+export const formatPrizeSummary = (tournament?: PrizeSummaryInput | null, options: { killPrefix?: boolean } = {}) => {
+  if (!tournament) return formatCurrency(0);
+
+  const prizeMode = String(tournament.prizeMode || "position");
+  const positionPrize = Number(tournament.prizePool || 0);
+  const killPrize = Number(tournament.killPrizeAmount || 0);
+  const killText = `${formatCurrency(killPrize)}/kill`;
+
+  if (prizeMode === "kill") return options.killPrefix ? `Kill: ${killText}` : killText;
+  if (prizeMode === "both") return `${formatCurrency(positionPrize)} + ${killText}`;
+  return formatCurrency(positionPrize);
+};
+
+export const getPrizeSortValue = (tournament?: PrizeSummaryInput | null) => {
+  if (!tournament) return 0;
+
+  const prizeMode = String(tournament.prizeMode || "position");
+  const positionPrize = Number(tournament.prizePool || 0);
+  const killPrize = Number(tournament.killPrizeAmount || 0);
+
+  if (prizeMode === "kill") return killPrize;
+  if (prizeMode === "both") return positionPrize + killPrize;
+  return positionPrize;
+};
+
 const humanizeErrorDetail = (detail: Record<string, unknown>) => {
   const field = detail.field ?? detail.path ?? detail.param ?? detail.name;
   const message = detail.message ?? detail.msg ?? detail.error ?? detail.reason;

@@ -180,7 +180,7 @@ const toIsoDateTime = (value?: string) => {
 const nowLocal = () => toDateTimeLocal(new Date().toISOString());
 
 const BASIC_RULES = [
-  "Players must join the custom room at least 10 minutes before match start.",
+  "Players must join the custom room at least 10 minutes before tournament start.",
   "Use only the registered in-game account and assigned slot.",
   "Teaming, hacking, emulator bypass, or abusive behavior leads to disqualification.",
   "Room ID and password must not be shared with unregistered players.",
@@ -331,7 +331,7 @@ const CreateTournamentScreen = () => {
       return;
     }
     if (form.roomJoinTime && new Date(form.roomJoinTime) > new Date(form.startAt)) {
-      toast.error("Invalid room join time", { description: "Room join time must be before match start time." });
+      toast.error("Invalid room join time", { description: "Room join time must be before tournament start time." });
       return;
     }
     if (usesPositionPrize && resolvedPrizeDistribution.length === 0) {
@@ -606,7 +606,7 @@ const CreateTournamentScreen = () => {
           </GlassCard>
           <GlassCard neon>
             <label className="text-xs text-muted-foreground font-heading mb-1.5 flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5" /> Match Starts
+              <Calendar className="w-3.5 h-3.5" /> Tournament Starts
             </label>
             <input type="datetime-local" value={form.startAt} onChange={(event) => update("startAt", event.target.value)} className={`${inputClass} text-foreground`} />
           </GlassCard>

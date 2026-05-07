@@ -6,7 +6,7 @@ import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { getMyTournamentRegistrations, Tournament, TournamentRegistration } from "@/api/tournaments";
 import { toast } from "@/components/ui/sonner";
-import { formatCurrency, getErrorMessage, getErrorToast } from "@/lib/page-utils";
+import { formatCurrency, formatPrizeSummary, getErrorMessage, getErrorToast } from "@/lib/page-utils";
 
 const gameLabels: Record<string, string> = {
   freefire: "Free Fire",
@@ -138,7 +138,7 @@ const MyTournamentsScreen = () => {
                 <div className="glass rounded-lg p-2 min-w-0">
                   <Trophy className="w-3.5 h-3.5 text-accent mb-1" />
                   <p className="text-[10px] text-muted-foreground">Prize</p>
-                  <p className="text-[10px] font-heading font-bold truncate">{formatCurrency(Number(tournament.prizePool || 0))}</p>
+                  <p className="text-[10px] font-heading font-bold truncate">{formatPrizeSummary(tournament)}</p>
                 </div>
               </div>
             </GlassCard>

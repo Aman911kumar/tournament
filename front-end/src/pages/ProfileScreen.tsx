@@ -78,7 +78,7 @@ const ProfileScreen = () => {
   const stats = [
     { label: "Balance", value: formatCurrency(profile?.walletBalance ?? 0) },
     { label: "Won", value: formatCurrency(profile?.stats?.amount_won ?? profile?.playerEarnings ?? 0) },
-    { label: "Matches", value: profile?.stats?.matchesPlayed ?? 0 },
+    { label: "Tournaments", value: profile?.stats?.tournamentsPlayed ?? profile?.stats?.matchesPlayed ?? 0 },
   ];
 
   const fetchProfile = useCallback(async () => {
@@ -142,6 +142,8 @@ const ProfileScreen = () => {
     ? [{ icon: ShieldCheck, label: "Admin Panel", route: "/admin" }]
     : [];
   const isCreator = Boolean(profile?.role?.includes("creator"));
+  const creatorRequestStatus = profile?.creatorRequest?.status ?? "none";
+  const creatorRequestPending = creatorRequestStatus === "pending";
   const passwordLabel = profile?.socialProvider && profile.passwordLoginEnabled !== true ? "Set Password" : "Change Password";
   const accountMenuItems = [
     menuItems[0],
@@ -256,9 +258,11 @@ const ProfileScreen = () => {
               </div>
               <div className="min-w-0 text-left">
                 <span className="text-sm font-heading font-medium truncate block">
-                  {creatorLoading ? "Updating..." : isCreator ? "Leave Creator" : "Become a Creator"}
+                  {creatorLoading ? "Updating..." : isCreator ? "Leave Creator" : creatorRequestPending ? "Creator Request Pending" : "Request Creator Access"}
                 </span>
-                <span className="text-[10px] text-muted-foreground">Platform keeps 10% from paid entries</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {isCreator ? "Platform keeps 10% from paid entries" : creatorRequestPending ? "Admin approval is required before creating tournaments" : "Admin approval is required"}
+                </span>
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />

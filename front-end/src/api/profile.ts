@@ -34,6 +34,12 @@ export interface User {
   playerEarnings?: number;
   playerMonthlyChange?: number;
   role: string[];
+  creatorRequest?: {
+    status: "none" | "pending" | "approved" | "rejected" | "removed";
+    requestedAt?: string | null;
+    reviewedAt?: string | null;
+    note?: string;
+  };
   lastLoginAt: string;
   isActive: boolean;
   createdAt: string;
@@ -46,6 +52,7 @@ export interface User {
 
 export interface Stats {
   matchesPlayed: number;
+  tournamentsPlayed?: number;
   kills: number;
   amount_won: number;
 }

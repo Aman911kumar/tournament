@@ -20,7 +20,7 @@ import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { deleteTournament, getTournaments, Tournament, updateTournamentStatus } from "@/api/tournaments";
 import { getMyProfile } from "@/api/profile";
-import { formatCurrency, getErrorToast } from "@/lib/page-utils";
+import { formatCurrency, formatPrizeSummary, getErrorToast } from "@/lib/page-utils";
 import { toast } from "@/components/ui/sonner";
 
 const statusFilters = ["all", "live", "upcoming", "completed", "draft"] as const;
@@ -340,7 +340,7 @@ const CreatorDashboardScreen = () => {
                     </span>
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {tournament.game} - {formatCurrency(Number(tournament.prizePool || 0))} prize
+                    {tournament.game} - {formatPrizeSummary(tournament)} prize
                   </p>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[10px] text-muted-foreground">
                     <span>{Number(tournament.registrationCount || 0)}/{tournament.maxPlayers} slots</span>

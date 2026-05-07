@@ -3,7 +3,6 @@ import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import { Tournament } from '../models/tournament.model.js';
 import { Team } from '../models/team.model.js';
-import { Match } from '../models/match.model.js';
 import { Channel } from '../models/channel.model.js';
 import { Registration } from '../models/registration.model.js';
 import { Wallet } from '../models/wallet.model.js';
@@ -361,7 +360,10 @@ const buildTournamentPayload = (body, organizerId, channelId = null) => {
 // GET ALL TOURNAMENTS
 // ---------------------------------
 const getAllTournaments = asyncHandler(async (req, res) => {
-    const { limit = 50, skip = 0, search, status, game, organizer, channel } = req.query;
+    const { limit = 20, page, skip = 0, search, status, game, organizer, channel } = req.query;
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const safePage = Math.max(Number(page) || 1, 1);
+    const safeSkip = page ? (safePage - 1) * safeLimit : Math.max(Number(skip) || 0, 0);
     const query = {};
 
     if (search && search.trim() !== "") {
@@ -372,26 +374,49 @@ const getAllTournaments = asyncHandler(async (req, res) => {
     if (!status && req.query.excludeCompleted === "true") query.status = { $ne: "completed" };
     if (game) query.game = normalizeGame(game);
     if (req.query.entryFee === "0") query.entryFee = 0;
-    if (organizer && mongoose.Types.ObjectId.isValid(organizer)) query.organizer = organizer;
-    if (channel && mongoose.Types.ObjectId.isValid(channel)) query.channel = channel;
+    if (organizer && mongoose.Types.ObjectId.isValid(organizer)) query.organizer = new mongoose.Types.ObjectId(organizer);
+    if (channel && mongoose.Types.ObjectId.isValid(channel)) query.channel = new mongoose.Types.ObjectId(channel);
 
     const tournaments = await Tournament.find(query)
         .populate("organizer", "username avatar stats")
         .populate("channel", "name handle avatar")
         .populate("results.player", "username avatar")
         .sort({ createdAt: -1, startAt: -1 })
-        .skip(Number(skip))
-        .limit(Number(limit));
+        .skip(safeSkip)
+        .limit(safeLimit);
     const syncedTournaments = await Promise.all(
         tournaments.map((tournament) => syncTournamentLifecycle(tournament, { save: true }))
     );
     const participantStats = await getParticipantStats(syncedTournaments.map((tournament) => tournament._id));
     const resultDetails = await getResultRegistrationDetails(syncedTournaments.map((tournament) => tournament._id));
 
-    const total = await Tournament.countDocuments(query);
+    const [total, statusCounts, gameCounts] = await Promise.all([
+        Tournament.countDocuments(query),
+        Tournament.aggregate([
+            { $match: query },
+            { $group: { _id: "$status", count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+        ]),
+        Tournament.aggregate([
+            { $match: query },
+            { $group: { _id: "$game", count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+        ])
+    ]);
 
     return res.status(200).json(
-        new ApiResponse(200, { tournaments: syncedTournaments.map((tournament) => serializeTournament(tournament, participantStats, resultDetails)), total }, "Tournaments fetched successfully")
+        new ApiResponse(200, {
+            tournaments: syncedTournaments.map((tournament) => serializeTournament(tournament, participantStats, resultDetails)),
+            total,
+            page: page ? safePage : Math.floor(safeSkip / safeLimit) + 1,
+            limit: safeLimit,
+            pages: Math.ceil(total / safeLimit),
+            hasMore: safeSkip + syncedTournaments.length < total,
+            aggregations: {
+                byStatus: statusCounts,
+                byGame: gameCounts,
+            }
+        }, "Tournaments fetched successfully")
     );
 });
 
@@ -566,7 +591,6 @@ const deleteTournament = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Tournament has paid registrations and cannot be deleted by creator");
     }
 
-    await Match.deleteMany({ tournament: tournamentId });
     await Team.deleteMany({ tournament: tournamentId });
     await Registration.deleteMany({ tournament: tournamentId });
     await tournament.deleteOne();

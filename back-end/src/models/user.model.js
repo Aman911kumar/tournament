@@ -73,6 +73,22 @@ const userSchema = new mongoose.Schema({
         enum: ['user', 'creator', 'admin', 'banned'],
         default: ['user']
     },
+    creatorRequest: {
+        status: {
+            type: String,
+            enum: ["none", "pending", "approved", "rejected", "removed"],
+            default: "none",
+            index: true,
+        },
+        requestedAt: { type: Date, default: null },
+        reviewedAt: { type: Date, default: null },
+        reviewedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
+        note: { type: String, trim: true, default: "" },
+    },
     lastLoginAt: {
         type: Date,
         default: null

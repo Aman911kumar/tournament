@@ -29,14 +29,23 @@ const paymentSchema = new mongoose.Schema({
     },
     providerPaymentId: {
         type: String,
-        required: true,
+        default: null,
         unique: true,
+        sparse: true,
         index:true,
+        trim: true
+    },
+    providerOrderId: {
+        type: String,
+        default: null,
+        unique: true,
+        sparse: true,
+        index: true,
         trim: true
     },
     status: {
         type: String,
-        enum: ['initiated', 'success', 'failed', 'refunded'],
+        enum: ['initiated', 'pending', 'success', 'failed', 'cancelled', 'refunded'],
         default: 'initiated',
         index: true
     },
@@ -47,8 +56,9 @@ const paymentSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Optional validation: prevent editing after success/failure
-paymentSchema.pre('save', function (next) {
-    if (!this.isNew && ['success', 'failed'].includes(this.status)) {
+paymentSchema.pre('save', async function (next) {
+    const existing = this.isNew ? null : await this.constructor.findById(this._id).select("status").lean();
+    if (['success', 'failed', 'cancelled', 'refunded'].includes(existing?.status)) {
         return next(new Error('Cannot modify a completed payment record.'));
     }
     next();

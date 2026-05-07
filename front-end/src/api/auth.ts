@@ -56,6 +56,7 @@ export type AuthResponse = ApiResponse<{
 
 export interface Stats {
   matchesPlayed: number;
+  tournamentsPlayed?: number;
   kills: number;
   amount_won: number;
 }

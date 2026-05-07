@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import errorHandler from './src/middlewares/errorHandler.middleware.js';
 import ApiError from './src/utils/ApiError.js';
 import path from "path";
+import { expireStaleRazorpayPayments } from './src/services/paymentExpiry.service.js';
 
 const __dirname = path.resolve();
 const distPath = path.join(__dirname, "dist");
@@ -81,6 +82,15 @@ app.use(errorHandler);
 
 connect_db()
     .then(() => {
+        expireStaleRazorpayPayments().catch((err) => {
+            console.error("Initial Razorpay payment expiry failed:", err);
+        });
+        setInterval(() => {
+            expireStaleRazorpayPayments().catch((err) => {
+                console.error("Razorpay payment expiry failed:", err);
+            });
+        }, 60 * 1000);
+
         app.listen(PORT, () => {
             console.log(`Server is listening on http://localhost:${PORT}`);
         });

@@ -66,7 +66,7 @@ const TournamentDetailScreen = () => {
 
   const rules = tournament?.rules
     ? tournament.rules.split("\n").filter(Boolean)
-    : ["Match starts at scheduled time.", "Disputes are resolved by admin decision."];
+    : ["Tournament starts at scheduled time.", "Disputes are resolved by admin decision."];
   const prize = Number(tournament?.prizePool || 0);
   const prizeMode = tournament?.prizeMode ?? "position";
   const killPrizeAmount = Number(tournament?.killPrizeAmount || 0);

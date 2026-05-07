@@ -2,12 +2,6 @@ import mongoose from "mongoose";
 
 const reportSchema = new mongoose.Schema(
     {
-        match: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Match",
-            required: true,
-            index: true
-        },
         tournament: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Tournament",
@@ -43,6 +37,6 @@ const reportSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-reportSchema.index({ tournament: 1, match: 1, createdAt: -1 });
+reportSchema.index({ tournament: 1, createdAt: -1 });
 
 export const Report = mongoose.model("Report", reportSchema);

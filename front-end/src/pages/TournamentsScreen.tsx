@@ -4,8 +4,8 @@ import { motion } from "framer-motion";
 import { AlertCircle, Calendar, Crosshair, DollarSign, RefreshCcw, Search, Shield, SlidersHorizontal, Trophy, Users } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import { formatCurrency, getErrorMessage } from "@/lib/page-utils";
-import { getMyTournamentRegistrations, getTournaments, Tournament } from "@/api/tournaments";
+import { formatCurrency, formatPrizeSummary, getErrorMessage, getPrizeSortValue } from "@/lib/page-utils";
+import { getMyTournamentRegistrations, getTournamentPage, Tournament } from "@/api/tournaments";
 
 const gameFilters = ["All", "Free Fire", "BGMI", "Valorant", "COD"];
 const feeFilters = ["All Fees", "Free", "Paid"];
@@ -36,15 +36,8 @@ const statusStyle = (status: Tournament["status"]) => {
 const getRegistrationTournamentId = (registration: Awaited<ReturnType<typeof getMyTournamentRegistrations>>[number]) =>
   typeof registration.tournament === "string" ? registration.tournament : registration.tournament?._id;
 
-const getPrizeSummary = (tournament: Tournament) => {
-  const prizeMode = tournament.prizeMode ?? "position";
-  const positionPrize = Number(tournament.prizePool || 0);
-  const killPrize = Number(tournament.killPrizeAmount || 0);
-
-  if (prizeMode === "kill") return `Kill: ${formatCurrency(killPrize)}/kill`;
-  if (prizeMode === "both") return `${formatCurrency(positionPrize)} + ${formatCurrency(killPrize)}/kill`;
-  return formatCurrency(positionPrize);
-};
+const getPrizeSummary = (tournament: Tournament) => formatPrizeSummary(tournament, { killPrefix: true });
+const PAGE_SIZE = 12;
 
 const TournamentsScreen = () => {
   const navigate = useNavigate();
@@ -56,35 +49,50 @@ const TournamentsScreen = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [joinedTournamentIds, setJoinedTournamentIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadTournaments = useCallback(async () => {
+  const loadTournaments = useCallback(async (nextPage = 1) => {
     try {
-      setLoading(true);
+      if (nextPage === 1) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
       setError(null);
       const feeFilter = activeFee === "Free" ? "free" : activeFee === "Paid" ? "paid" : "all";
       const gameFilter = activeGame === "COD" ? gameMap.COD : activeGame;
       const [data, registrations] = await Promise.all([
-        getTournaments({
+        getTournamentPage({
           game: gameFilter,
           type: feeFilter,
           sort: sortMap[activeSort],
           search: searchQuery.trim() || undefined,
           excludeCompleted: true,
+          page: nextPage,
+          limit: PAGE_SIZE,
         }),
         getMyTournamentRegistrations().catch(() => []),
       ]);
-      setTournaments(data);
+      setTournaments((previous) => nextPage === 1 ? data.tournaments : [...previous, ...data.tournaments]);
+      setPage(data.page ?? nextPage);
+      setHasMore(Boolean(data.hasMore));
       setJoinedTournamentIds(new Set(registrations.map(getRegistrationTournamentId).filter(Boolean)));
     } catch (err) {
       setError(getErrorMessage(err, "Failed to load tournaments."));
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [activeFee, activeGame, activeSort, searchQuery]);
 
   useEffect(() => {
-    loadTournaments();
+    setTournaments([]);
+    setPage(1);
+    setHasMore(false);
+    loadTournaments(1);
   }, [loadTournaments]);
 
   const filtered = useMemo(() => {
@@ -107,8 +115,8 @@ const TournamentsScreen = () => {
       );
     }
 
-    if (activeSort === "Prize Up") return [...list].sort((a, b) => Number(a.prizePool || 0) - Number(b.prizePool || 0));
-    if (activeSort === "Prize Down") return [...list].sort((a, b) => Number(b.prizePool || 0) - Number(a.prizePool || 0));
+    if (activeSort === "Prize Up") return [...list].sort((a, b) => getPrizeSortValue(a) - getPrizeSortValue(b));
+    if (activeSort === "Prize Down") return [...list].sort((a, b) => getPrizeSortValue(b) - getPrizeSortValue(a));
     return [...list].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
   }, [activeFee, activeGame, activeSort, searchQuery, tournaments]);
 
@@ -208,7 +216,7 @@ const TournamentsScreen = () => {
             <AlertCircle className="w-10 h-10 mx-auto text-destructive mb-2" />
             <p className="text-sm font-heading">Could not load tournaments</p>
             <p className="text-xs text-muted-foreground mt-1">{error}</p>
-            <button onClick={loadTournaments} className="mt-4 inline-flex items-center gap-1.5 text-xs text-primary font-heading">
+            <button onClick={() => loadTournaments(1)} className="mt-4 inline-flex items-center gap-1.5 text-xs text-primary font-heading">
               <RefreshCcw className="w-3.5 h-3.5" /> Retry
             </button>
           </GlassCard>
@@ -270,6 +278,12 @@ const TournamentsScreen = () => {
             </GlassCard>
           )})
         ))}
+
+        {!loading && !error && hasMore && (
+          <NeonButton full variant="blue" className="text-xs py-2" onClick={() => loadTournaments(page + 1)} disabled={loadingMore}>
+            {loadingMore ? "LOADING..." : "LOAD MORE"}
+          </NeonButton>
+        )}
       </div>
 
     </div>

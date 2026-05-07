@@ -3,7 +3,6 @@ import authRoutes from "./auth.routes.js";
 import gameAccount from "./gameAccount.routes.js"
 import userRoutes from "./user.routes.js";
 import tournamentRoutes from "./tournament.routes.js";
-import matchRoutes from "./match.routes.js";
 import teamRoutes from "./team.routes.js";
 import leaderboardRoutes from "./leaderboard.routes.js";
 import supportRoutes from "./support.routes.js";
@@ -37,9 +36,6 @@ router.use("/tournaments", tournamentRoutes);
 
 // Creator channel routes
 router.use("/channels", channelRoutes);
-
-// Match routes
-router.use("/matches", matchRoutes);
 
 // Team routes
 router.use("/teams", teamRoutes);

@@ -18,7 +18,7 @@ import NeonButton from "@/components/NeonButton";
 import { followCreator, getCreatorProfile, unfollowCreator, CreatorProfileData } from "@/api/creators";
 import { Tournament } from "@/api/tournaments";
 import { toast } from "@/components/ui/sonner";
-import { formatCurrency, getErrorMessage, getErrorToast } from "@/lib/page-utils";
+import { formatCurrency, formatPrizeSummary, getErrorMessage, getErrorToast } from "@/lib/page-utils";
 
 const gameLabels: Record<string, string> = {
   freefire: "Free Fire",
@@ -247,7 +247,7 @@ const CreatorProfileScreen = () => {
                           </p>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-xs font-heading font-bold text-accent">{formatCurrency(Number(tournament.prizePool || 0))}</p>
+                          <p className="text-xs font-heading font-bold text-accent">{formatPrizeSummary(tournament)}</p>
                           <span className={`text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full ${statusClass[tournament.status]}`}>
                             {tournament.status}
                           </span>

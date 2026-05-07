@@ -3,8 +3,6 @@ import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import { Leaderboard } from '../models/leaderboad.model.js';
 import { Tournament } from '../models/tournament.model.js';
-import { Match } from '../models/match.model.js';
-import { Team } from '../models/team.model.js';
 import mongoose from 'mongoose';
 
 // ---------------------------------
@@ -68,39 +66,27 @@ const getLeaderboardByTournament = asyncHandler(async (req, res) => {
 });
 
 
-// ---------------------------------
-// UPDATE LEADERBOARD (After Match Results)
-// ---------------------------------
 const updateLeaderboard = asyncHandler(async (tournamentId) => {
     if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
         throw new ApiError(400, "Invalid tournament ID");
     }
 
-    const matches = await Match.find({ tournament: tournamentId, status: "finished" });
+    const tournament = await Tournament.findById(tournamentId).select("results");
+    if (!tournament?.results?.length) return;
 
-    if (!matches.length) return;
-
-    // Calculate points for each team
-    const leaderboardMap = {};
-
-    for (const match of matches) {
-        if (!match.result) continue;
-
-        const { scores } = match.result; // Example: [{ teamId, points }]
-        for (const score of scores) {
-            const teamId = score.teamId.toString();
-            leaderboardMap[teamId] = (leaderboardMap[teamId] || 0) + (score.points || 0);
-        }
-    }
-
-    // Upsert leaderboard
-    for (const [teamId, points] of Object.entries(leaderboardMap)) {
-        await Leaderboard.findOneAndUpdate(
-            { tournament: tournamentId, team: teamId },
-            { points },
-            { upsert: true, new: true }
-        );
-    }
+    await Leaderboard.findOneAndUpdate(
+        { tournament: tournamentId },
+        {
+            tournament: tournamentId,
+            entries: tournament.results.map((result) => ({
+                user: result.player,
+                points: Number(result.points || 0),
+                kills: Number(result.kills || 0),
+                rank: Number(result.position || 0),
+            })),
+        },
+        { upsert: true, new: true }
+    );
 });
 
 // ---------------------------------
