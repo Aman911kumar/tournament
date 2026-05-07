@@ -9,6 +9,7 @@ import { Wallet } from '../models/wallet.model.js';
 import { WalletTransaction } from '../models/walletTransaction.model.js';
 import { Ledger } from '../models/ledger.model.js';
 import { GameAccount } from '../models/gameAccount.model.js';
+import { Notification } from '../models/notification.model.js';
 import { hasRole } from '../middlewares/auth.middleware.js';
 import { calculateFeeSplit, getPlatformFeePercent, roundCurrency } from '../utils/money.js';
 import { applyPrizeSettings, assignTournamentResults, updatePrizePool } from '../services/tournamentPrize.service.js';
@@ -16,6 +17,11 @@ import mongoose from 'mongoose';
 import { v4 as uuidv4 } from "uuid";
 
 const getParamId = (req, key) => req.params[key] || req.params.id;
+
+const hasRealPhoneNumber = (user) => {
+    const phoneNumber = String(user?.phone_number || "").trim();
+    return Boolean(phoneNumber) && !/^(google|facebook):/i.test(phoneNumber);
+};
 
 const parseDate = (value, fieldName) => {
     const date = new Date(value);
@@ -252,7 +258,42 @@ const getResultRegistrationDetails = async (tournamentIds) => {
     return details;
 };
 
-const serializeTournament = (tournament, participantStats = new Map(), resultDetails = new Map()) => {
+const hasRoomDetailsChanged = (before = {}, after = {}) => {
+    const keys = ["roomId", "roomPass", "roomJoinTime"];
+    return keys.some((key) => String(before?.[key] || "") !== String(after?.[key] || ""));
+};
+
+const notifyJoinedUsersAboutRoom = async (tournament) => {
+    const plain = tournament?.toObject?.() || tournament;
+    const room = plain.room_details || {};
+
+    if (!room.roomId && !room.roomPass && !room.roomJoinTime) return;
+
+    const registrations = await Registration.find({
+        tournament: plain._id,
+        status: { $in: ["paid", "confirmed"] }
+    }).select("user team").lean();
+
+    const recipients = new Set();
+    registrations.forEach((registration) => {
+        if (registration.user) recipients.add(registration.user.toString());
+        (registration.team || []).forEach((member) => recipients.add(member.toString()));
+    });
+
+    if (recipients.size === 0) return;
+
+    await Notification.insertMany(
+        [...recipients].map((user) => ({
+            user,
+            title: "Tournament room details updated",
+            body: `Room details are available for ${plain.title}. Open the tournament page to view room ID and password.`,
+            type: "tournament_update",
+        })),
+        { ordered: false }
+    );
+};
+
+const serializeTournament = (tournament, participantStats = new Map(), resultDetails = new Map(), options = {}) => {
     const plain = tournament?.toObject?.() || tournament;
     const stats = participantStats.get(plain._id?.toString?.() || String(plain._id)) || {};
     const receivedMoney = Number(plain.organizerEarnings || stats.organizerEarnings || 0);
@@ -270,7 +311,7 @@ const serializeTournament = (tournament, participantStats = new Map(), resultDet
         };
     });
 
-    return {
+    const serialized = {
         ...plain,
         results,
         organizerEarnings: receivedMoney,
@@ -278,8 +319,26 @@ const serializeTournament = (tournament, participantStats = new Map(), resultDet
         receivedMoney,
         paidMoney,
         registrationCount: stats.registrationCount || 0,
-        participantCount: stats.participantCount || 0
+        participantCount: stats.participantCount || 0,
+        trendingScore: Number(
+            (
+                Number(plain.views || 0) * 0.5 +
+                Number(stats.participantCount || stats.registrationCount || 0) * 8 +
+                Number(plain.prizePool || 0) * 0.05 +
+                (plain.status === "running" ? 120 : plain.status === "open" ? 80 : 0)
+            ).toFixed(2)
+        )
     };
+
+    if (options.hideRoomCredentials && serialized.room_details) {
+        serialized.room_details = {
+            roomJoinTime: serialized.room_details.roomJoinTime,
+            hasRoomId: Boolean(serialized.room_details.roomId),
+            hasRoomPass: Boolean(serialized.room_details.roomPass),
+        };
+    }
+
+    return serialized;
 };
 
 const buildTournamentPayload = (body, organizerId, channelId = null) => {
@@ -360,7 +419,7 @@ const buildTournamentPayload = (body, organizerId, channelId = null) => {
 // GET ALL TOURNAMENTS
 // ---------------------------------
 const getAllTournaments = asyncHandler(async (req, res) => {
-    const { limit = 20, page, skip = 0, search, status, game, organizer, channel } = req.query;
+    const { limit = 20, page, skip = 0, search, status, game, organizer, channel, sort = "latest" } = req.query;
     const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
     const safePage = Math.max(Number(page) || 1, 1);
     const safeSkip = page ? (safePage - 1) * safeLimit : Math.max(Number(skip) || 0, 0);
@@ -377,11 +436,20 @@ const getAllTournaments = asyncHandler(async (req, res) => {
     if (organizer && mongoose.Types.ObjectId.isValid(organizer)) query.organizer = new mongoose.Types.ObjectId(organizer);
     if (channel && mongoose.Types.ObjectId.isValid(channel)) query.channel = new mongoose.Types.ObjectId(channel);
 
+    const sortMode = String(sort || "latest");
+    const sortConfig = sortMode === "trending"
+        ? { status: 1, views: -1, prizePool: -1, startAt: 1, createdAt: -1 }
+        : sortMode === "prize_desc"
+            ? { prizePool: -1, killPrizeAmount: -1, createdAt: -1 }
+            : sortMode === "prize_asc"
+                ? { prizePool: 1, killPrizeAmount: 1, createdAt: -1 }
+                : { createdAt: -1, startAt: -1 };
+
     const tournaments = await Tournament.find(query)
         .populate("organizer", "username avatar stats")
         .populate("channel", "name handle avatar")
         .populate("results.player", "username avatar")
-        .sort({ createdAt: -1, startAt: -1 })
+        .sort(sortConfig)
         .skip(safeSkip)
         .limit(safeLimit);
     const syncedTournaments = await Promise.all(
@@ -406,7 +474,7 @@ const getAllTournaments = asyncHandler(async (req, res) => {
 
     return res.status(200).json(
         new ApiResponse(200, {
-            tournaments: syncedTournaments.map((tournament) => serializeTournament(tournament, participantStats, resultDetails)),
+            tournaments: syncedTournaments.map((tournament) => serializeTournament(tournament, participantStats, resultDetails, { hideRoomCredentials: true })),
             total,
             page: page ? safePage : Math.floor(safeSkip / safeLimit) + 1,
             limit: safeLimit,
@@ -439,9 +507,26 @@ const getTournamentById = asyncHandler(async (req, res) => {
     await syncTournamentLifecycle(tournament, { save: true });
     const participantStats = await getParticipantStats([tournament._id]);
     const resultDetails = await getResultRegistrationDetails([tournament._id]);
+    let canViewRoomCredentials = false;
+
+    if (req.user) {
+        canViewRoomCredentials =
+            hasRole(req.user, "admin") ||
+            tournament.organizer?._id?.toString?.() === req.user._id.toString() ||
+            tournament.organizer?.toString?.() === req.user._id.toString() ||
+            Boolean(await Registration.exists({
+                tournament: tournamentId,
+                status: { $in: ["paid", "confirmed"] },
+                $or: [{ user: req.user._id }, { team: req.user._id }]
+            }));
+    }
 
     return res.status(200).json(
-        new ApiResponse(200, serializeTournament(tournament, participantStats, resultDetails), "Tournament fetched successfully")
+        new ApiResponse(
+            200,
+            serializeTournament(tournament, participantStats, resultDetails, { hideRoomCredentials: !canViewRoomCredentials }),
+            "Tournament fetched successfully"
+        )
     );
 });
 
@@ -470,6 +555,7 @@ const updateTournament = asyncHandler(async (req, res) => {
 
     const tournament = await Tournament.findById(tournamentId);
     if (!tournament) throw new ApiError(404, "Tournament not found");
+    const previousRoomDetails = { ...(tournament.room_details?.toObject?.() || tournament.room_details || {}) };
 
     if (!userCanManageTournament(req.user, tournament)) {
         throw new ApiError(403, "Not authorized to update this tournament");
@@ -557,6 +643,9 @@ const updateTournament = asyncHandler(async (req, res) => {
     updatePrizePool(tournament);
     await tournament.save();
     await syncTournamentLifecycle(tournament, { save: true });
+    if (hasRoomDetailsChanged(previousRoomDetails, tournament.room_details)) {
+        await notifyJoinedUsersAboutRoom(tournament);
+    }
     const participantStats = await getParticipantStats([tournament._id]);
 
     return res.status(200).json(
@@ -606,6 +695,10 @@ const deleteTournament = asyncHandler(async (req, res) => {
 const joinTournament = asyncHandler(async (req, res) => {
     const tournamentId = getParamId(req, "tournamentId");
     const { slotNumber, teamName, players = [] } = req.body;
+
+    if (!hasRealPhoneNumber(req.user)) {
+        throw new ApiError(400, "Add your phone number before joining tournaments");
+    }
 
     if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
         throw new ApiError(400, "Invalid tournament ID");

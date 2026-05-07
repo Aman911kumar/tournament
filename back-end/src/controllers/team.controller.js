@@ -29,7 +29,8 @@ const getAllTeams = asyncHandler(async (req, res) => {
     const teams = await Team.find(query)
         .sort({ createdAt: -1 })
         .skip(Number(skip))
-        .limit(Number(limit));
+        .limit(Number(limit))
+        .lean();
 
     const total = await Team.countDocuments(query);
 
@@ -94,7 +95,7 @@ const updateTeam = asyncHandler(async (req, res) => {
     const teamId = getParamId(req, "teamId");
     const updates = req.body;
 
-    const team = await Team.findById(teamId);
+    const team = await Team.findById(teamId).lean();
     if (!team) throw new ApiError(404, "Team not found");
     if (!userCanManageTeam(req.user, team)) {
         throw new ApiError(403, "Not authorized to update this team");

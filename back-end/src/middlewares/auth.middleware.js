@@ -29,7 +29,8 @@ const protect = asyncHandler(async (req, res, next) => {
         // const user = await User.findById(decodedToken?._id).select(
         //     "-password -refreshToken"
         // );
-        const user = await User.findById(decodedToken?._id);
+        const user = await User.findById(decodedToken?._id)
+            .select("_id username email phone_number avatar role isActive creatorRequest preferences walletBalance socialProvider passwordLoginEnabled dateOfBirth gender lastLoginAt createdAt updatedAt");
 
         if (!user) {
             throw new ApiError(402, "Invalid access token");
@@ -44,6 +45,28 @@ const protect = asyncHandler(async (req, res, next) => {
     } catch (error) {
         throw new ApiError(401, error?.message || "Invalid access token");
     }
+});
+
+const optionalProtect = asyncHandler(async (req, res, next) => {
+    const token =
+        req.cookies?.accessToken ||
+        req.header("Authorization")?.replace("Bearer ", "");
+
+    if (!token) return next();
+
+    try {
+        const decodedToken = jwt.verify(token, ACCESS_TOKEN_SECRET);
+        const user = await User.findById(decodedToken?._id)
+            .select("_id username email phone_number avatar role isActive creatorRequest preferences walletBalance socialProvider passwordLoginEnabled dateOfBirth gender lastLoginAt createdAt updatedAt");
+
+        if (user && user.isActive && !hasRole(user, "banned")) {
+            req.user = user;
+        }
+    } catch {
+        // Public routes should stay public; protected routes still use protect().
+    }
+
+    next();
 });
 
 // Middleware to allow only admin
@@ -61,4 +84,4 @@ const creatorOrAdmin = (req, res, next) => {
     next();
 };
 
-export { protect, admin, creatorOrAdmin, hasRole };
+export { protect, optionalProtect, admin, creatorOrAdmin, hasRole };

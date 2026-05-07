@@ -6,7 +6,7 @@ export interface CreatorUser {
   username: string;
   avatar?: { url?: string };
   role?: string[];
-  stats?: { rating?: number };
+  stats?: { rating?: number; ratingCount?: number };
 }
 
 export interface CreatorChannel {
@@ -25,6 +25,16 @@ export interface CreatorChannel {
   };
   memberCount: number;
   isActive: boolean;
+  topScore?: number;
+  ranking?: {
+    completedTournaments?: number;
+    activeTournaments?: number;
+    totalPrize?: number;
+    earnings?: number;
+    rating?: number;
+    ratingCount?: number;
+  };
+  virtual?: boolean;
 }
 
 export interface CreatorProfileData {
@@ -40,6 +50,8 @@ export const ENDPOINTS = {
   channelProfile: (id: string) => `/channels/${id}`,
   userProfile: (id: string) => `/channels/creator/${id}`,
   follow: (id: string) => `/channels/${id}/join`,
+  rateChannel: (id: string) => `/channels/${id}/rating`,
+  rateUser: (id: string) => `/channels/creator/${id}/rating`,
 };
 
 export async function getCreators() {
@@ -63,4 +75,12 @@ export async function followCreator(channelId: string) {
 
 export async function unfollowCreator(channelId: string) {
   return apiFetch<ApiResponse>(ENDPOINTS.follow(channelId), { method: "DELETE" });
+}
+
+export async function rateCreator(id: string, rating: number, mode: "channel" | "user" = "channel") {
+  const endpoint = mode === "channel" ? ENDPOINTS.rateChannel(id) : ENDPOINTS.rateUser(id);
+  return apiFetch<ApiResponse<{ creator: CreatorUser }>>(endpoint, {
+    method: "POST",
+    body: JSON.stringify({ rating }),
+  });
 }

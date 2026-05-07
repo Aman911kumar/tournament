@@ -7,6 +7,7 @@ import NeonButton from "@/components/NeonButton";
 import { getParticipants, joinTournament } from "@/api/tournaments";
 import { listGameAccounts } from "@/api/gameAccounts";
 import { getBalance } from "@/api/wallet";
+import { getMyProfile } from "@/api/profile";
 import { toast } from "@/components/ui/sonner";
 import { getErrorMessage, getErrorToast } from "@/lib/page-utils";
 
@@ -17,6 +18,11 @@ const TEAM_SIZE: Record<TournamentType, number> = {
   duo: 2,
   squad: 4,
   team: 5,
+};
+
+const hasRealPhoneNumber = (value?: string) => {
+  const phoneNumber = String(value || "").trim();
+  return Boolean(phoneNumber) && !/^(google|facebook):/i.test(phoneNumber);
 };
 
 interface SlotInfo {
@@ -113,6 +119,15 @@ const SlotSelectionScreen = () => {
   const handleConfirm = async () => {
     try {
       setConfirming(true);
+      const profile = await getMyProfile();
+      if (!hasRealPhoneNumber(profile.data.user.phone_number)) {
+        toast.error("Phone number required", {
+          description: "Add your phone number before joining any tournament.",
+        });
+        navigate("/edit-profile");
+        return;
+      }
+
       if (requiredGame) {
         const accountsRes = await listGameAccounts();
         const hasRequiredAccount = (accountsRes.data ?? []).some((account) => account.game === requiredGame);

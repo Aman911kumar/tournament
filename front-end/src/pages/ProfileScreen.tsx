@@ -7,7 +7,9 @@ import {
   ChevronRight,
   Crown,
   Edit,
+  FileText,
   Gamepad2,
+  HelpCircle,
   Lock,
   LogOut,
   Mail,
@@ -38,6 +40,12 @@ const menuItems = [
   { icon: Edit, label: "Edit Profile", route: "/edit-profile" },
   { icon: Trophy, label: "My Tournaments", route: "/my-tournaments" },
   { icon: Gamepad2, label: "Game Accounts", route: "/game-accounts" },
+];
+
+const helpMenu = [
+  { icon: HelpCircle, label: "Help Center", route: "/help" },
+  { icon: ShieldCheck, label: "Rules & Regulations", route: "/rules" },
+  { icon: FileText, label: "Privacy Policy", route: "/privacy" },
 ];
 
 const creatorMenu = [
@@ -348,6 +356,29 @@ const ProfileScreen = () => {
               {logoutLoading ? "Logging out..." : "Logout"}
             </span>
           </motion.button>
+        </div>
+      </div>
+
+      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mt-4">
+        <h2 className="font-heading text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">
+          Help & Legal
+        </h2>
+        <div className="space-y-2">
+          {helpMenu.map((item) => (
+            <GlassCard
+              key={item.label}
+              className="flex items-center justify-between cursor-pointer"
+              onClick={() => navigate(item.route)}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
+                  <item.icon className="w-4 h-4 text-secondary" />
+                </div>
+                <span className="text-sm font-heading font-medium truncate">{item.label}</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            </GlassCard>
+          ))}
         </div>
       </div>
 

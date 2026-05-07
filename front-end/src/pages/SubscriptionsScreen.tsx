@@ -5,20 +5,34 @@ import { ArrowLeft, Star, Shield, Search } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { CreatorChannel, getCreators } from "@/api/creators";
+import { CACHE_KEYS, readCache, writeCache } from "@/lib/offline-cache";
 
 const SubscriptionsScreen = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [creators, setCreators] = useState<(CreatorChannel & { tournamentCount?: number })[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
+    const cachedCreators = readCache<(CreatorChannel & { tournamentCount?: number })[]>(CACHE_KEYS.creators);
+    if (cachedCreators) {
+      setCreators(cachedCreators.data);
+      setLoading(false);
+    }
+
     getCreators()
       .then((data) => {
-        if (active) setCreators(data);
+        if (active) {
+          setCreators(data);
+          writeCache(CACHE_KEYS.creators, data);
+        }
       })
       .catch(() => {
-        if (active) setCreators([]);
+        if (active && !cachedCreators) setCreators([]);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
 
     return () => {
@@ -62,7 +76,10 @@ const SubscriptionsScreen = () => {
           CREATORS ({filteredCreators.length})
         </h2>
         <div className="space-y-3">
-          {filteredCreators.length === 0 && (
+          {loading && [0, 1, 2, 3].map((item) => (
+            <div key={item} className="h-20 animate-pulse rounded-xl bg-muted" />
+          ))}
+          {!loading && filteredCreators.length === 0 && (
             <GlassCard className="text-center py-8">
               <Search className="w-9 h-9 mx-auto text-muted-foreground mb-2" />
               <p className="text-sm font-heading">No creators found</p>
@@ -70,7 +87,7 @@ const SubscriptionsScreen = () => {
             </GlassCard>
           )}
 
-          {filteredCreators.map((creator, index) => (
+          {!loading && filteredCreators.map((creator, index) => (
             <GlassCard key={creator._id} neon delay={index * 0.08}>
               <div className="flex items-center gap-3">
                 <button onClick={() => navigate(`/creator/${creator._id}`)} className="relative shrink-0">
@@ -92,7 +109,9 @@ const SubscriptionsScreen = () => {
                   </p>
                   <div className="flex items-center gap-0.5 mt-0.5">
                     <Star className="w-2.5 h-2.5 text-accent fill-accent" />
-                    <span className="text-[10px] text-accent font-heading">{creator.owner?.stats?.rating ?? 4.5}</span>
+                    <span className="text-[10px] text-accent font-heading">{Number(creator.owner?.stats?.rating || 0).toFixed(1)}</span>
+                    {typeof creator.topScore === "number" && <span className="ml-1 text-[10px] text-primary font-heading">Top {Math.round(creator.topScore)}</span>}
+                    {creator.virtual && <span className="text-[10px] text-muted-foreground">- channel pending</span>}
                   </div>
                 </button>
                 <NeonButton variant="purple" className="text-[10px] py-1.5 px-3" onClick={() => navigate(`/creator/${creator._id}`)}>

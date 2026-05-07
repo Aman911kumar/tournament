@@ -1,5 +1,11 @@
 import mongoose from "mongoose";
-import { MONGODB_URI } from "../../env.js";
+import {
+    MONGODB_MAX_IDLE_TIME_MS,
+    MONGODB_MAX_POOL_SIZE,
+    MONGODB_MIN_POOL_SIZE,
+    MONGODB_URI,
+    MONGODB_WAIT_QUEUE_TIMEOUT_MS,
+} from "../../env.js";
 import { User } from "../models/user.model.js";
 
 const ensureUserPhoneIndex = async () => {
@@ -45,7 +51,16 @@ const ensureUserPhoneIndex = async () => {
 
 const connect_db = async () => {
     try {
-        const connection = await mongoose.connect(MONGODB_URI)
+        mongoose.set("strictQuery", true);
+
+        const connection = await mongoose.connect(MONGODB_URI, {
+            autoIndex: process.env.NODE_ENV !== "production",
+            maxPoolSize: Number(MONGODB_MAX_POOL_SIZE || 50),
+            minPoolSize: Number(MONGODB_MIN_POOL_SIZE || 0),
+            maxIdleTimeMS: Number(MONGODB_MAX_IDLE_TIME_MS || 60000),
+            waitQueueTimeoutMS: Number(MONGODB_WAIT_QUEUE_TIMEOUT_MS || 5000),
+            serverSelectionTimeoutMS: 10000,
+        })
         await ensureUserPhoneIndex();
         console.log(`\nDatabase connected successfully to :${connection.connection.host}`)
     } catch (error) {

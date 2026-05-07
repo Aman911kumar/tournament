@@ -236,5 +236,9 @@ TournamentSchema.index({ title: 1, startAt: -1 });
 TournamentSchema.index({ organizer: 1, startAt: -1 });
 TournamentSchema.index({ channel: 1, startAt: -1 });
 TournamentSchema.index({ status: 1, startAt: 1 });
+TournamentSchema.index({ createdAt: -1 });
+TournamentSchema.index({ game: 1, status: 1, createdAt: -1 });
+TournamentSchema.index({ organizer: 1, createdAt: -1 });
+TournamentSchema.index({ channel: 1, createdAt: -1 });
 
 export const Tournament = mongoose.model('Tournament', TournamentSchema);

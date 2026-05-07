@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Bell, Search, ChevronRight, Crosshair, Flame, Zap, Star, Users, Crown } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import { getMyTournamentRegistrations, getTournaments, Tournament } from "@/api/tournaments";
+import { getMyTournamentRegistrations, getTournamentPage, Tournament } from "@/api/tournaments";
 import { getCreators, CreatorChannel } from "@/api/creators";
 import { formatPrizeSummary } from "@/lib/page-utils";
+import { CACHE_KEYS, readCache, writeCache } from "@/lib/offline-cache";
 
 import gameFreefire from "@/assets/game-freefire.jpg";
 import gameBgmi from "@/assets/game-bgmi.jpg";
@@ -14,10 +15,10 @@ import gameCod from "@/assets/game-cod.jpg";
 import gameValorant from "@/assets/game-valorant.jpg";
 
 const games = [
-  { name: "Free Fire", image: gameFreefire, players: "2.4M" },
-  { name: "BGMI", image: gameBgmi, players: "1.8M" },
-  { name: "Call of Duty", image: gameCod, players: "3.1M" },
-  { name: "Valorant", image: gameValorant, players: "2.9M" },
+  { name: "Free Fire", image: gameFreefire, players: "2.4M", query: "freefire" },
+  { name: "BGMI", image: gameBgmi, players: "1.8M", query: "bgmi" },
+  { name: "Call of Duty", image: gameCod, players: "3.1M", query: "callofduty" },
+  { name: "Valorant", image: gameValorant, players: "2.9M", query: "valorant" },
 ];
 
 const gameLabels: Record<string, string> = {
@@ -31,40 +32,67 @@ const getRegistrationTournamentId = (registration: Awaited<ReturnType<typeof get
   typeof registration.tournament === "string" ? registration.tournament : registration.tournament?._id;
 
 const getPrizeSummary = (tournament?: Tournament) => formatPrizeSummary(tournament);
+const PAGE_SIZE = 6;
 
 const Index = () => {
   const navigate = useNavigate();
   const [trendingTournaments, setTrendingTournaments] = useState<Tournament[]>([]);
   const [recommendedCreators, setRecommendedCreators] = useState<(CreatorChannel & { tournamentCount?: number })[]>([]);
   const [joinedTournamentIds, setJoinedTournamentIds] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const loadHome = useCallback(async (nextPage = 1) => {
+    const cachedHome = readCache<{
+      tournaments: Tournament[];
+      creators: (CreatorChannel & { tournamentCount?: number })[];
+      joinedIds: string[];
+      page?: number;
+      hasMore?: boolean;
+    }>(CACHE_KEYS.home);
+    if (nextPage === 1 && cachedHome) {
+      setTrendingTournaments(cachedHome.data.tournaments);
+      setRecommendedCreators(cachedHome.data.creators);
+      setJoinedTournamentIds(new Set(cachedHome.data.joinedIds));
+      setPage(cachedHome.data.page ?? 1);
+      setHasMore(Boolean(cachedHome.data.hasMore));
+    }
+
+    try {
+      if (nextPage > 1) setLoadingMore(true);
+      const [tournaments, creators, registrations] = await Promise.all([
+        getTournamentPage({ sort: "trending", page: nextPage, limit: PAGE_SIZE, excludeCompleted: true }),
+        getCreators(),
+        getMyTournamentRegistrations().catch(() => []),
+      ]);
+      setTrendingTournaments((previous) => nextPage === 1 ? tournaments.tournaments : [...previous, ...tournaments.tournaments]);
+      setRecommendedCreators(creators.slice(0, 4));
+      setPage(tournaments.page ?? nextPage);
+      setHasMore(Boolean(tournaments.hasMore));
+      const joinedIds = registrations.map(getRegistrationTournamentId).filter(Boolean);
+      setJoinedTournamentIds(new Set(joinedIds));
+      if (nextPage === 1) {
+        writeCache(CACHE_KEYS.home, {
+          tournaments: tournaments.tournaments,
+          creators: creators.slice(0, 4),
+          joinedIds,
+          page: tournaments.page ?? nextPage,
+          hasMore: Boolean(tournaments.hasMore),
+        });
+      }
+    } catch {
+      if (nextPage === 1 && cachedHome) return;
+      setTrendingTournaments([]);
+      setRecommendedCreators([]);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let active = true;
-
-    const loadHome = async () => {
-      try {
-        const [tournaments, creators, registrations] = await Promise.all([
-          getTournaments({ sort: "trending" }),
-          getCreators(),
-          getMyTournamentRegistrations().catch(() => []),
-        ]);
-        if (!active) return;
-        setTrendingTournaments(tournaments.slice(0, 3));
-        setRecommendedCreators(creators.slice(0, 4));
-        setJoinedTournamentIds(new Set(registrations.map(getRegistrationTournamentId).filter(Boolean)));
-      } catch {
-        if (!active) return;
-        setTrendingTournaments([]);
-        setRecommendedCreators([]);
-      }
-    };
-
-    loadHome();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+    loadHome(1);
+  }, [loadHome]);
 
   const liveTournament = trendingTournaments.find((tournament) => tournament.status === "running") ?? trendingTournaments[0];
 
@@ -171,7 +199,7 @@ const Index = () => {
             <Zap className="w-4 h-4 text-primary" />
             Popular Games
           </h2>
-          <button className="text-xs text-primary font-heading flex items-center gap-1">
+          <button onClick={() => navigate("/tournaments")} className="text-xs text-primary font-heading flex items-center gap-1">
             View All <ChevronRight className="w-3 h-3" />
           </button>
         </div>
@@ -184,7 +212,7 @@ const Index = () => {
               transition={{ delay: i * 0.1 }}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              onClick={() => navigate("/tournaments")}
+              onClick={() => navigate(`/tournaments?game=${game.query}`)}
               className="glass rounded-xl overflow-hidden group"
             >
               <div className="relative aspect-square">
@@ -215,7 +243,7 @@ const Index = () => {
             Trending Tournaments
           </h2>
           <button
-            onClick={() => navigate("/tournaments")}
+            onClick={() => navigate("/tournaments?sort=trending")}
             className="text-xs text-primary font-heading flex items-center gap-1"
           >
             See All <ChevronRight className="w-3 h-3" />
@@ -252,6 +280,17 @@ const Index = () => {
             </div>
           </GlassCard>
         ))}
+        {hasMore && (
+          <NeonButton
+            full
+            variant="blue"
+            className="text-xs py-2"
+            onClick={() => loadHome(page + 1)}
+            disabled={loadingMore}
+          >
+            {loadingMore ? "LOADING..." : "LOAD MORE"}
+          </NeonButton>
+        )}
       </div>
 
     </div>

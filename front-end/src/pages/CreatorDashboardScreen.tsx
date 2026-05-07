@@ -8,9 +8,11 @@ import {
   CheckCircle2,
   DollarSign,
   Edit,
+  PieChart,
   PlayCircle,
   Plus,
   Search,
+  ShieldCheck,
   Trash2,
   TrendingUp,
   Trophy,
@@ -22,6 +24,7 @@ import { deleteTournament, getTournaments, Tournament, updateTournamentStatus } 
 import { getMyProfile } from "@/api/profile";
 import { formatCurrency, formatPrizeSummary, getErrorToast } from "@/lib/page-utils";
 import { toast } from "@/components/ui/sonner";
+import { CACHE_KEYS, readCache, writeAuthenticatedCache } from "@/lib/offline-cache";
 
 const statusFilters = ["all", "live", "upcoming", "completed", "draft"] as const;
 type DashboardStatus = Exclude<(typeof statusFilters)[number], "all">;
@@ -65,6 +68,7 @@ const CreatorDashboardScreen = () => {
   const [status, setStatus] = useState<(typeof statusFilters)[number]>("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -73,12 +77,20 @@ const CreatorDashboardScreen = () => {
       try {
         const profileRes = await getMyProfile();
         const userId = profileRes.data.user._id;
+        const cachedTournaments = readCache<Tournament[]>(CACHE_KEYS.creatorDashboard(userId));
+        if (cachedTournaments && active) {
+          setTournaments(cachedTournaments.data);
+          setLoading(false);
+        }
         const allTournaments = await getTournaments({ organizer: userId });
         if (!active) return;
         setTournaments(allTournaments);
+        writeAuthenticatedCache(CACHE_KEYS.creatorDashboard(userId), allTournaments);
       } catch (error) {
         const errorToast = getErrorToast(error, { action: "Load tournaments", fallback: "Could not load creator tournaments." });
         toast.error(errorToast.title, { description: errorToast.description });
+      } finally {
+        if (active) setLoading(false);
       }
     };
 
@@ -126,6 +138,44 @@ const CreatorDashboardScreen = () => {
     }));
   }, [tournaments]);
 
+  const statusBreakdown = useMemo(() => {
+    const rows = statusFilters.filter((item) => item !== "all").map((item) => {
+      const count = tournaments.filter((tournament) => toDashboardStatus(tournament.status) === item).length;
+      const percent = tournaments.length ? Math.round((count / tournaments.length) * 100) : 0;
+      return { label: item, count, percent };
+    });
+    return rows;
+  }, [tournaments]);
+
+  const financeSummary = useMemo(() => {
+    const gross = tournaments.reduce((sum, tournament) => sum + Number(tournament.receivedMoney ?? tournament.organizerEarnings ?? 0), 0);
+    const platformFees = tournaments.reduce((sum, tournament) => sum + Number(tournament.platformFeeAmount || 0), 0);
+    const prizePaid = tournaments.reduce((sum, tournament) => sum + getPaidMoney(tournament), 0);
+    const pendingPrize = tournaments
+      .filter((tournament) => tournament.status === "completed" && getReceivedMoney(tournament) > 0 && getPaidMoney(tournament) === 0)
+      .reduce((sum, tournament) => sum + Number(tournament.prizePool || tournament.killPrizeAmount || 0), 0);
+
+    return {
+      gross,
+      platformFees,
+      prizePaid,
+      pendingPrize,
+      net: gross - prizePaid,
+      payoutRate: gross > 0 ? Math.min(100, Math.round((prizePaid / gross) * 100)) : 0,
+    };
+  }, [tournaments]);
+
+  const gameBreakdown = useMemo(() => {
+    const counts = tournaments.reduce<Record<string, number>>((record, tournament) => {
+      record[tournament.game] = (record[tournament.game] || 0) + 1;
+      return record;
+    }, {});
+    const max = Math.max(...Object.values(counts), 1);
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([game, count]) => ({ game, count, width: Math.max(8, Math.round((count / max) * 100)) }));
+  }, [tournaments]);
+
   const filteredTournaments = useMemo(() => {
     const search = query.trim().toLowerCase();
     return tournaments.filter((tournament) => {
@@ -140,6 +190,11 @@ const CreatorDashboardScreen = () => {
   }, [query, status, tournaments]);
 
   const recentTournaments = tournaments.slice(0, 4);
+
+  const skeletonCards = (count: number, className = "h-20") =>
+    Array.from({ length: count }).map((_, index) => (
+      <div key={index} className={`${className} animate-pulse rounded-lg bg-muted`} />
+    ));
 
   const handleDelete = async (tournament: Tournament) => {
     if (Number(tournament.receivedMoney ?? tournament.organizerEarnings ?? 0) > 0) {
@@ -202,7 +257,7 @@ const CreatorDashboardScreen = () => {
 
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-5">
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          {stats.map((s, i) => (
+          {loading ? skeletonCards(5, "h-[86px]") : stats.map((s, i) => (
             <GlassCard key={s.label} neon delay={i * 0.06}>
               <div className="flex items-center gap-2 mb-1 min-w-0">
                 <s.icon className={`w-4 h-4 shrink-0 ${s.color}`} />
@@ -219,7 +274,9 @@ const CreatorDashboardScreen = () => {
           <TrendingUp className="w-4 h-4 text-accent" />
           Monthly Earnings
         </h2>
-        <GlassCard neon className="p-4">
+        {loading ? (
+          <div className="h-40 animate-pulse rounded-xl bg-muted" />
+        ) : <GlassCard neon className="p-4">
           <div className="grid grid-cols-4 gap-3">
             {earningsData.map((e, i) => (
               <div key={e.month} className="min-w-0">
@@ -238,7 +295,111 @@ const CreatorDashboardScreen = () => {
               </div>
             ))}
           </div>
-        </GlassCard>
+        </GlassCard>}
+      </div>
+
+      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-5 grid gap-4 sm:grid-cols-2">
+        {loading ? (
+          <>
+            <div className="h-44 animate-pulse rounded-xl bg-muted" />
+            <div className="h-44 animate-pulse rounded-xl bg-muted" />
+          </>
+        ) : (
+          <>
+            <GlassCard neon>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-heading text-sm font-bold flex items-center gap-2">
+                    <PieChart className="w-4 h-4 text-primary" />
+                    Tournament Mix
+                  </h2>
+                  <p className="text-[10px] text-muted-foreground">Status distribution</p>
+                </div>
+                <span className="text-xs font-heading text-primary">{tournaments.length} total</span>
+              </div>
+              <div className="space-y-3">
+                {statusBreakdown.map((row) => (
+                  <div key={row.label}>
+                    <div className="mb-1 flex items-center justify-between text-[10px] font-heading capitalize">
+                      <span className="text-muted-foreground">{row.label}</span>
+                      <span>{row.count} - {row.percent}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full gradient-primary" style={{ width: `${Math.max(row.percent, row.count ? 8 : 0)}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+
+            <GlassCard neon>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-heading text-sm font-bold flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-secondary" />
+                    Payout Health
+                  </h2>
+                  <p className="text-[10px] text-muted-foreground">Prize distribution progress</p>
+                </div>
+                <span className="text-xs font-heading text-secondary">{financeSummary.payoutRate}% paid</span>
+              </div>
+              <div className="mb-4 h-2 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-secondary" style={{ width: `${financeSummary.payoutRate}%` }} />
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg border border-glass-border bg-background/35 p-3">
+                  <p className="text-[10px] text-muted-foreground">Received</p>
+                  <p className="font-heading font-bold text-accent">{formatCurrency(financeSummary.gross)}</p>
+                </div>
+                <div className="rounded-lg border border-glass-border bg-background/35 p-3">
+                  <p className="text-[10px] text-muted-foreground">Prize paid</p>
+                  <p className="font-heading font-bold text-secondary">{formatCurrency(financeSummary.prizePaid)}</p>
+                </div>
+                <div className="rounded-lg border border-glass-border bg-background/35 p-3">
+                  <p className="text-[10px] text-muted-foreground">Platform fees</p>
+                  <p className="font-heading font-bold text-primary">{formatCurrency(financeSummary.platformFees)}</p>
+                </div>
+                <div className="rounded-lg border border-glass-border bg-background/35 p-3">
+                  <p className="text-[10px] text-muted-foreground">Pending prizes</p>
+                  <p className="font-heading font-bold text-destructive">{formatCurrency(financeSummary.pendingPrize)}</p>
+                </div>
+              </div>
+            </GlassCard>
+          </>
+        )}
+      </div>
+
+      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-5">
+        {loading ? (
+          <div className="h-36 animate-pulse rounded-xl bg-muted" />
+        ) : (
+          <GlassCard>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="font-heading text-sm font-bold flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-accent" />
+                Game Performance
+              </h2>
+              <span className="text-[10px] text-muted-foreground">By created tournaments</span>
+            </div>
+            {gameBreakdown.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Create tournaments to see game analytics.</p>
+            ) : (
+              <div className="space-y-3">
+                {gameBreakdown.map((row) => (
+                  <div key={row.game}>
+                    <div className="mb-1 flex items-center justify-between text-[10px] font-heading">
+                      <span className="capitalize text-muted-foreground">{row.game}</span>
+                      <span>{row.count}</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-accent" style={{ width: `${row.width}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </GlassCard>
+        )}
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-5">
@@ -247,7 +408,8 @@ const CreatorDashboardScreen = () => {
           Recent Tournaments
         </h2>
         <div className="space-y-3">
-          {recentTournaments.length === 0 && (
+          {loading && skeletonCards(3)}
+          {!loading && recentTournaments.length === 0 && (
             <GlassCard className="text-center py-8">
               <Trophy className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
               <p className="text-sm font-heading">No tournaments yet</p>
@@ -255,7 +417,7 @@ const CreatorDashboardScreen = () => {
             </GlassCard>
           )}
 
-          {recentTournaments.map((tournament, i) => (
+          {!loading && recentTournaments.map((tournament, i) => (
             <GlassCard key={tournament._id} neon delay={i * 0.06}>
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -319,7 +481,8 @@ const CreatorDashboardScreen = () => {
         </div>
 
         <div className="space-y-3">
-          {filteredTournaments.length === 0 && (
+          {loading && skeletonCards(5)}
+          {!loading && filteredTournaments.length === 0 && (
             <GlassCard className="text-center py-8">
               <Search className="w-9 h-9 mx-auto text-muted-foreground mb-2" />
               <p className="text-sm font-heading">No matching tournaments</p>
@@ -327,7 +490,7 @@ const CreatorDashboardScreen = () => {
             </GlassCard>
           )}
 
-          {filteredTournaments.map((tournament, index) => {
+          {!loading && filteredTournaments.map((tournament, index) => {
             const hasPaidEntries = Number(tournament.receivedMoney ?? tournament.organizerEarnings ?? 0) > 0;
             return (
             <GlassCard key={tournament._id} delay={index * 0.04} className="relative overflow-hidden">

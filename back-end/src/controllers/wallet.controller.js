@@ -233,7 +233,10 @@ const withdrawMoney = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Withdrawal destination is required");
     }
 
-    if (!password || !(await req.user.isPasswordCorrect(password))) {
+    const passwordUser = password
+        ? await User.findById(req.user._id).select("password")
+        : null;
+    if (!password || !passwordUser || !(await passwordUser.isPasswordCorrect(password))) {
         throw new ApiError(400, "Incorrect password");
     }
 

@@ -47,6 +47,21 @@ export interface WalletTransaction {
   clickable?: boolean;
 }
 
+export interface WalletTransactionPage {
+  transactions: WalletTransaction[];
+  walletTransactions: WalletTransaction[];
+  paymentTransactions: WalletTransaction[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+  hasMore: boolean;
+  aggregations?: {
+    wallet?: { _id: { type?: string; category?: string; status?: string }; count: number; amount: number; platformFee?: number }[];
+    payments?: { _id: string; count: number; amount: number }[];
+  };
+}
+
 interface ApiData<T> {
   data?: T;
 }
@@ -253,17 +268,53 @@ export async function getBalance() {
   return { balance: res.data?.balance ?? res.balance ?? 0 };
 }
 
-export async function getTransactions(filter: "all" | "player" | "creator" = "all") {
-  const res = await apiFetch<WalletTransactionDto[] | ApiData<WalletTransactionDto[]>>(
-    `${ENDPOINTS.transactions}?filter=${filter}`,
+export async function getTransactions(
+  filter: "all" | "player" | "creator" = "all",
+  options: { page?: number; limit?: number; view?: "all" | "wallet" | "payments" } = {},
+) {
+  const params = new URLSearchParams({ filter });
+  if (options.page) params.set("page", String(options.page));
+  if (options.limit) params.set("limit", String(options.limit));
+  if (options.view) params.set("view", options.view);
+
+  const res = await apiFetch<
+    WalletTransactionDto[] |
+    ApiData<WalletTransactionDto[]> |
+    ApiData<{
+      transactions?: WalletTransactionDto[];
+      walletTransactions?: WalletTransactionDto[];
+      paymentTransactions?: WalletTransactionDto[];
+      total?: number;
+      page?: number;
+      limit?: number;
+      pages?: number;
+      hasMore?: boolean;
+      aggregations?: WalletTransactionPage["aggregations"];
+    }>
+  >(
+    `${ENDPOINTS.transactions}?${params.toString()}`,
     {
       method: "GET",
       credentials: "include",
     },
   );
 
-  const transactions = Array.isArray(res) ? res : res.data ?? [];
-  return transactions.map(mapTransaction);
+  const data = Array.isArray(res) ? { transactions: res } : res.data;
+  const transactions = Array.isArray(data) ? data : data?.transactions ?? [];
+  const walletTransactions = Array.isArray(data) ? data.filter((item) => item.kind !== "PAYMENT") : data?.walletTransactions ?? [];
+  const paymentTransactions = Array.isArray(data) ? data.filter((item) => item.kind === "PAYMENT") : data?.paymentTransactions ?? [];
+
+  return {
+    transactions: transactions.map(mapTransaction),
+    walletTransactions: walletTransactions.map(mapTransaction),
+    paymentTransactions: paymentTransactions.map(mapTransaction),
+    total: Array.isArray(data) ? transactions.length : data?.total ?? transactions.length,
+    page: Array.isArray(data) ? options.page ?? 1 : data?.page ?? options.page ?? 1,
+    limit: Array.isArray(data) ? options.limit ?? transactions.length : data?.limit ?? options.limit ?? transactions.length,
+    pages: Array.isArray(data) ? 1 : data?.pages ?? 1,
+    hasMore: Array.isArray(data) ? false : Boolean(data?.hasMore),
+    aggregations: Array.isArray(data) ? undefined : data?.aggregations,
+  };
 }
 
 export async function getTransactionDetail(id: string): Promise<ApiResponse<TransactionDetail>> {

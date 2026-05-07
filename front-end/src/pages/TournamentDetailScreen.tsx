@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, ArrowLeft, Award, Calendar, Crosshair, Users, Trophy, DollarSign, Shield, CheckCircle, Star, MessageCircle, RefreshCcw, KeyRound, Hash, Lock } from "lucide-react";
+import { AlertCircle, ArrowLeft, Award, Calendar, Crosshair, Users, Trophy, DollarSign, Shield, CheckCircle, Star, MessageCircle, RefreshCcw, KeyRound, Hash, Lock, Flag } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { getMyTournamentRegistrations, getTournamentById, Tournament } from "@/api/tournaments";
 import { formatCurrency, getErrorMessage } from "@/lib/page-utils";
+import { CACHE_KEYS, readCache, writeAuthenticatedCache, writeCache } from "@/lib/offline-cache";
+import { createSupportTicket, SupportReason } from "@/api/support";
+import { toast } from "@/components/ui/sonner";
 
 const gameLabels: Record<string, string> = {
   freefire: "Free Fire",
@@ -29,11 +32,25 @@ const TournamentDetailScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState<SupportReason>("cheating");
+  const [reportDescription, setReportDescription] = useState("");
+  const [reportProof, setReportProof] = useState("");
+  const [reportTargetUser, setReportTargetUser] = useState("");
+  const [submittingReport, setSubmittingReport] = useState(false);
 
   const loadTournament = async () => {
     if (!id) return;
+    const cachedTournament = readCache<Tournament>(CACHE_KEYS.tournamentDetail(id));
+    const cachedRegistrations = readCache<Awaited<ReturnType<typeof getMyTournamentRegistrations>>>(CACHE_KEYS.myRegistrations);
+    if (cachedTournament) {
+      setTournament(cachedTournament.data);
+      setRegistered(Boolean(cachedRegistrations?.data.some((registration) => getRegistrationTournamentId(registration) === id)));
+      setLoading(false);
+    }
+
     try {
-      setLoading(true);
+      setLoading(!cachedTournament);
       setError(null);
       const [tournamentRes, registrations] = await Promise.all([
         getTournamentById(id),
@@ -41,8 +58,10 @@ const TournamentDetailScreen = () => {
       ]);
       setTournament(tournamentRes);
       setRegistered(registrations.some((registration) => getRegistrationTournamentId(registration) === id));
+      writeCache(CACHE_KEYS.tournamentDetail(id), tournamentRes);
+      writeAuthenticatedCache(CACHE_KEYS.myRegistrations, registrations);
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to load tournament."));
+      if (!cachedTournament) setError(getErrorMessage(err, "Failed to load tournament."));
     } finally {
       setLoading(false);
     }
@@ -75,7 +94,13 @@ const TournamentDetailScreen = () => {
   const entryFee = Number(tournament?.entryFee || 0);
   const registeredSlots = Number(tournament?.registrationCount || 0);
   const participantCount = Number(tournament?.participantCount || registeredSlots);
-  const hasRoomDetails = Boolean(tournament?.room_details?.roomJoinTime || tournament?.room_details?.roomId || tournament?.room_details?.roomPass);
+  const hasRoomDetails = Boolean(
+    tournament?.room_details?.roomJoinTime ||
+    tournament?.room_details?.roomId ||
+    tournament?.room_details?.roomPass ||
+    tournament?.room_details?.hasRoomId ||
+    tournament?.room_details?.hasRoomPass
+  );
   const resultRows = (tournament?.results ?? [])
     .filter((result) => Number(result.prizeWon || 0) > 0)
     .sort((a, b) => {
@@ -105,6 +130,42 @@ const TournamentDetailScreen = () => {
           : now > registrationEndMs
             ? "REGISTRATION CLOSED"
             : `REGISTER NOW - ${entryFee === 0 ? "FREE" : formatCurrency(entryFee)}`;
+
+  const reportablePlayers = (tournament?.results ?? [])
+    .map((result) => result.player)
+    .filter((player): player is { _id?: string; username?: string; avatar?: { url?: string } } => typeof player !== "string" && Boolean(player?._id));
+
+  const submitReport = async () => {
+    if (!tournament) return;
+    if (reportDescription.trim().length < 12) {
+      toast.error("Add more details", { description: "Explain what happened so admin can review it properly." });
+      return;
+    }
+
+    try {
+      setSubmittingReport(true);
+      const isDispute = reportReason === "payout_not_distributed" || reportReason === "wrong_payout";
+      await createSupportTicket({
+        title: isDispute ? `Prize dispute: ${tournament.title}` : `Player report: ${tournament.title}`,
+        description: reportDescription.trim(),
+        type: isDispute ? "dispute" : "report",
+        reason: reportReason,
+        tournament: tournament._id,
+        targetUser: reportTargetUser || undefined,
+        evidence: { matchProof: reportProof.trim() },
+        priority: isDispute || reportReason === "cheating" ? "high" : "normal",
+      });
+      toast.success("Report submitted", { description: "Admin will review the report and update the status." });
+      setReportOpen(false);
+      setReportDescription("");
+      setReportProof("");
+      setReportTargetUser("");
+    } catch (reportError) {
+      toast.error(getErrorMessage(reportError, "Could not submit report."));
+    } finally {
+      setSubmittingReport(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-10">
@@ -236,23 +297,28 @@ const TournamentDetailScreen = () => {
                       <p className="font-heading font-bold">{new Date(tournament.room_details.roomJoinTime).toLocaleString()}</p>
                     </div>
                   )}
-                  {tournament.room_details?.roomId && (
+                  {(tournament.room_details?.roomId || tournament.room_details?.hasRoomId) && (
                     <div className="glass rounded-lg p-3">
                       <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                         <Hash className="w-3 h-3" /> Room ID
                       </p>
-                      <p className="font-heading font-bold truncate">{tournament.room_details.roomId}</p>
+                      <p className="font-heading font-bold truncate">{tournament.room_details.roomId || (registered ? "Not shared yet" : "Join to view")}</p>
                     </div>
                   )}
-                  {tournament.room_details?.roomPass && (
+                  {(tournament.room_details?.roomPass || tournament.room_details?.hasRoomPass) && (
                     <div className="glass rounded-lg p-3">
                       <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                         <Lock className="w-3 h-3" /> Room Pass
                       </p>
-                      <p className="font-heading font-bold truncate">{tournament.room_details.roomPass}</p>
+                      <p className="font-heading font-bold truncate">{tournament.room_details.roomPass || (registered ? "Not shared yet" : "Join to view")}</p>
                     </div>
                   )}
                 </div>
+                {!registered && !tournament.room_details?.roomId && !tournament.room_details?.roomPass && (
+                  <p className="mt-3 text-[10px] text-muted-foreground">
+                    Room ID and password are only visible to joined users.
+                  </p>
+                )}
               </GlassCard>
             )}
 
@@ -352,6 +418,23 @@ const TournamentDetailScreen = () => {
               </p>
             </GlassCard>
 
+            <GlassCard delay={0.18}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="font-heading font-bold text-sm flex items-center gap-2">
+                    <Flag className="w-4 h-4 text-destructive" />
+                    Report Match Issue
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Report cheating, fake results, room problems, or missing prize distribution.
+                  </p>
+                </div>
+                <NeonButton variant="blue" className="shrink-0 text-[10px] py-1.5 px-3" onClick={() => setReportOpen(true)}>
+                  Report
+                </NeonButton>
+              </div>
+            </GlassCard>
+
             {/* Comments Link */}
             <GlassCard delay={0.2} onClick={() => navigate(`/tournament/${tournament._id}/comments`)} className="cursor-pointer">
               <div className="flex items-center justify-between">
@@ -383,6 +466,88 @@ const TournamentDetailScreen = () => {
 
       {/* Confirmation Popup */}
       <AnimatePresence>
+        {reportOpen && tournament && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="glass max-h-[88vh] w-full max-w-md overflow-y-auto rounded-2xl border border-glass-border p-5"
+            >
+              <h3 className="font-heading text-lg font-bold">Report issue</h3>
+              <p className="mt-1 text-xs text-muted-foreground">Reports go to admin review with your evidence.</p>
+
+              <div className="mt-4 space-y-3">
+                <label className="block">
+                  <span className="text-[10px] font-heading text-muted-foreground">Reason</span>
+                  <select
+                    value={reportReason}
+                    onChange={(event) => setReportReason(event.target.value as SupportReason)}
+                    className="mt-1 w-full rounded-lg border border-glass-border bg-background px-3 py-2 text-xs font-heading"
+                  >
+                    <option value="cheating">Player cheating</option>
+                    <option value="fake_result">Fake or wrong result</option>
+                    <option value="payout_not_distributed">Creator did not distribute prize</option>
+                    <option value="wrong_payout">Wrong payout amount</option>
+                    <option value="room_details_issue">Room ID/password issue</option>
+                    <option value="abusive_behavior">Abusive behavior</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+
+                {reportablePlayers.length > 0 && (
+                  <label className="block">
+                    <span className="text-[10px] font-heading text-muted-foreground">Reported player optional</span>
+                    <select
+                      value={reportTargetUser}
+                      onChange={(event) => setReportTargetUser(event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-glass-border bg-background px-3 py-2 text-xs font-heading"
+                    >
+                      <option value="">Not specific</option>
+                      {reportablePlayers.map((player) => (
+                        <option key={player._id} value={player._id}>{player.username || "Player"}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                <label className="block">
+                  <span className="text-[10px] font-heading text-muted-foreground">What happened?</span>
+                  <textarea
+                    value={reportDescription}
+                    onChange={(event) => setReportDescription(event.target.value)}
+                    rows={4}
+                    placeholder="Mention player name/game ID, round time, suspicious action, or payout issue..."
+                    className="mt-1 w-full resize-none rounded-lg border border-glass-border bg-background px-3 py-2 text-xs font-heading outline-none"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-[10px] font-heading text-muted-foreground">Evidence link or proof text</span>
+                  <input
+                    value={reportProof}
+                    onChange={(event) => setReportProof(event.target.value)}
+                    placeholder="Screenshot/video URL, match timestamp, transaction note..."
+                    className="mt-1 w-full rounded-lg border border-glass-border bg-background px-3 py-2 text-xs font-heading outline-none"
+                  />
+                </label>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <NeonButton variant="blue" onClick={() => setReportOpen(false)} disabled={submittingReport}>Cancel</NeonButton>
+                <NeonButton variant="purple" onClick={submitReport} disabled={submittingReport}>
+                  {submittingReport ? "Submitting..." : "Submit"}
+                </NeonButton>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
         {showConfirm && (
           <motion.div
             initial={{ opacity: 0 }}

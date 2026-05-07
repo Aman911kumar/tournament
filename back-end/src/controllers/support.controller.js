@@ -2,6 +2,8 @@ import asyncHandler from '../utils/AsyncHandler.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import { SupportTicket } from '../models/SupportTicket.model.js';
+import { Notification } from '../models/notification.model.js';
+import { Tournament } from '../models/tournament.model.js';
 import { hasRole } from '../middlewares/auth.middleware.js';
 import mongoose from 'mongoose';
 
@@ -11,24 +13,62 @@ const getParamId = (req, key) => req.params[key] || req.params.id;
 // CREATE SUPPORT TICKET
 // ---------------------------------
 const createTicket = asyncHandler(async (req, res) => {
-    const { title, subject, description, type, tournament } = req.body;
+    const {
+        title,
+        subject,
+        description,
+        type = "general",
+        tournament,
+        targetUser,
+        reason = "other",
+        evidence = {},
+        priority
+    } = req.body;
     const ticketTitle = title || subject;
 
     if (!ticketTitle || !description) {
         throw new ApiError(400, "Title and description are required");
     }
 
+    const ticketType = ["report", "dispute", "general"].includes(type) ? type : "general";
+    const ticketPriority = priority || (["cheating", "payout_not_distributed", "wrong_payout"].includes(reason) ? "high" : "normal");
+    let tournamentDoc = null;
+    if (tournament) {
+        if (!mongoose.Types.ObjectId.isValid(tournament)) {
+            throw new ApiError(400, "Invalid tournament ID");
+        }
+        tournamentDoc = await Tournament.findById(tournament).select("title organizer");
+        if (!tournamentDoc) throw new ApiError(404, "Tournament not found");
+    }
+
     const ticket = await SupportTicket.create({
         title: ticketTitle,
         description,
-        type,
+        type: ticketType,
         tournament,
+        targetUser: targetUser || null,
+        reason,
+        evidence: {
+            screenshots: Array.isArray(evidence.screenshots) ? evidence.screenshots.filter(Boolean).slice(0, 5) : [],
+            videoUrl: evidence.videoUrl || "",
+            matchProof: evidence.matchProof || "",
+        },
+        priority: ticketPriority,
         user: req.user._id,
         status: "open"
     });
 
+    if (tournamentDoc?.organizer && tournamentDoc.organizer.toString() !== req.user._id.toString()) {
+        await Notification.create({
+            user: tournamentDoc.organizer,
+            title: ticketType === "dispute" ? "Tournament dispute opened" : "Tournament report opened",
+            body: `${req.user.username || "A user"} submitted ${ticketType === "dispute" ? "a dispute" : "a report"} for ${tournamentDoc.title}. Admin will review it.`,
+            type: "system",
+        });
+    }
+
     return res.status(201).json(
-        new ApiResponse(200, ticket, "Support ticket created successfully")
+        new ApiResponse(201, ticket, ticketType === "general" ? "Support ticket created successfully" : "Report submitted for admin review")
     );
 });
 
@@ -42,9 +82,12 @@ const getUserTickets = asyncHandler(async (req, res) => {
     if (status) query.status = status;
 
     const tickets = await SupportTicket.find(query)
+        .populate("tournament", "title game status")
+        .populate("targetUser", "username avatar phone_number")
         .sort({ createdAt: -1 })
         .skip(Number(skip))
-        .limit(Number(limit));
+        .limit(Number(limit))
+        .lean();
 
     const total = await SupportTicket.countDocuments(query);
 
@@ -74,9 +117,12 @@ const getAllTickets = asyncHandler(async (req, res) => {
     // Fetch tickets with user details
     const tickets = await SupportTicket.find(query)
         .populate("user", "username phone_number")
+        .populate("targetUser", "username phone_number")
+        .populate("tournament", "title game status")
         .sort({ [sortBy]: order === "asc" ? 1 : -1 })
         .skip(Number(skip))
-        .limit(Number(limit));
+        .limit(Number(limit))
+        .lean();
 
     const total = await SupportTicket.countDocuments(query);
 
@@ -100,7 +146,9 @@ const getTicketById = asyncHandler(async (req, res) => {
     // Fetch ticket with user details and optional replies
     const ticket = await SupportTicket.findById(ticketId)
         .populate("user", "username phone_number")
-        .exec();
+        .populate("targetUser", "username phone_number")
+        .populate("tournament", "title game status")
+        .lean();
 
     if (!ticket) {
         throw new ApiError(404, "Ticket not found");

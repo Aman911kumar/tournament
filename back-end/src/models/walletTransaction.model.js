@@ -108,6 +108,10 @@ const walletTransactionSchema = new mongoose.Schema(
 
 // Add indexes for better query performance
 walletTransactionSchema.index({ user: 1, createdAt: -1 });
+walletTransactionSchema.index({ user: 1, status: 1, createdAt: -1 });
+walletTransactionSchema.index({ type: 1, createdAt: -1 });
+walletTransactionSchema.index({ category: 1, status: 1, createdAt: -1 });
+walletTransactionSchema.index({ referenceId: 1, category: 1 });
 
 // Pagination plugin
 walletTransactionSchema.plugin(mongooseAggregatePaginate);

@@ -24,7 +24,8 @@ const getAllReports = asyncHandler(async (req, res) => {
     const reports = await Report.find(query)
         .sort({ createdAt: -1 })
         .skip(Number(skip))
-        .limit(Number(limit));
+        .limit(Number(limit))
+        .lean();
 
     const total = await Report.countDocuments(query);
 
@@ -80,7 +81,7 @@ const updateReport = asyncHandler(async (req, res) => {
     const reportId = getParamId(req, "reportId");
     const updates = req.body;
 
-    const report = await Report.findById(reportId);
+    const report = await Report.findById(reportId).lean();
     if (!report) throw new ApiError(404, "Report not found");
     if (report.createdBy.toString() !== req.user._id.toString() && !hasRole(req.user, "admin")) {
         throw new ApiError(403, "Not authorized to update this report");

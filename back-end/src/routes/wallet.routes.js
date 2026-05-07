@@ -9,6 +9,7 @@ import {
 } from "../controllers/user.controller.js";
 import { addMoney, verifyAddMoney, updateAddMoneyStatus, withdrawMoney, transferMoney } from "../controllers/wallet.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
+import { walletLimiter } from "../middlewares/rateLimit.middleware.js";
 
 const router = express.Router();
 
@@ -18,10 +19,10 @@ router.get("/transaction/:id", protect, getTransactionDetails);
 router.get("/payment/:id", protect, getPaymentDetails);
 router.get("/creator-earnings", protect, getCreatorEarnings);
 router.get("/player-earnings", protect, getPlayerEarnings);
-router.post("/add", protect, addMoney);
-router.post("/add/verify", protect, verifyAddMoney);
-router.post("/add/status", protect, updateAddMoneyStatus);
-router.post("/withdraw", protect, withdrawMoney);
-router.post("/transfer", protect, transferMoney);
+router.post("/add", walletLimiter, protect, addMoney);
+router.post("/add/verify", walletLimiter, protect, verifyAddMoney);
+router.post("/add/status", walletLimiter, protect, updateAddMoneyStatus);
+router.post("/withdraw", walletLimiter, protect, withdrawMoney);
+router.post("/transfer", walletLimiter, protect, transferMoney);
 
 export default router;

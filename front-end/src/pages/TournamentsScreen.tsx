@@ -1,16 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { AlertCircle, Calendar, Crosshair, DollarSign, RefreshCcw, Search, Shield, SlidersHorizontal, Trophy, Users } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { formatCurrency, formatPrizeSummary, getErrorMessage, getPrizeSortValue } from "@/lib/page-utils";
 import { getMyTournamentRegistrations, getTournamentPage, Tournament } from "@/api/tournaments";
+import { CACHE_KEYS, readCache, stableCacheKey, writeAuthenticatedCache, writeCache } from "@/lib/offline-cache";
 
 const gameFilters = ["All", "Free Fire", "BGMI", "Valorant", "COD"];
 const feeFilters = ["All Fees", "Free", "Paid"];
 const sortOptions = ["Trending", "Latest", "Prize Up", "Prize Down"];
 const gameMap: Record<string, string> = { COD: "Call of Duty" };
+const queryGameMap: Record<string, string> = {
+  freefire: "Free Fire",
+  bgmi: "BGMI",
+  valorant: "Valorant",
+  callofduty: "COD",
+  cod: "COD",
+};
 const gameLabels: Record<string, string> = {
   freefire: "Free Fire",
   bgmi: "BGMI",
@@ -41,10 +49,14 @@ const PAGE_SIZE = 12;
 
 const TournamentsScreen = () => {
   const navigate = useNavigate();
-  const [activeGame, setActiveGame] = useState("All");
-  const [activeFee, setActiveFee] = useState("All Fees");
-  const [activeSort, setActiveSort] = useState("Latest");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchParams] = useSearchParams();
+  const initialGame = queryGameMap[String(searchParams.get("game") || "").toLowerCase()] || "All";
+  const initialFee = searchParams.get("type") === "free" ? "Free" : searchParams.get("type") === "paid" ? "Paid" : "All Fees";
+  const initialSort = searchParams.get("sort") === "trending" ? "Trending" : "Latest";
+  const [activeGame, setActiveGame] = useState(initialGame);
+  const [activeFee, setActiveFee] = useState(initialFee);
+  const [activeSort, setActiveSort] = useState(initialSort);
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
   const [showFilters, setShowFilters] = useState(false);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [joinedTournamentIds, setJoinedTournamentIds] = useState<Set<string>>(new Set());
@@ -55,15 +67,39 @@ const TournamentsScreen = () => {
   const [error, setError] = useState<string | null>(null);
 
   const loadTournaments = useCallback(async (nextPage = 1) => {
+    const feeFilter = activeFee === "Free" ? "free" : activeFee === "Paid" ? "paid" : "all";
+    const gameFilter = activeGame === "COD" ? gameMap.COD : activeGame;
+    const cacheKey = CACHE_KEYS.tournamentPage(stableCacheKey({
+      activeFee,
+      activeGame,
+      activeSort,
+      searchQuery: searchQuery.trim(),
+      page: nextPage,
+    }));
+    const cachedPage = nextPage === 1
+      ? readCache<{
+          tournaments: Tournament[];
+          page: number;
+          hasMore: boolean;
+          joinedIds: string[];
+        }>(cacheKey)
+      : null;
+
+    if (cachedPage) {
+      setTournaments(cachedPage.data.tournaments);
+      setPage(cachedPage.data.page);
+      setHasMore(cachedPage.data.hasMore);
+      setJoinedTournamentIds(new Set(cachedPage.data.joinedIds));
+      setLoading(false);
+    }
+
     try {
       if (nextPage === 1) {
-        setLoading(true);
+        setLoading(!cachedPage);
       } else {
         setLoadingMore(true);
       }
       setError(null);
-      const feeFilter = activeFee === "Free" ? "free" : activeFee === "Paid" ? "paid" : "all";
-      const gameFilter = activeGame === "COD" ? gameMap.COD : activeGame;
       const [data, registrations] = await Promise.all([
         getTournamentPage({
           game: gameFilter,
@@ -79,9 +115,19 @@ const TournamentsScreen = () => {
       setTournaments((previous) => nextPage === 1 ? data.tournaments : [...previous, ...data.tournaments]);
       setPage(data.page ?? nextPage);
       setHasMore(Boolean(data.hasMore));
-      setJoinedTournamentIds(new Set(registrations.map(getRegistrationTournamentId).filter(Boolean)));
+      const joinedIds = registrations.map(getRegistrationTournamentId).filter(Boolean);
+      setJoinedTournamentIds(new Set(joinedIds));
+      if (nextPage === 1) {
+        writeCache(cacheKey, {
+          tournaments: data.tournaments,
+          page: data.page ?? nextPage,
+          hasMore: Boolean(data.hasMore),
+          joinedIds,
+        });
+        writeAuthenticatedCache(CACHE_KEYS.myRegistrations, registrations);
+      }
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to load tournaments."));
+      if (!cachedPage) setError(getErrorMessage(err, "Failed to load tournaments."));
     } finally {
       setLoading(false);
       setLoadingMore(false);

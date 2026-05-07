@@ -13,6 +13,18 @@ import { useGoogleLogin } from "@react-oauth/google";
 
 const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID;
 const FACEBOOK_GRAPH_VERSION = import.meta.env.VITE_FACEBOOK_GRAPH_VERSION || "v25.0";
+const PASSWORD_MIN_LENGTH = 6;
+
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
+const normalizePhoneNumber = (value: string) => {
+  const digits = value.replace(/\D/g, "");
+  return digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits;
+};
+
+const isValidPhoneNumber = (value: string) => /^[6-9]\d{9}$/.test(normalizePhoneNumber(value));
+
+const isValidUsername = (value: string) => /^[a-zA-Z0-9_]{4,30}$/.test(value.trim());
 
 const loadFacebookSdk = async() =>
   new Promise<void>((resolve, reject) => {
@@ -103,6 +115,12 @@ const LoginScreen = () => {
 
   const handleFacebookLogin = async () => {
     try {
+      if (window.location.protocol !== "https:") {
+        toast.error("Facebook login needs HTTPS", {
+          description: "Facebook blocks FB.login on plain HTTP. Use the deployed HTTPS site or an HTTPS dev tunnel.",
+        });
+        return;
+      }
       setSocialLoading("facebook");
       await loadFacebookSdk();
 
@@ -136,13 +154,42 @@ const LoginScreen = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!phone_number.trim() || !password) {
+    const identifier = phone_number.trim();
+    const normalizedPhone = normalizePhoneNumber(identifier);
+    const loginIdentifier = isValidEmail(identifier)
+      ? identifier.toLowerCase()
+      : isValidPhoneNumber(identifier)
+        ? normalizedPhone
+        : identifier;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!identifier || !password) {
       toast.error("Phone/email and password are required.");
       return;
     }
 
-    if (isSignup && (!username.trim() || !email.trim())) {
-      toast.error("Username and email are required.");
+    if (!isValidPhoneNumber(identifier) && !isValidEmail(identifier) && !isValidUsername(identifier)) {
+      toast.error("Enter a valid username, phone number, or email.");
+      return;
+    }
+
+    if (password.trim().length < PASSWORD_MIN_LENGTH) {
+      toast.error(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`);
+      return;
+    }
+
+    if (isSignup && !isValidUsername(username)) {
+      toast.error("Username must be 4-30 letters, numbers, or underscores.");
+      return;
+    }
+
+    if (isSignup && !isValidEmail(normalizedEmail)) {
+      toast.error("Enter a valid email address.");
+      return;
+    }
+
+    if (isSignup && !isValidPhoneNumber(identifier)) {
+      toast.error("Enter a valid 10 digit phone number.");
       return;
     }
 
@@ -150,12 +197,12 @@ const LoginScreen = () => {
       setLoading(true);
       const res = isSignup
         ? await signup({
-          email: email.trim(),
+          email: normalizedEmail,
           password,
           username: username.trim(),
-          phone_number: phone_number.trim(),
+          phone_number: normalizedPhone,
         })
-        : await login({ phone_number: phone_number.trim(), password });
+        : await login({ phone_number: loginIdentifier, password });
       completeLogin(res);
     }
     catch (err) {
@@ -247,7 +294,11 @@ const LoginScreen = () => {
           </div>
 
           {!isSignup && (
-            <button type="button" className="text-xs text-primary font-heading">
+            <button
+              type="button"
+              onClick={() => navigate("/forgot-password")}
+              className="text-xs text-primary font-heading"
+            >
               Forgot Password?
             </button>
           )}

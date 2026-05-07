@@ -55,6 +55,11 @@ const paymentSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+paymentSchema.index({ user: 1, createdAt: -1 });
+paymentSchema.index({ status: 1, createdAt: -1 });
+paymentSchema.index({ provider: 1, status: 1, createdAt: -1 });
+paymentSchema.index({ "meta.purpose": 1, status: 1, createdAt: -1 });
+
 // Optional validation: prevent editing after success/failure
 paymentSchema.pre('save', async function (next) {
     const existing = this.isNew ? null : await this.constructor.findById(this._id).select("status").lean();

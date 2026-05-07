@@ -39,6 +39,48 @@ const adminCollections = {
     adminAuditLogs: { model: AdminAuditLog, label: "Admin Audit Logs", sort: { createdAt: -1 } },
 };
 
+const normalizeChannelHandle = (value = "") => {
+    const base = String(value || "creator")
+        .trim()
+        .toLowerCase()
+        .replace(/^@/, "")
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9_-]/g, "")
+        .replace(/^[^a-z0-9]+/, "")
+        .slice(0, 24);
+
+    return base.length >= 3 ? base : `creator-${base || "user"}`;
+};
+
+const ensureCreatorChannel = async (user) => {
+    const existing = await Channel.findOne({ owner: user._id });
+    if (existing) {
+        if (!existing.isActive) {
+            existing.isActive = true;
+            await existing.save();
+        }
+        return existing;
+    }
+
+    const handleBase = normalizeChannelHandle(user.username || user.email || user._id);
+    let handle = handleBase;
+    let suffix = 0;
+    while (await Channel.exists({ handle })) {
+        suffix += 1;
+        const nextSuffix = `-${suffix}`;
+        handle = `${handleBase.slice(0, 30 - nextSuffix.length)}${nextSuffix}`;
+    }
+
+    return Channel.create({
+        owner: user._id,
+        name: user.username || "Creator",
+        handle,
+        description: "Approved creator",
+        avatar: user.avatar || {},
+        isActive: true,
+    });
+};
+
 const sensitiveKeyPattern = /(password|refreshToken|accessToken|token|secret|otp|credential|resetPassword)/i;
 
 const adminCollectionPopulates = {
@@ -76,6 +118,7 @@ const adminCollectionPopulates = {
     gameAccounts: [{ path: "user", select: "username phone_number email" }],
     tickets: [
         { path: "user", select: "username phone_number email" },
+        { path: "targetUser", select: "username phone_number email" },
         { path: "tournament", select: "title game status" },
     ],
     reports: [
@@ -190,6 +233,10 @@ const getWindowStart = (days) => {
     return { start, days: safeDays };
 };
 
+const ADMIN_DASHBOARD_CACHE_MS = 10 * 1000;
+const adminDashboardCache = new Map();
+const clearAdminDashboardCache = () => adminDashboardCache.clear();
+
 const fillDailySeries = (rows, days, start, valueKeys = ["count"]) => {
     const rowMap = new Map(rows.map((row) => [row._id, row]));
 
@@ -255,196 +302,375 @@ const countByField = (Model, field, match = {}) => {
     ]);
 };
 
+const firstFacetRow = (rows, fallback = {}) => rows?.[0] || fallback;
+
+const getUserDashboardData = (start) => User.aggregate([
+    {
+        $facet: {
+            totals: [
+                {
+                    $group: {
+                        _id: null,
+                        users: { $sum: 1 },
+                        activeUsers: { $sum: { $cond: ["$isActive", 1, 0] } },
+                        creators: { $sum: { $cond: [{ $in: ["creator", { $ifNull: ["$role", []] }] }, 1, 0] } },
+                        bannedUsers: { $sum: { $cond: [{ $in: ["banned", { $ifNull: ["$role", []] }] }, 1, 0] } },
+                        pendingCreatorRequests: { $sum: { $cond: [{ $eq: ["$creatorRequest.status", "pending"] }, 1, 0] } },
+                    }
+                }
+            ],
+            byDay: [
+                { $match: { createdAt: { $gte: start } } },
+                { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, count: { $sum: 1 } } },
+                { $sort: { _id: 1 } }
+            ],
+            byRole: [
+                { $unwind: "$role" },
+                { $group: { _id: "$role", count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ],
+            recent: [
+                { $sort: { createdAt: -1 } },
+                { $limit: 6 },
+                { $project: { username: 1, phone_number: 1, email: 1, role: 1, isActive: 1, creatorRequest: 1, createdAt: 1 } }
+            ],
+            creatorRequests: [
+                { $match: { "creatorRequest.status": "pending" } },
+                { $sort: { "creatorRequest.requestedAt": -1, createdAt: -1 } },
+                { $limit: 8 },
+                { $project: { username: 1, phone_number: 1, email: 1, role: 1, creatorRequest: 1, createdAt: 1 } }
+            ]
+        }
+    }
+]);
+
+const getTournamentDashboardData = (start) => Tournament.aggregate([
+    {
+        $facet: {
+            totals: [
+                {
+                    $group: {
+                        _id: null,
+                        tournaments: { $sum: 1 },
+                        openTournaments: { $sum: { $cond: [{ $eq: ["$status", "open"] }, 1, 0] } },
+                        runningTournaments: { $sum: { $cond: [{ $eq: ["$status", "running"] }, 1, 0] } },
+                        completedTournaments: { $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } },
+                    }
+                }
+            ],
+            byDay: [
+                { $match: { createdAt: { $gte: start } } },
+                { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, count: { $sum: 1 } } },
+                { $sort: { _id: 1 } }
+            ],
+            byStatus: [
+                { $group: { _id: "$status", count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ],
+            byGame: [
+                { $group: { _id: "$game", count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ],
+            recent: [
+                { $sort: { createdAt: -1 } },
+                { $limit: 6 },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "organizer",
+                        foreignField: "_id",
+                        pipeline: [{ $project: { username: 1, avatar: 1 } }],
+                        as: "organizer"
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "channels",
+                        localField: "channel",
+                        foreignField: "_id",
+                        pipeline: [{ $project: { name: 1, handle: 1 } }],
+                        as: "channel"
+                    }
+                },
+                { $unwind: { path: "$organizer", preserveNullAndEmptyArrays: true } },
+                { $unwind: { path: "$channel", preserveNullAndEmptyArrays: true } },
+                { $project: { title: 1, game: 1, type: 1, status: 1, entryFee: 1, prizePool: 1, prizeMode: 1, killPrizeAmount: 1, prizeDistribution: 1, maxPlayers: 1, startAt: 1, organizer: 1, channel: 1, createdAt: 1 } }
+            ]
+        }
+    }
+]);
+
+const getPaymentDashboardData = (start) => Payment.aggregate([
+    {
+        $facet: {
+            revenue: [
+                { $match: { status: "success", "meta.purpose": { $ne: "withdrawal" } } },
+                { $group: { _id: null, successfulPayments: { $sum: 1 }, totalRevenue: { $sum: "$amount" } } }
+            ],
+            byDay: [
+                { $match: { status: "success", "meta.purpose": { $ne: "withdrawal" }, createdAt: { $gte: start } } },
+                { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, amount: { $sum: "$amount" }, count: { $sum: 1 } } },
+                { $sort: { _id: 1 } }
+            ],
+            byStatus: [
+                { $group: { _id: "$status", count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ],
+            razorpay: [
+                { $match: { provider: "Razorpay" } },
+                {
+                    $group: {
+                        _id: null,
+                        pendingRazorpayPayments: { $sum: { $cond: [{ $in: ["$status", ["initiated", "pending"]] }, 1, 0] } },
+                        failedRazorpayPayments: { $sum: { $cond: [{ $eq: ["$status", "failed"] }, 1, 0] } },
+                    }
+                }
+            ]
+        }
+    }
+]);
+
+const getWalletFlowDashboardData = () => WalletTransaction.aggregate([
+    {
+        $group: {
+            _id: "$type",
+            amount: { $sum: "$amount" }
+        }
+    }
+]);
+
+const getLedgerDashboardData = () => Ledger.aggregate([
+    {
+        $facet: {
+            totalCount: [{ $count: "count" }],
+            platformFeeTotals: [
+                { $match: { status: "SUCCESS", creditAccount: "PLATFORM_FEE" } },
+                { $group: { _id: null, amount: { $sum: "$amount" }, count: { $sum: 1 } } }
+            ],
+            platformFeesByCategory: [
+                { $match: { status: "SUCCESS", creditAccount: "PLATFORM_FEE" } },
+                { $group: { _id: "$category", amount: { $sum: "$amount" }, count: { $sum: 1 } } },
+                { $sort: { amount: -1 } }
+            ],
+            recent: [
+                { $sort: { createdAt: -1 } },
+                { $limit: 12 },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "fromUser",
+                        foreignField: "_id",
+                        pipeline: [{ $project: { username: 1, phone_number: 1, email: 1 } }],
+                        as: "fromUser"
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "toUser",
+                        foreignField: "_id",
+                        pipeline: [{ $project: { username: 1, phone_number: 1, email: 1 } }],
+                        as: "toUser"
+                    }
+                },
+                { $unwind: { path: "$fromUser", preserveNullAndEmptyArrays: true } },
+                { $unwind: { path: "$toUser", preserveNullAndEmptyArrays: true } },
+                { $project: { transactionId: 1, debitAccount: 1, creditAccount: 1, fromUser: 1, toUser: 1, category: 1, referenceId: 1, amount: 1, platformFee: 1, netAmount: 1, status: 1, createdAt: 1, metadata: 1 } }
+            ]
+        }
+    }
+]);
+
+const getSupportDashboardData = () => SupportTicket.aggregate([
+    {
+        $facet: {
+            totals: [
+                { $match: { status: { $in: ["open", "in_progress"] } } },
+                { $count: "openTickets" }
+            ],
+            recent: [
+                { $sort: { createdAt: -1 } },
+                { $limit: 6 },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "user",
+                        foreignField: "_id",
+                        pipeline: [{ $project: { username: 1, phone_number: 1 } }],
+                        as: "user"
+                    }
+                },
+                { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+                { $project: { title: 1, type: 1, status: 1, user: 1, createdAt: 1 } }
+            ]
+        }
+    }
+]);
+
+const getChannelDashboardData = () => Channel.aggregate([
+    {
+        $facet: {
+            totals: [
+                { $match: { isActive: true } },
+                { $group: { _id: null, channels: { $sum: 1 }, channelMembers: { $sum: "$memberCount" } } }
+            ],
+            topCreators: [
+                { $match: { isActive: true } },
+                {
+                    $lookup: {
+                        from: "tournaments",
+                        let: { ownerId: "$owner" },
+                        pipeline: [
+                            { $match: { $expr: { $eq: ["$organizer", "$$ownerId"] } } },
+                            { $count: "count" }
+                        ],
+                        as: "tournamentStats"
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "owner",
+                        foreignField: "_id",
+                        pipeline: [{ $project: { username: 1, avatar: 1 } }],
+                        as: "owner"
+                    }
+                },
+                { $unwind: "$owner" },
+                {
+                    $project: {
+                        name: 1,
+                        handle: 1,
+                        memberCount: 1,
+                        tournamentCount: { $ifNull: [{ $arrayElemAt: ["$tournamentStats.count", 0] }, 0] },
+                        owner: { _id: "$owner._id", username: "$owner.username", avatar: "$owner.avatar" }
+                    }
+                },
+                { $sort: { memberCount: -1, tournamentCount: -1 } },
+                { $limit: 5 }
+            ]
+        }
+    }
+]);
+
+const getAuditDashboardData = () => AdminAuditLog.aggregate([
+    {
+        $facet: {
+            totals: [{ $count: "count" }],
+            recent: [
+                { $sort: { createdAt: -1 } },
+                { $limit: 8 },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "actor",
+                        foreignField: "_id",
+                        pipeline: [{ $project: { username: 1, phone_number: 1, email: 1 } }],
+                        as: "actor"
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "targetUser",
+                        foreignField: "_id",
+                        pipeline: [{ $project: { username: 1, phone_number: 1, email: 1 } }],
+                        as: "targetUser"
+                    }
+                },
+                { $unwind: { path: "$actor", preserveNullAndEmptyArrays: true } },
+                { $unwind: { path: "$targetUser", preserveNullAndEmptyArrays: true } }
+            ]
+        }
+    }
+]);
+
 const getAdminDashboard = asyncHandler(async (req, res) => {
     const { start, days } = getWindowStart(req.query.days);
+    const cacheKey = String(days);
+    const cached = adminDashboardCache.get(cacheKey);
+
+    if (cached && Date.now() - cached.createdAt < ADMIN_DASHBOARD_CACHE_MS) {
+        return res.status(200).json(
+            new ApiResponse(200, cached.data, "Admin dashboard fetched successfully")
+        );
+    }
+
     await expireStaleRazorpayPayments();
 
     const [
-        totalUsers,
-        activeUsers,
-        creatorUsers,
-        bannedUsers,
-        totalChannels,
-        totalSubscriptions,
-        totalTournaments,
-        openTournaments,
-        runningTournaments,
-        completedTournaments,
+        userDashboardRows,
+        tournamentDashboardRows,
+        paymentDashboardRows,
+        walletFlowRows,
+        ledgerDashboardRows,
+        supportDashboardRows,
+        channelDashboardRows,
+        auditDashboardRows,
         totalTeams,
         totalRegistrations,
         verifiedGameAccounts,
-        openTickets,
-        successfulPayments,
-        successfulPaymentTotals,
-        walletCreditTotals,
-        walletDebitTotals,
-        usersByDayRows,
-        tournamentsByDayRows,
-        revenueByDayRows,
-        tournamentsByStatus,
-        tournamentsByGame,
-        paymentsByStatus,
-        usersByRole,
-        platformFeeTotals,
-        platformFeesByCategory,
-        ledgerTransactionCount,
-        pendingRazorpayPayments,
-        failedRazorpayPayments,
-        pendingCreatorRequests,
-        adminAuditCount,
-        topCreators,
-        recentTournaments,
-        recentUsers,
-        recentTickets,
-        creatorRequests,
-        recentAdminAuditLogs,
-        recentFinanceTransactions
+        totalSubscriptions
     ] = await Promise.all([
-        User.countDocuments(),
-        User.countDocuments({ isActive: true }),
-        User.countDocuments({ role: "creator" }),
-        User.countDocuments({ role: "banned" }),
-        Channel.countDocuments({ isActive: true }),
-        ChannelSubscription.countDocuments(),
-        Tournament.countDocuments(),
-        Tournament.countDocuments({ status: "open" }),
-        Tournament.countDocuments({ status: "running" }),
-        Tournament.countDocuments({ status: "completed" }),
+        getUserDashboardData(start),
+        getTournamentDashboardData(start),
+        getPaymentDashboardData(start),
+        getWalletFlowDashboardData(),
+        getLedgerDashboardData(),
+        getSupportDashboardData(),
+        getChannelDashboardData(),
+        getAuditDashboardData(),
         Team.countDocuments(),
         Registration.countDocuments(),
         GameAccount.countDocuments({ verified: true }),
-        SupportTicket.countDocuments({ status: { $in: ["open", "in_progress"] } }),
-        Payment.countDocuments({ status: "success", "meta.purpose": { $ne: "withdrawal" } }),
-        Payment.aggregate([
-            { $match: { status: "success", "meta.purpose": { $ne: "withdrawal" } } },
-            { $group: { _id: null, amount: { $sum: "$amount" } } }
-        ]),
-        WalletTransaction.aggregate([
-            { $match: { type: "CREDIT" } },
-            { $group: { _id: null, amount: { $sum: "$amount" } } }
-        ]),
-        WalletTransaction.aggregate([
-            { $match: { type: "DEBIT" } },
-            { $group: { _id: null, amount: { $sum: "$amount" } } }
-        ]),
-        dailyCount(User, start),
-        dailyCount(Tournament, start),
-        dailyPaymentRevenue(start),
-        countByField(Tournament, "status"),
-        countByField(Tournament, "game"),
-        countByField(Payment, "status"),
-        User.aggregate([
-            { $unwind: "$role" },
-            { $group: { _id: "$role", count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-        ]),
-        Ledger.aggregate([
-            { $match: { status: "SUCCESS", creditAccount: "PLATFORM_FEE" } },
-            { $group: { _id: null, amount: { $sum: "$amount" }, count: { $sum: 1 } } }
-        ]),
-        Ledger.aggregate([
-            { $match: { status: "SUCCESS", creditAccount: "PLATFORM_FEE" } },
-            { $group: { _id: "$category", amount: { $sum: "$amount" }, count: { $sum: 1 } } },
-            { $sort: { amount: -1 } }
-        ]),
-        Ledger.countDocuments(),
-        Payment.countDocuments({ provider: "Razorpay", status: { $in: ["initiated", "pending"] } }),
-        Payment.countDocuments({ provider: "Razorpay", status: "failed" }),
-        User.countDocuments({ "creatorRequest.status": "pending" }),
-        AdminAuditLog.countDocuments(),
-        Channel.aggregate([
-            { $match: { isActive: true } },
-            {
-                $lookup: {
-                    from: "tournaments",
-                    localField: "owner",
-                    foreignField: "organizer",
-                    as: "tournaments"
-                }
-            },
-            {
-                $lookup: {
-                    from: "users",
-                    localField: "owner",
-                    foreignField: "_id",
-                    as: "owner"
-                }
-            },
-            { $unwind: "$owner" },
-            {
-                $project: {
-                    name: 1,
-                    handle: 1,
-                    memberCount: 1,
-                    tournamentCount: { $size: "$tournaments" },
-                    owner: {
-                        _id: "$owner._id",
-                        username: "$owner.username",
-                        avatar: "$owner.avatar"
-                    }
-                }
-            },
-            { $sort: { memberCount: -1, tournamentCount: -1 } },
-            { $limit: 5 }
-        ]),
-        Tournament.find()
-            .populate("organizer", "username avatar")
-            .populate("channel", "name handle")
-            .sort({ createdAt: -1 })
-            .limit(6)
-            .select("title game type status entryFee prizePool prizeMode killPrizeAmount prizeDistribution maxPlayers startAt organizer channel createdAt"),
-        User.find()
-            .sort({ createdAt: -1 })
-            .limit(6)
-            .select("username phone_number email role isActive createdAt"),
-        SupportTicket.find()
-            .populate("user", "username phone_number")
-            .sort({ createdAt: -1 })
-            .limit(6)
-            .select("title type status user createdAt"),
-        User.find({ "creatorRequest.status": "pending" })
-            .sort({ "creatorRequest.requestedAt": -1, createdAt: -1 })
-            .limit(8)
-            .select("username phone_number email role creatorRequest createdAt"),
-        AdminAuditLog.find()
-            .populate("actor", "username phone_number email")
-            .populate("targetUser", "username phone_number email")
-            .sort({ createdAt: -1 })
-            .limit(8),
-        Ledger.find()
-            .populate("fromUser", "username phone_number email")
-            .populate("toUser", "username phone_number email")
-            .sort({ createdAt: -1 })
-            .limit(12)
-            .select("transactionId debitAccount creditAccount fromUser toUser category referenceId amount platformFee netAmount status createdAt metadata")
+        ChannelSubscription.countDocuments()
     ]);
 
-    const totalRevenue = Number(successfulPaymentTotals[0]?.amount || 0);
-    const totalCredits = Number(walletCreditTotals[0]?.amount || 0);
-    const totalDebits = Number(walletDebitTotals[0]?.amount || 0);
-    const totalPlatformFees = Number(platformFeeTotals[0]?.amount || 0);
-    const platformFeeTransactionCount = Number(platformFeeTotals[0]?.count || 0);
+    const userDashboard = firstFacetRow(userDashboardRows);
+    const tournamentDashboard = firstFacetRow(tournamentDashboardRows);
+    const paymentDashboard = firstFacetRow(paymentDashboardRows);
+    const ledgerDashboard = firstFacetRow(ledgerDashboardRows);
+    const supportDashboard = firstFacetRow(supportDashboardRows);
+    const channelDashboard = firstFacetRow(channelDashboardRows);
+    const auditDashboard = firstFacetRow(auditDashboardRows);
 
-    return res.status(200).json(
-        new ApiResponse(
-            200,
-            {
+    const userTotals = firstFacetRow(userDashboard.totals, {});
+    const tournamentTotals = firstFacetRow(tournamentDashboard.totals, {});
+    const paymentTotals = firstFacetRow(paymentDashboard.revenue, {});
+    const razorpayTotals = firstFacetRow(paymentDashboard.razorpay, {});
+    const ledgerTotals = firstFacetRow(ledgerDashboard.platformFeeTotals, {});
+    const channelTotals = firstFacetRow(channelDashboard.totals, {});
+    const supportTotals = firstFacetRow(supportDashboard.totals, {});
+    const auditTotals = firstFacetRow(auditDashboard.totals, {});
+    const walletFlow = walletFlowRows.reduce((totals, row) => ({
+        ...totals,
+        [row._id]: Number(row.amount || 0)
+    }), {});
+
+    const totalRevenue = Number(paymentTotals.totalRevenue || 0);
+    const successfulPayments = Number(paymentTotals.successfulPayments || 0);
+    const totalCredits = Number(walletFlow.CREDIT || 0);
+    const totalDebits = Number(walletFlow.DEBIT || 0);
+    const totalPlatformFees = Number(ledgerTotals.amount || 0);
+    const platformFeeTransactionCount = Number(ledgerTotals.count || 0);
+
+    const dashboardData = {
                 range: { days, start, end: new Date() },
                 totals: {
-                    users: totalUsers,
-                    activeUsers,
-                    creators: creatorUsers,
-                    bannedUsers,
-                    channels: totalChannels,
+                    users: Number(userTotals.users || 0),
+                    activeUsers: Number(userTotals.activeUsers || 0),
+                    creators: Number(userTotals.creators || 0),
+                    bannedUsers: Number(userTotals.bannedUsers || 0),
+                    channels: Number(channelTotals.channels || 0),
                     channelMembers: totalSubscriptions,
-                    tournaments: totalTournaments,
-                    openTournaments,
-                    runningTournaments,
-                    completedTournaments,
+                    tournaments: Number(tournamentTotals.tournaments || 0),
+                    openTournaments: Number(tournamentTotals.openTournaments || 0),
+                    runningTournaments: Number(tournamentTotals.runningTournaments || 0),
+                    completedTournaments: Number(tournamentTotals.completedTournaments || 0),
                     teams: totalTeams,
                     registrations: totalRegistrations,
                     verifiedGameAccounts,
-                    openTickets,
+                    openTickets: Number(supportTotals.openTickets || 0),
                     successfulPayments,
                     totalRevenue,
                     walletCredits: totalCredits,
@@ -452,34 +678,37 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
                     netWalletFlow: totalCredits - totalDebits,
                     platformFees: totalPlatformFees,
                     platformFeeTransactionCount,
-                    ledgerTransactions: ledgerTransactionCount,
-                    pendingRazorpayPayments,
-                    failedRazorpayPayments,
-                    pendingCreatorRequests,
-                    adminAuditCount
+                    ledgerTransactions: Number(firstFacetRow(ledgerDashboard.totalCount, {}).count || 0),
+                    pendingRazorpayPayments: Number(razorpayTotals.pendingRazorpayPayments || 0),
+                    failedRazorpayPayments: Number(razorpayTotals.failedRazorpayPayments || 0),
+                    pendingCreatorRequests: Number(userTotals.pendingCreatorRequests || 0),
+                    adminAuditCount: Number(auditTotals.count || 0)
                 },
                 charts: {
-                    usersByDay: fillDailySeries(usersByDayRows, days, start),
-                    tournamentsByDay: fillDailySeries(tournamentsByDayRows, days, start),
-                    revenueByDay: fillDailySeries(revenueByDayRows, days, start, ["amount", "count"]),
-                    tournamentsByStatus,
-                    tournamentsByGame,
-                    paymentsByStatus,
-                    usersByRole,
-                    platformFeesByCategory
+                    usersByDay: fillDailySeries(userDashboard.byDay || [], days, start),
+                    tournamentsByDay: fillDailySeries(tournamentDashboard.byDay || [], days, start),
+                    revenueByDay: fillDailySeries(paymentDashboard.byDay || [], days, start, ["amount", "count"]),
+                    tournamentsByStatus: tournamentDashboard.byStatus || [],
+                    tournamentsByGame: tournamentDashboard.byGame || [],
+                    paymentsByStatus: paymentDashboard.byStatus || [],
+                    usersByRole: userDashboard.byRole || [],
+                    platformFeesByCategory: ledgerDashboard.platformFeesByCategory || []
                 },
                 tables: {
-                    topCreators,
-                    recentTournaments,
-                    recentUsers,
-                    recentTickets,
-                    creatorRequests,
-                    recentAdminAuditLogs,
-                    recentFinanceTransactions
+                    topCreators: channelDashboard.topCreators || [],
+                    recentTournaments: tournamentDashboard.recent || [],
+                    recentUsers: userDashboard.recent || [],
+                    recentTickets: supportDashboard.recent || [],
+                    creatorRequests: userDashboard.creatorRequests || [],
+                    recentAdminAuditLogs: auditDashboard.recent || [],
+                    recentFinanceTransactions: ledgerDashboard.recent || []
                 }
-            },
-            "Admin dashboard fetched successfully"
-        )
+            };
+
+    adminDashboardCache.set(cacheKey, { createdAt: Date.now(), data: dashboardData });
+
+    return res.status(200).json(
+        new ApiResponse(200, dashboardData, "Admin dashboard fetched successfully")
     );
 });
 
@@ -493,7 +722,8 @@ const getWithdrawalRequests = asyncHandler(async (req, res) => {
     const withdrawals = await Payment.find(query)
         .populate("user", "username phone_number email")
         .sort({ createdAt: -1 })
-        .limit(Math.min(Number(limit) || 20, 100));
+        .limit(Math.min(Number(limit) || 20, 100))
+        .lean();
 
     return res.status(200).json(
         new ApiResponse(200, withdrawals, "Withdrawal requests fetched successfully")
@@ -579,6 +809,7 @@ const updateWithdrawalStatus = asyncHandler(async (req, res) => {
             },
         });
     }
+    clearAdminDashboardCache();
 
     const message = status === "success"
         ? "Withdrawal marked as paid"
@@ -621,6 +852,10 @@ const updateCreatorPermission = asyncHandler(async (req, res) => {
     }
 
     await user.save({ validateBeforeSave: false });
+    const channel = status === "approved" ? await ensureCreatorChannel(user) : null;
+    if (status === "removed") {
+        await Channel.updateOne({ owner: user._id }, { $set: { isActive: false } });
+    }
     const notificationBody = {
         approved: adminNote || "Your creator request has been approved. You can now create tournaments.",
         rejected: adminNote || "Your creator request was rejected by admin.",
@@ -643,8 +878,10 @@ const updateCreatorPermission = asyncHandler(async (req, res) => {
             previousRoles: roles,
             nextRoles: user.role,
             creatorRequestStatus: status,
+            channelId: channel?._id,
         },
     });
+    clearAdminDashboardCache();
 
     const updatedUser = await User.findById(user._id)
         .populate("creatorRequest.reviewedBy", "username phone_number email")

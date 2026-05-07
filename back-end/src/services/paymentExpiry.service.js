@@ -1,6 +1,9 @@
 import { Payment } from "../models/payment.model.js";
 
 const RAZORPAY_PAYMENT_TIMEOUT_MINUTES = 15;
+const PAYMENT_EXPIRY_THROTTLE_MS = 30 * 1000;
+let lastGlobalRunAt = 0;
+const lastUserRunAt = new Map();
 
 export const getRazorpayPaymentExpiryCutoff = () => {
     const cutoff = new Date();
@@ -9,6 +12,21 @@ export const getRazorpayPaymentExpiryCutoff = () => {
 };
 
 export const expireStaleRazorpayPayments = async ({ user = null } = {}) => {
+    const now = Date.now();
+    const cacheKey = user?.toString?.() || String(user || "");
+
+    if (cacheKey) {
+        const lastRunAt = lastUserRunAt.get(cacheKey) || 0;
+        if (now - lastRunAt < PAYMENT_EXPIRY_THROTTLE_MS) {
+            return { acknowledged: true, matchedCount: 0, modifiedCount: 0, skipped: true };
+        }
+        lastUserRunAt.set(cacheKey, now);
+    } else if (now - lastGlobalRunAt < PAYMENT_EXPIRY_THROTTLE_MS) {
+        return { acknowledged: true, matchedCount: 0, modifiedCount: 0, skipped: true };
+    } else {
+        lastGlobalRunAt = now;
+    }
+
     const cutoff = getRazorpayPaymentExpiryCutoff();
     const query = {
         provider: "Razorpay",

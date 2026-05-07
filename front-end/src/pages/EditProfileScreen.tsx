@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { AlertCircle, ArrowLeft, Calendar, Camera, Lock, Phone, RefreshCcw, User, Users } from "lucide-react";
+import { AlertCircle, ArrowLeft, Calendar, Camera, Lock, Mail, Phone, RefreshCcw, User, Users } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { toast } from "@/components/ui/sonner";
@@ -17,6 +17,7 @@ import { getErrorMessage, getErrorToast } from "@/lib/page-utils";
 
 interface ProfileForm {
   username: string;
+  email: string;
   phone_number: string;
   dateOfBirth: string;
   gender: string;
@@ -25,6 +26,7 @@ interface ProfileForm {
 
 const emptyForm: ProfileForm = {
   username: "",
+  email: "",
   phone_number: "",
   dateOfBirth: "",
   gender: "",
@@ -46,6 +48,8 @@ const getEditablePhoneNumber = (phoneNumber?: string) => {
   return /^(google|facebook):/i.test(value) ? "" : value;
 };
 
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
 const EditProfileScreen = () => {
   const navigate = useNavigate();
   const [initialForm, setInitialForm] = useState<ProfileForm>(emptyForm);
@@ -61,6 +65,7 @@ const EditProfileScreen = () => {
   const hasChanges = useMemo(
     () =>
       form.username.trim() !== initialForm.username ||
+      form.email.trim() !== initialForm.email ||
       form.phone_number.trim() !== initialForm.phone_number ||
       form.dateOfBirth !== initialForm.dateOfBirth ||
       form.gender !== initialForm.gender,
@@ -69,6 +74,7 @@ const EditProfileScreen = () => {
 
   const onlyPhoneChanged = hasChanges
     && form.phone_number.trim() !== initialForm.phone_number
+    && form.email.trim() === initialForm.email
     && form.username.trim() === initialForm.username
     && form.dateOfBirth === initialForm.dateOfBirth
     && form.gender === initialForm.gender;
@@ -88,6 +94,7 @@ const EditProfileScreen = () => {
       if (cachedProfile) {
         const cachedForm = {
           username: cachedProfile.data.username ?? "",
+          email: cachedProfile.data.email ?? "",
           phone_number: getEditablePhoneNumber(cachedProfile.data.phone_number),
           dateOfBirth: formatDateInput(cachedProfile.data.dateOfBirth),
           gender: cachedProfile.data.gender ?? "",
@@ -104,6 +111,7 @@ const EditProfileScreen = () => {
       const res = await getMyProfile();
       const nextForm = {
         username: res.data.user.username ?? "",
+        email: res.data.user.email ?? "",
         phone_number: getEditablePhoneNumber(res.data.user.phone_number),
         dateOfBirth: formatDateInput(res.data.user.dateOfBirth),
         gender: res.data.user.gender ?? "",
@@ -148,10 +156,16 @@ const EditProfileScreen = () => {
       return;
     }
 
+    if (form.email.trim() && !isValidEmail(form.email)) {
+      toast.error("Enter a valid email address.");
+      return;
+    }
+
     try {
       setSaving(true);
       const payload: ProfileUpdatePayload = {};
       if (form.username.trim() !== initialForm.username) payload.username = form.username.trim();
+      if (form.email.trim() !== initialForm.email) payload.email = form.email.trim().toLowerCase();
       if (form.phone_number.trim() !== initialForm.phone_number) payload.phone_number = form.phone_number.trim();
       if (form.dateOfBirth !== initialForm.dateOfBirth) payload.dateOfBirth = form.dateOfBirth;
       if (form.gender !== initialForm.gender) payload.gender = form.gender;
@@ -252,6 +266,24 @@ const EditProfileScreen = () => {
                   className={inputClass}
                 />
               </div>
+            </GlassCard>
+
+            <GlassCard neon>
+              <label className="text-xs text-muted-foreground font-heading mb-1 block">Email Address</label>
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => update("email", e.target.value)}
+                  placeholder="Add email address"
+                  disabled={saving}
+                  className={inputClass}
+                />
+              </div>
+              <p className="mt-2 text-[10px] text-muted-foreground">
+                You can login or reset password with this email after saving it.
+              </p>
             </GlassCard>
 
             <GlassCard neon>

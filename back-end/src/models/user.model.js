@@ -21,8 +21,13 @@ const userSchema = new mongoose.Schema({
         index: true,
         type: String,
         unique: true,
+        sparse: true,
         lowercase: true,
         trim: true
+    },
+    emailVerified: {
+        type: Boolean,
+        default: false,
     },
     phone_number: {
         index: true,
@@ -32,6 +37,20 @@ const userSchema = new mongoose.Schema({
         trim: true,
         default: undefined,
     },
+    phoneVerified: {
+        type: Boolean,
+        default: false,
+    },
+    linkedProviders: [{
+        provider: {
+            type: String,
+            enum: ["password", "google", "facebook", "phone", "email"],
+            required: true,
+        },
+        providerId: { type: String, trim: true },
+        linkedAt: { type: Date, default: Date.now },
+        verified: { type: Boolean, default: false },
+    }],
     socialProvider: {
         type: String,
         enum: ["google", "facebook"],
@@ -67,6 +86,10 @@ const userSchema = new mongoose.Schema({
     walletBalance: {
         type: Number,
         default: 0
+    },
+    stats: {
+        rating: { type: Number, default: 0, min: 0, max: 5 },
+        ratingCount: { type: Number, default: 0, min: 0 },
     },
     role: {
         type: [String],
@@ -115,6 +138,10 @@ userSchema.index(
         },
     }
 );
+userSchema.index({ createdAt: -1 });
+userSchema.index({ isActive: 1, createdAt: -1 });
+userSchema.index({ role: 1, createdAt: -1 });
+userSchema.index({ "creatorRequest.status": 1, "creatorRequest.requestedAt": -1 });
 
 // Hash password before saving
 userSchema.pre("save", async function (next) {

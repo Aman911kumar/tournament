@@ -10,7 +10,9 @@ import {
     leaveChannel,
     getJoinedChannels,
     getJoinedChannelTournaments,
-    getChannelTournaments
+    getChannelTournaments,
+    rateCreatorByUserId,
+    rateCreatorByChannelId,
 } from "../controllers/channel.controller.js";
 import { protect } from "../middlewares/auth.middleware.js";
 
@@ -23,9 +25,11 @@ router.get("/me", protect, getMyChannel);
 router.get("/joined", protect, getJoinedChannels);
 router.get("/feed/tournaments", protect, getJoinedChannelTournaments);
 router.get("/creator/:userId", getCreatorByUserId);
+router.post("/creator/:userId/rating", protect, rateCreatorByUserId);
 
 router.get("/:identifier", getChannelByIdentifier);
 router.patch("/:channelId", protect, updateChannel);
+router.post("/:channelId/rating", protect, rateCreatorByChannelId);
 router.post("/:channelId/join", protect, joinChannel);
 router.delete("/:channelId/join", protect, leaveChannel);
 router.get("/:channelId/tournaments", getChannelTournaments);

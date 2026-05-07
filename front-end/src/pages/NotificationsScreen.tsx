@@ -11,6 +11,7 @@ import {
   NotificationItem,
 } from "@/api/notifications";
 import { getErrorMessage, getErrorToast } from "@/lib/page-utils";
+import { CACHE_KEYS, readCache, writeAuthenticatedCache } from "@/lib/offline-cache";
 
 const iconColorMap: Record<string, string> = {
   tournament_update: "text-destructive",
@@ -31,12 +32,20 @@ const NotificationsScreen = () => {
   const [error, setError] = useState<string | null>(null);
 
   const loadNotifications = async () => {
+    const cachedNotifications = readCache<NotificationItem[]>(CACHE_KEYS.notifications);
+    if (cachedNotifications) {
+      setNotifications(cachedNotifications.data);
+      setLoading(false);
+    }
+
     try {
-      setLoading(true);
+      setLoading(!cachedNotifications);
       setError(null);
-      setNotifications(await getNotifications());
+      const nextNotifications = await getNotifications();
+      setNotifications(nextNotifications);
+      writeAuthenticatedCache(CACHE_KEYS.notifications, nextNotifications);
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to load notifications."));
+      if (!cachedNotifications) setError(getErrorMessage(err, "Failed to load notifications."));
     } finally {
       setLoading(false);
     }

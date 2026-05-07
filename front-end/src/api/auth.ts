@@ -70,6 +70,16 @@ export interface ChangePasswordPayload {
   newPassword: string;
 }
 
+export interface ForgotPasswordResponse {
+  resetToken?: string;
+  expiresInMinutes?: number;
+}
+
+export interface ResetPasswordPayload {
+  token: string;
+  newPassword: string;
+}
+
 export const ENDPOINTS = {
   google: "/auth/google",
   facebook: "/auth/facebook",
@@ -78,6 +88,7 @@ export const ENDPOINTS = {
   signup: "/auth/register",
   changePassword: "/auth/change-password",
   forgotPassword: "/auth/forgot-password",
+  resetPassword: (token: string) => `/auth/reset-password/${encodeURIComponent(token)}`,
   socialLogin: (provider: "google" | "facebook") => `/auth/${provider}`,
 };
 
@@ -125,6 +136,30 @@ export async function changePassword(payload: ChangePasswordPayload):Promise<Api
   return apiFetch(ENDPOINTS.changePassword, { method: "PATCH", body: JSON.stringify(payload) , credentials:"include" });
 }
 
-export async function forgotPassword(email: string): Promise<void> {
-  // return apiFetch(ENDPOINTS.forgotPassword, { method: "POST", body: JSON.stringify({ email }) });
+export async function forgotPassword(identifier: string): Promise<ApiResponse<ForgotPasswordResponse>> {
+  const trimmedIdentifier = identifier.trim();
+  const digitsOnly = trimmedIdentifier.replace(/\D/g, "");
+  const phoneNumber = digitsOnly.length === 12 && digitsOnly.startsWith("91")
+    ? digitsOnly.slice(2)
+    : digitsOnly.length === 10
+      ? digitsOnly
+      : trimmedIdentifier;
+  const email = trimmedIdentifier.includes("@") ? trimmedIdentifier.toLowerCase() : trimmedIdentifier;
+
+  return apiFetch(ENDPOINTS.forgotPassword, {
+    method: "POST",
+    body: JSON.stringify({
+      identifier: trimmedIdentifier,
+      phone_number: phoneNumber,
+      email,
+      username: trimmedIdentifier,
+    }),
+  });
+}
+
+export async function resetPassword(payload: ResetPasswordPayload): Promise<ApiResponse> {
+  return apiFetch(ENDPOINTS.resetPassword(payload.token), {
+    method: "PUT",
+    body: JSON.stringify({ newPassword: payload.newPassword }),
+  });
 }

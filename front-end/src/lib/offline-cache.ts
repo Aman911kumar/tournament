@@ -16,7 +16,23 @@ export const CACHE_KEYS = {
   gameAccounts: "gameAccounts.list",
   walletSummary: "wallet.summary",
   walletTransactions: "wallet.transactions",
+  creators: "creators.list",
+  home: "home.feed",
+  myRegistrations: "tournaments.myRegistrations",
+  notifications: "notifications.list",
+  creatorDashboard: (userId: string) => `creatorDashboard.${userId}`,
+  creatorProfile: (id: string) => `creatorProfile.${id}`,
+  tournamentDetail: (id: string) => `tournamentDetail.${id}`,
+  tournamentPage: (key: string) => `tournaments.page.${key}`,
 } as const;
+
+export const stableCacheKey = (value: unknown) => {
+  try {
+    return JSON.stringify(value, Object.keys(value as Record<string, unknown>).sort());
+  } catch {
+    return String(value);
+  }
+};
 
 const canUseStorage = () => typeof window !== "undefined" && Boolean(window.localStorage);
 

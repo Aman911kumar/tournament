@@ -68,5 +68,6 @@ const channelSchema = new mongoose.Schema(
 
 channelSchema.index({ name: "text", handle: "text" });
 channelSchema.index({ memberCount: -1, createdAt: -1 });
+channelSchema.index({ isActive: 1, memberCount: -1, createdAt: -1 });
 
 export const Channel = mongoose.model("Channel", channelSchema);

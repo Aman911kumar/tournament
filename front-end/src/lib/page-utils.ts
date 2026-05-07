@@ -1,5 +1,8 @@
 import { ApiError } from "@/api/client";
 
+const showApiRoutesInToast =
+  import.meta.env.DEV || import.meta.env.VITE_SHOW_API_ROUTES_IN_TOAST === "true";
+
 export const formatCurrency = (value: number | string) => {
   const numberValue = typeof value === "string" ? Number(value) : value;
 
@@ -55,6 +58,12 @@ const humanizeErrorDetail = (detail: Record<string, unknown>) => {
     .join(", ");
 };
 
+const sanitizeUserFacingError = (value: string) =>
+  value
+    .replace(/\b(GET|POST|PUT|PATCH|DELETE)\s+\/[^\s,)"']+/gi, "$1 [hidden]")
+    .replace(/https?:\/\/[^\s,)"']+/gi, "[hidden url]")
+    .replace(/\/api\/[^\s,)"']+/gi, "[hidden path]");
+
 export const getErrorSourceLabel = (error: unknown) => {
   if (error instanceof ApiError) {
     if (error.source === "network" || error.status === 0) return "Network";
@@ -68,13 +77,13 @@ export const getErrorSourceLabel = (error: unknown) => {
 
 export const getErrorMessage = (error: unknown, fallback = "Something went wrong") => {
   if (error instanceof Error) {
-    return error.message;
+    return sanitizeUserFacingError(error.message);
   }
 
   if (typeof error === "object" && error !== null && "message" in error) {
     const message = (error as { message?: unknown }).message;
     if (typeof message === "string") {
-      return message;
+      return sanitizeUserFacingError(message);
     }
   }
 
@@ -88,6 +97,7 @@ export const getErrorDetails = (error: unknown) => {
 
   return error.errors
     .map((detail) => humanizeErrorDetail(detail))
+    .map(sanitizeUserFacingError)
     .filter(Boolean)
     .slice(0, 3)
     .join(" | ");
@@ -103,18 +113,17 @@ export const getErrorToast = (
   const source = getErrorSourceLabel(error);
   const message = getErrorMessage(error, options.fallback ?? "Something went wrong");
   const details = getErrorDetails(error);
-  const endpoint =
-    error instanceof ApiError && error.endpoint
-      ? `${error.method.toUpperCase()} ${error.endpoint}`
-      : "";
   const requestId = error instanceof ApiError && error.requestId ? error.requestId : "";
+  const route = error instanceof ApiError && error.endpoint
+    ? `${error.method || "GET"} ${error.endpoint}`
+    : "";
 
   return {
     title: `${options.action ?? "Request"} failed`,
     description: [
       `[${source}] ${message}`,
       details ? `Details: ${details}` : "",
-      endpoint ? `Endpoint: ${endpoint}` : "",
+      showApiRoutesInToast && route ? `API: ${route}` : "",
       requestId ? `Request ID: ${requestId}` : "",
     ]
       .filter(Boolean)

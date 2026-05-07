@@ -1,10 +1,12 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import { PORT, CORS_ORIGIN } from './env.js';
 import connect_db from './src/database/dataBaseConnect.js';
 import routes from './src/routes/all.routes.js';
 import cookieParser from 'cookie-parser';
 import errorHandler from './src/middlewares/errorHandler.middleware.js';
+import { globalApiLimiter } from './src/middlewares/rateLimit.middleware.js';
 import ApiError from './src/utils/ApiError.js';
 import path from "path";
 import { expireStaleRazorpayPayments } from './src/services/paymentExpiry.service.js';
@@ -14,6 +16,8 @@ const distPath = path.join(__dirname, "dist");
 
 // App configuration
 const app = express();
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
 
 // CORS configuration
 const configuredOrigins = CORS_ORIGIN
@@ -42,6 +46,14 @@ app.use(
     })
 );
 
+app.use(compression({
+    threshold: 1024,
+    filter: (req, res) => {
+        if (req.headers["x-no-compression"]) return false;
+        return compression.filter(req, res);
+    },
+}));
+
 // Body parsers
 app.use(express.json({ limit: "50kb" })); // JSON payload limit
 app.use(express.urlencoded({ extended: true, limit: "50kb" })); // form data
@@ -63,9 +75,9 @@ app.use((req, res, next) => {
 // });
 
 // All routes
-app.use('/api/v1', routes);
+app.use('/api/v1', globalApiLimiter, routes);
 
-app.use("/", (req, res) => {
+app.get("/", (req, res) => {
     res.json("server is live")
 })
 

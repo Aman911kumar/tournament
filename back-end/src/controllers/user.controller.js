@@ -68,7 +68,69 @@ const createUniqueUsername = async (name, email, providerId) => {
 
 const isProviderPhoneNumber = (value) => /^(google|facebook):/i.test(String(value || ""));
 
-const normalizePhoneNumber = (value = "") => String(value).trim().replace(/\s+/g, "");
+const normalizePhoneNumber = (value = "") => {
+    const compact = String(value).trim().replace(/\s+/g, "");
+    const digits = compact.replace(/\D/g, "");
+    if (digits.length === 12 && digits.startsWith("91")) return digits.slice(2);
+    if (digits.length === 10) return digits;
+    return compact;
+};
+
+const normalizeEmail = (value = "") => String(value).trim().toLowerCase();
+
+const isValidEmail = (value = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
+
+const escapeRegex = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const findUserByIdentifier = async (rawIdentifier, projection) => {
+    const identifier = String(rawIdentifier || "").trim();
+    const normalizedPhone = normalizePhoneNumber(identifier);
+    const normalizedEmail = normalizeEmail(identifier);
+    const exactUsername = new RegExp(`^${escapeRegex(identifier)}$`, "i");
+    const exactEmail = new RegExp(`^${escapeRegex(normalizedEmail)}$`, "i");
+    const digits = identifier.replace(/\D/g, "");
+    const candidates = [
+        { phone_number: identifier },
+        { phone_number: normalizedPhone },
+        { email: normalizedEmail },
+        { email: exactEmail },
+        { username: exactUsername },
+        ...(digits ? [{ phone_number: digits }] : [])
+    ];
+
+    const directMatch = await User.findOne({
+        $or: candidates
+    })
+        .collation({ locale: "en", strength: 2 })
+        .select(projection || "");
+
+    if (directMatch || !identifier) return directMatch;
+
+    const loosePattern = new RegExp(escapeRegex(identifier), "i");
+    const loosePhonePattern = digits ? new RegExp(escapeRegex(digits), "i") : null;
+
+    return User.findOne({
+        $or: [
+            { username: loosePattern },
+            { email: loosePattern },
+            { email: new RegExp(escapeRegex(normalizedEmail), "i") },
+            ...(loosePhonePattern ? [{ phone_number: loosePhonePattern }] : []),
+        ]
+    }).select(projection || "");
+};
+
+const getIdentifierDebugInfo = (rawIdentifier) => {
+    const identifier = String(rawIdentifier || "").trim();
+    const digits = identifier.replace(/\D/g, "");
+
+    return {
+        received: identifier,
+        normalizedPhone: normalizePhoneNumber(identifier),
+        normalizedEmail: normalizeEmail(identifier),
+        username: identifier,
+        digits: digits || undefined,
+    };
+};
 
 const toDateInputString = (value) => {
     if (!value) return "";
@@ -187,6 +249,24 @@ const findOrCreateSocialUser = async ({ provider, providerId, email, name, pictu
             isUpdated = true;
         }
 
+        const existingLinks = existingUser.linkedProviders || [];
+        const nextLinks = [...existingLinks];
+        if (!nextLinks.some((link) => link.provider === provider && link.providerId === providerId)) {
+            nextLinks.push({ provider, providerId, verified: true });
+        }
+        if (normalizedEmail && !nextLinks.some((link) => link.provider === "email" && link.providerId === normalizedEmail)) {
+            nextLinks.push({ provider: "email", providerId: normalizedEmail, verified: true });
+        }
+        if (nextLinks.length !== existingLinks.length) {
+            existingUser.linkedProviders = nextLinks;
+            isUpdated = true;
+        }
+
+        if (normalizedEmail && !existingUser.emailVerified) {
+            existingUser.emailVerified = true;
+            isUpdated = true;
+        }
+
         if (isProviderPhoneNumber(existingUser.phone_number)) {
             existingUser.set("phone_number", undefined);
             isUpdated = true;
@@ -217,11 +297,16 @@ const findOrCreateSocialUser = async ({ provider, providerId, email, name, pictu
                 {
                     username,
                     email: accountEmail,
+                    emailVerified: Boolean(normalizedEmail),
                     socialProvider: provider,
                     socialProviderId: providerId,
                     password,
                     passwordLoginEnabled: false,
                     avatar: picture ? { url: picture } : undefined,
+                    linkedProviders: [
+                        { provider, providerId, verified: true },
+                        { provider: "email", providerId: accountEmail, verified: Boolean(normalizedEmail) }
+                    ],
                 }
             ],
             { session }
@@ -357,6 +442,8 @@ const getFacebookProfile = async ({ accessToken, access_token, userID }) => {
 
 const registerUser = asyncHandler(async (req, res) => {
     const { username, phone_number, password, email } = req.body;
+    const normalizedEmail = email ? normalizeEmail(email) : undefined;
+    const normalizedPhone = normalizePhoneNumber(phone_number);
 
     // Validate required fields
     [
@@ -369,16 +456,21 @@ const registerUser = asyncHandler(async (req, res) => {
         }
     });
 
+    if (normalizedEmail && !isValidEmail(normalizedEmail)) {
+        throw new ApiError(400, "Invalid email address");
+    }
+
     // Check if user already exists
     const existedUser = await User.findOne({
         $or: [
             { username: { $regex: `^${username}$`, $options: "i" } },
-            { phone_number }
+            { phone_number: normalizedPhone },
+            ...(normalizedEmail ? [{ email: normalizedEmail }] : [])
         ]
     });
 
     if (existedUser) {
-        throw new ApiError(400, 'Username or phone number already exists');
+        throw new ApiError(400, 'Username, email, or phone number already exists');
     }
 
     // 🔥 START TRANSACTION
@@ -390,7 +482,18 @@ const registerUser = asyncHandler(async (req, res) => {
     try {
         // 1️⃣ Create user
         const createdUserArr = await User.create(
-            [{ username, phone_number, password, email, passwordLoginEnabled: true }],
+            [{
+                username,
+                phone_number: normalizedPhone,
+                password,
+                email: normalizedEmail,
+                passwordLoginEnabled: true,
+                linkedProviders: [
+                    { provider: "password", providerId: username, verified: true },
+                    { provider: "phone", providerId: normalizedPhone, verified: false },
+                    ...(normalizedEmail ? [{ provider: "email", providerId: normalizedEmail, verified: false }] : [])
+                ]
+            }],
             { session }
         );
 
@@ -439,11 +542,12 @@ const registerUser = asyncHandler(async (req, res) => {
 });
 
 const loginUser = asyncHandler(async (req, res) => {
-    const { phone_number, password } = req.body;
+    const { phone_number, identifier, username, email, password } = req.body;
+    const loginIdentifier = phone_number || identifier || username || email;
 
-    // console.log(phone_number, "\n", password)
+    console.log(phone_number, "\n", password)
     // Validate input
-    [{ field: phone_number, name: "phone number" },
+    [{ field: loginIdentifier, name: "username, email, or phone number" },
     { field: password, name: "password" }].forEach(item => {
         if (!item.field || item.field.trim() === '') {
             throw new ApiError(400, `${item.name} is required`);
@@ -451,10 +555,7 @@ const loginUser = asyncHandler(async (req, res) => {
     });
 
     // Find user
-    let user = await User.findOne({ phone_number });
-    if (!user) {
-        user = await User.findOne({ email: phone_number });
-    }
+    const user = await findUserByIdentifier(loginIdentifier);
     if (!user) {
         throw new ApiError(404, 'User not found');
     }
@@ -557,36 +658,65 @@ const renewTokens = asyncHandler(async (req, res) => {
         throw new ApiError(401, error?.message || "Invalid refresh token");
     }
 });
-const forgotPassword = asyncHandler(async (req, res) => {
-    const { phone_number } = req.body;
 
-    if (!phone_number || phone_number.trim() === '') {
-        throw new ApiError(400, "Phone number is required");
+const forgotPassword = asyncHandler(async (req, res) => {
+    const identifiers = [
+        req.body?.identifier,
+        req.body?.phone_number,
+        req.body?.email,
+        req.body?.username,
+    ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .filter((value, index, values) => values.findIndex((item) => item.toLowerCase() === value.toLowerCase()) === index);
+
+    if (identifiers.length === 0) {
+        throw new ApiError(400, "Username, email, or phone number is required");
     }
 
-    const user = await User.findOne({ phone_number });
+    let user = null;
+    for (const identifier of identifiers) {
+        user = await findUserByIdentifier(identifier);
+        console.log("Found user:", user);
+        if (user) break;
+    }
+
     if (!user) {
-        throw new ApiError(404, "User not found");
+        throw new ApiError(
+            404,
+            "User not found",
+            process.env.NODE_ENV === "production"
+                ? []
+                : identifiers.map((identifier) => ({
+                    field: "lookup",
+                    message: "No user matched this identifier",
+                    searched: getIdentifierDebugInfo(identifier),
+                }))
+        );
     }
 
     // Generate a reset token (expires in 10 min)
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const resetTokenExpires = Date.now() + 10 * 60 * 1000; // 1 min
+    const resetTokenExpires = Date.now() + 10 * 60 * 1000;
 
     user.resetPasswordToken = resetToken;
     user.resetPasswordExpires = resetTokenExpires;
     await user.save({ validateBeforeSave: false });
 
-
     // TODO: send token via SMS or email
     // e.g., sendSMS(user.phone_number, `Your reset code: ${resetToken}`)
+    const responseData = {
+        expiresInMinutes: 10,
+        ...(process.env.NODE_ENV !== "production" ? { resetToken } : {})
+    };
 
     return res.status(200).json(
-        new ApiResponse(200, {}, "Password reset token sent successfully")
+        new ApiResponse(200, responseData, "Password reset token generated successfully")
     );
 });
 const resetPassword = asyncHandler(async (req, res) => {
-    const { token, newPassword } = req.body;
+    const token = req.params.token || req.body?.token;
+    const { newPassword } = req.body;
 
     if (!token || !newPassword || newPassword.trim() === '') {
         throw new ApiError(400, "Token and new password are required");
@@ -611,8 +741,10 @@ const resetPassword = asyncHandler(async (req, res) => {
         new ApiResponse(200, {}, "Password reset successfully")
     );
 });
+
 const changePassword = asyncHandler(async (req, res) => {
-    const user = req.user;
+    const user = await User.findById(req.user._id).select("password passwordLoginEnabled socialProvider phone_number");
+    if (!user) throw new ApiError(404, "User not found");
     const { currentPassword, newPassword } = req.body;
     const isSettingSocialPassword = Boolean(user.socialProvider) && user.passwordLoginEnabled !== true;
 
@@ -678,14 +810,19 @@ const getUserById = asyncHandler(async (req, res) => {
 });
 
 const updateUserProfile = asyncHandler(async (req, res) => {
-    const user = req.user
-    const { username, phone_number, gamename, gameid, dateOfBirth, gender, password } = req.body;
+    const user = await User.findById(req.user._id);
+    if (!user) throw new ApiError(404, "User not found");
+    const { username, email, phone_number, gamename, gameid, dateOfBirth, gender, password } = req.body;
     // console.log(username, gamename, gameid, dateOfBirth, gender, password)
     const isSocialUser = Boolean(user.socialProvider);
     const wantsPhoneUpdate = Object.prototype.hasOwnProperty.call(req.body, "phone_number");
+    const wantsEmailUpdate = Object.prototype.hasOwnProperty.call(req.body, "email");
     const nextPhoneNumber = wantsPhoneUpdate ? normalizePhoneNumber(phone_number) : undefined;
+    const nextEmail = wantsEmailUpdate ? normalizeEmail(email) : undefined;
     const currentPhoneNumber = isProviderPhoneNumber(user.phone_number) ? "" : normalizePhoneNumber(user.phone_number);
+    const currentEmail = normalizeEmail(user.email);
     const phoneChanged = wantsPhoneUpdate && nextPhoneNumber !== currentPhoneNumber;
+    const emailChanged = wantsEmailUpdate && nextEmail !== currentEmail;
     const usernameChanged = Boolean(username?.trim()) && username.trim() !== user.username;
     const gamenameChanged = Boolean(gamename?.trim()) && gamename.trim() !== user.gamename;
     const gameidChanged = Boolean(gameid?.trim()) && gameid.trim() !== user.gameid;
@@ -695,8 +832,12 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     }
     const dateOfBirthChanged = Boolean(dateOfBirth?.trim()) && nextDateOfBirth !== toDateInputString(user.dateOfBirth);
     const genderChanged = Boolean(gender?.trim()) && gender.trim() !== user.gender;
-    const wantsOtherUpdate = usernameChanged || gamenameChanged || gameidChanged || dateOfBirthChanged || genderChanged;
+    const wantsOtherUpdate = usernameChanged || emailChanged || gamenameChanged || gameidChanged || dateOfBirthChanged || genderChanged;
     const hasAnyUpdate = phoneChanged || wantsOtherUpdate;
+
+    if (emailChanged && nextEmail && !isValidEmail(nextEmail)) {
+        throw new ApiError(400, "Invalid email address");
+    }
 
     // Validate current password
     if (hasAnyUpdate && (!isSocialUser || wantsOtherUpdate) && (!password || password.trim() === "")) {
@@ -724,12 +865,28 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     if (phoneChanged) {
         if (!nextPhoneNumber) {
             updates.phone_number = undefined;
+            updates.phoneVerified = false;
         } else {
             const existingPhoneUser = await User.findOne({ phone_number: nextPhoneNumber });
             if (existingPhoneUser && existingPhoneUser._id.toString() !== user._id.toString()) {
                 throw new ApiError(400, "Phone number already exists");
             }
             updates.phone_number = nextPhoneNumber;
+            updates.phoneVerified = false;
+        }
+    }
+
+    if (emailChanged) {
+        if (!nextEmail) {
+            updates.email = undefined;
+            updates.emailVerified = false;
+        } else {
+            const existingEmailUser = await User.findOne({ email: nextEmail });
+            if (existingEmailUser && existingEmailUser._id.toString() !== user._id.toString()) {
+                throw new ApiError(400, "Email already exists");
+            }
+            updates.email = nextEmail;
+            updates.emailVerified = false;
         }
     }
 
@@ -741,7 +898,19 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     // Update user in DB
     const updatedUser = await User.findByIdAndUpdate(
         user._id,
-        updates,
+        {
+            ...updates,
+            ...(phoneChanged || emailChanged ? {
+                linkedProviders: [
+                    ...(user.linkedProviders || []).filter((link) => !(
+                        (phoneChanged && link.provider === "phone") ||
+                        (emailChanged && link.provider === "email")
+                    )),
+                    ...(phoneChanged && nextPhoneNumber ? [{ provider: "phone", providerId: nextPhoneNumber, verified: false }] : []),
+                    ...(emailChanged && nextEmail ? [{ provider: "email", providerId: nextEmail, verified: false }] : []),
+                ]
+            } : {})
+        },
         { new: true, runValidators: true }
     ).select("-password -refreshToken -accessToken");
 
@@ -815,7 +984,8 @@ const deleteUser = asyncHandler(async (req, res) => {
 
     // Verify password
     if (!requestedUserId) {
-        const isCorrect = await user.isPasswordCorrect(password);
+        const passwordUser = await User.findById(user._id).select("password");
+        const isCorrect = passwordUser ? await passwordUser.isPasswordCorrect(password) : false;
         if (!isCorrect) {
             throw new ApiError(400, 'Incorrect password');
         }
@@ -895,9 +1065,9 @@ const getCreatorEarningsTotals = async (userId, extraMatch = {}) => {
 const getWalletBalance = asyncHandler(async (req, res) => {
     const wallet = await Wallet.findOne({
         user: req.user._id
-    })
+    }).select("balance").lean();
     
-    const balance = wallet.balance || 0;
+    const balance = wallet?.balance || 0;
 
     return res.status(200).json(
         new ApiResponse(200, { balance }, "Wallet balance fetched successfully")
@@ -906,7 +1076,10 @@ const getWalletBalance = asyncHandler(async (req, res) => {
 
 const getWalletTransaction = asyncHandler(async (req, res) => {
     const userId = req.user._id;
-    const { limit = 20, skip = 0, type, filter } = req.query;
+    const { limit = 20, page, skip = 0, type, filter, view = "all" } = req.query;
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const safePage = Math.max(Number(page) || 1, 1);
+    const safeSkip = page ? (safePage - 1) * safeLimit : Math.max(Number(skip) || 0, 0);
 
     const query = { user: userId };
     if (type && ['credit', 'debit'].includes(type)) {
@@ -928,25 +1101,65 @@ const getWalletTransaction = asyncHandler(async (req, res) => {
 
     await expireStaleRazorpayPayments({ user: userId });
 
-    const transactions = await WalletTransaction.find(query)
+    const [transactions, walletTotal, walletAggregations] = await Promise.all([
+        WalletTransaction.find(query)
         .populate("fromUser", "username phone_number avatar role")
         .populate("toUser", "username phone_number avatar role")
         .sort({ createdAt: -1 })
-        .skip(Number(skip))
-        .limit(Number(limit));
+            .skip(safeSkip)
+            .limit(safeLimit)
+            .lean(),
+        WalletTransaction.countDocuments(query),
+        WalletTransaction.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: { type: "$type", category: "$category", status: "$status" },
+                    count: { $sum: 1 },
+                    amount: { $sum: "$amount" },
+                    platformFee: { $sum: { $ifNull: ["$platformFee", 0] } }
+                }
+            },
+            { $sort: { count: -1 } }
+        ])
+    ]);
 
     if (filter === "creator") {
         return res.status(200).json(
-            new ApiResponse(200, transactions, "Wallet transactions fetched successfully")
+            new ApiResponse(200, {
+                transactions,
+                walletTransactions: transactions,
+                paymentTransactions: [],
+                total: walletTotal,
+                page: page ? safePage : Math.floor(safeSkip / safeLimit) + 1,
+                limit: safeLimit,
+                pages: Math.ceil(walletTotal / safeLimit),
+                hasMore: safeSkip + transactions.length < walletTotal,
+                aggregations: { wallet: walletAggregations, payments: [] }
+            }, "Wallet transactions fetched successfully")
         );
     }
 
     const paymentQuery = { user: userId };
-    const payments = await Payment.find(paymentQuery)
+    const [payments, paymentTotal, paymentAggregations] = await Promise.all([
+        Payment.find(paymentQuery)
         .sort({ createdAt: -1 })
-        .skip(Number(skip))
-        .limit(Number(limit))
-        .lean();
+            .skip(safeSkip)
+            .limit(safeLimit)
+            .lean(),
+        Payment.countDocuments(paymentQuery),
+        Payment.aggregate([
+            { $match: paymentQuery },
+            {
+                $group: {
+                    _id: "$status",
+                    count: { $sum: 1 },
+                    amount: { $sum: "$amount" }
+                }
+            },
+            { $sort: { count: -1 } }
+        ])
+    ]);
 
     const paymentTransactions = payments.map((payment) => ({
         _id: payment._id,
@@ -963,12 +1176,28 @@ const getWalletTransaction = asyncHandler(async (req, res) => {
         meta: payment.meta,
     }));
 
-    const mergedTransactions = [...transactions.map((transaction) => transaction.toObject()), ...paymentTransactions]
+    const mergedTransactions = [...transactions, ...paymentTransactions]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, Number(limit));
+        .slice(0, safeLimit);
+
+    const selectedTotal = view === "payments" ? paymentTotal : view === "wallet" ? walletTotal : walletTotal + paymentTotal;
+    const selectedCount = view === "payments" ? paymentTransactions.length : view === "wallet" ? transactions.length : mergedTransactions.length;
 
     return res.status(200).json(
-        new ApiResponse(200, mergedTransactions, "Wallet transactions fetched successfully")
+        new ApiResponse(200, {
+            transactions: view === "payments" ? paymentTransactions : view === "wallet" ? transactions : mergedTransactions,
+            walletTransactions: transactions,
+            paymentTransactions,
+            total: selectedTotal,
+            page: page ? safePage : Math.floor(safeSkip / safeLimit) + 1,
+            limit: safeLimit,
+            pages: Math.ceil(selectedTotal / safeLimit),
+            hasMore: safeSkip + selectedCount < selectedTotal,
+            aggregations: {
+                wallet: walletAggregations,
+                payments: paymentAggregations,
+            }
+        }, "Wallet transactions fetched successfully")
     );
 });
 const getTransactionDetails = asyncHandler(async (req, res) => {
@@ -977,6 +1206,7 @@ const getTransactionDetails = asyncHandler(async (req, res) => {
     const transaction = await WalletTransaction.findById(transactionId)
         .populate("fromUser", "username phone_number avatar role")
         .populate("toUser", "username phone_number avatar role")
+        .lean();
 
     return res.status(200).json(
         new ApiResponse(200, transaction, "Wallet transactions fetched successfully")
@@ -1056,7 +1286,8 @@ const getUserNotifications = asyncHandler(async (req, res) => {
     const notifications = await Notification.find(query)
         .sort({ createdAt: -1 })
         .skip(Number(skip))
-        .limit(Number(limit));
+        .limit(Number(limit))
+        .lean();
 
     return res.status(200).json(
         new ApiResponse(200, notifications, "Notifications fetched successfully")
@@ -1126,11 +1357,14 @@ const getAllUsers = asyncHandler(async (req, res) => {
         query.role = role;
     }
 
-    // Search by username or phone_number
+    // Search by username, email, or phone_number
     if (search && search.trim() !== "") {
+        const searchText = String(search).trim();
+        const searchPattern = escapeRegex(searchText);
         query.$or = [
-            { username: { $regex: search, $options: "i" } },
-            { phone_number: { $regex: search, $options: "i" } }
+            { username: { $regex: searchPattern, $options: "i" } },
+            { email: { $regex: searchPattern, $options: "i" } },
+            { phone_number: { $regex: searchPattern, $options: "i" } }
         ];
     }
 

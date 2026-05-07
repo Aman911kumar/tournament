@@ -110,6 +110,7 @@ const formatTransactionStatus = (status: string) => {
 };
 
 const formatMonthlyChange = (value: number) => `${value > 0 ? "+" : ""}${value}% this month`;
+const PAGE_SIZE = 12;
 
 const WalletScreen = () => {
   const navigate = useNavigate();
@@ -121,18 +122,22 @@ const WalletScreen = () => {
   const [monthlyChange, setMonthlyChange] = useState(0);
   const [playerMonthlyChange, setPlayerMonthlyChange] = useState(0);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cacheNotice, setCacheNotice] = useState<string | null>(null);
 
-  const loadWallet = useCallback(async () => {
+  const loadWallet = useCallback(async (nextPage = 1) => {
     const cachedSummary = readCache<WalletSummary>(CACHE_KEYS.walletSummary);
     const cachedTransactions = readCache<WalletTransaction[]>(CACHE_KEYS.walletTransactions);
 
     try {
-      setLoading(true);
+      if (nextPage === 1) setLoading(true);
+      else setLoadingMore(true);
       setError(null);
-      if (cachedSummary) {
+      if (nextPage === 1 && cachedSummary) {
         setBalance(cachedSummary.data.balance);
         setCreatorEarnings(cachedSummary.data.creatorEarnings);
         setPlayerEarnings(cachedSummary.data.playerEarnings ?? 0);
@@ -140,7 +145,7 @@ const WalletScreen = () => {
         setPlayerMonthlyChange(cachedSummary.data.playerMonthlyChange ?? 0);
         setCacheNotice(getSavedDataLabel(cachedSummary.savedAt));
       }
-      if (cachedTransactions) {
+      if (nextPage === 1 && cachedTransactions) {
         setTransactions(cachedTransactions.data);
       }
 
@@ -148,14 +153,16 @@ const WalletScreen = () => {
         getBalance(),
         getCreatorEarnings(),
         getPlayerEarnings(),
-        getTransactions("all"),
+        getTransactions("all", { page: nextPage, limit: PAGE_SIZE }),
       ]);
       setBalance(balanceRes.balance);
       setCreatorEarnings(earningsRes.total);
       setPlayerEarnings(playerEarningsRes.total);
       setMonthlyChange(earningsRes.monthlyChange);
       setPlayerMonthlyChange(playerEarningsRes.monthlyChange);
-      setTransactions(transactionsRes);
+      setTransactions((previous) => nextPage === 1 ? transactionsRes.transactions : [...previous, ...transactionsRes.transactions]);
+      setPage(transactionsRes.page);
+      setHasMore(transactionsRes.hasMore);
       setCacheNotice(null);
       writeAuthenticatedCache(CACHE_KEYS.walletSummary, {
         balance: balanceRes.balance,
@@ -164,9 +171,11 @@ const WalletScreen = () => {
         monthlyChange: earningsRes.monthlyChange,
         playerMonthlyChange: playerEarningsRes.monthlyChange,
       });
-      writeAuthenticatedCache(CACHE_KEYS.walletTransactions, transactionsRes);
+      if (nextPage === 1) {
+        writeAuthenticatedCache(CACHE_KEYS.walletTransactions, transactionsRes.transactions);
+      }
     } catch (loadError) {
-      if (cachedSummary || cachedTransactions) {
+      if (nextPage === 1 && (cachedSummary || cachedTransactions)) {
         if (cachedSummary) {
           setBalance(cachedSummary.data.balance);
           setCreatorEarnings(cachedSummary.data.creatorEarnings);
@@ -184,11 +193,12 @@ const WalletScreen = () => {
       }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, []);
 
   useEffect(() => {
-    loadWallet();
+    loadWallet(1);
   }, [loadWallet]);
 
   const filtered = useMemo(() => {
@@ -240,7 +250,7 @@ const WalletScreen = () => {
                 <AlertCircle className="w-4 h-4" />
                 Could not load balance
               </p>
-              <button type="button" onClick={loadWallet} className="mt-2 text-xs text-primary inline-flex items-center gap-1.5">
+              <button type="button" onClick={() => loadWallet(1)} className="mt-2 text-xs text-primary inline-flex items-center gap-1.5">
                 <RefreshCcw className="w-3.5 h-3.5" />
                 Retry
               </button>
@@ -458,6 +468,12 @@ const WalletScreen = () => {
                 </GlassCard>
               );
             })
+          )}
+
+          {!loading && !error && hasMore && (
+            <NeonButton full variant="blue" className="text-xs py-2" onClick={() => loadWallet(page + 1)} disabled={loadingMore}>
+              {loadingMore ? "LOADING..." : "LOAD MORE"}
+            </NeonButton>
           )}
         </div>
       </div>

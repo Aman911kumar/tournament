@@ -37,4 +37,8 @@ const gameAccountSchema = new mongoose.Schema(
     }
 );
 
+gameAccountSchema.index({ user: 1, game: 1 }, { unique: true });
+gameAccountSchema.index({ game: 1, gameId: 1 }, { unique: true });
+gameAccountSchema.index({ verified: 1, createdAt: -1 });
+
 export const GameAccount = mongoose.model("GameAccount", gameAccountSchema);

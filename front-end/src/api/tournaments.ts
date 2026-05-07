@@ -77,6 +77,8 @@ export interface Tournament {
     roomId?: string;
     roomPass?: string;
     roomJoinTime?: string;
+    hasRoomId?: boolean;
+    hasRoomPass?: boolean;
   };
   organizer?: {
     _id?: string;
@@ -154,6 +156,7 @@ export async function getTournamentPage(filters: TournamentFilters = {}) {
   if (game) params.set("game", game);
   if (filters.organizer) params.set("organizer", filters.organizer);
   if (filters.status) params.set("status", filters.status);
+  if (filters.sort) params.set("sort", filters.sort);
   if (filters.excludeCompleted) params.set("excludeCompleted", "true");
   if (filters.type === "free") params.set("entryFee", "0");
   const qs = params.toString();
