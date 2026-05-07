@@ -7,6 +7,8 @@ import routes from './src/routes/all.routes.js';
 import cookieParser from 'cookie-parser';
 import errorHandler from './src/middlewares/errorHandler.middleware.js';
 import { globalApiLimiter } from './src/middlewares/rateLimit.middleware.js';
+import securityHeaders from './src/middlewares/securityHeaders.middleware.js';
+import requestMetrics from './src/middlewares/requestMetrics.middleware.js';
 import ApiError from './src/utils/ApiError.js';
 import path from "path";
 import { expireStaleRazorpayPayments } from './src/services/paymentExpiry.service.js';
@@ -16,8 +18,10 @@ const distPath = path.join(__dirname, "dist");
 
 // App configuration
 const app = express();
+const serverPort = PORT || 8000;
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
+app.use(securityHeaders);
 
 // CORS configuration
 const configuredOrigins = CORS_ORIGIN
@@ -66,6 +70,8 @@ app.use((req, res, next) => {
     next();
 });
 
+app.use(requestMetrics);
+
 // // Serve static files
 // app.use(express.static("public"));
 // app.use(express.static(distPath))
@@ -103,8 +109,8 @@ connect_db()
             });
         }, 60 * 1000);
 
-        app.listen(PORT, () => {
-            console.log(`Server is listening on http://localhost:${PORT}`);
+        app.listen(serverPort, () => {
+            console.log(`Server is listening on http://localhost:${serverPort}`);
         });
     })
     .catch((err) => {

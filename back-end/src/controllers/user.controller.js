@@ -28,15 +28,19 @@ const generateAccessTokenAndRefreshToken = async (userId) => {
         const accessToken = user.generateAccessToken()
         const refreshToken = user.generateRefreshToken()
         user.refreshToken = refreshToken
-        await user.save({ validateBeforSave: false })
+        await user.save({ validateBeforeSave: false })
         return { accessToken, refreshToken }
     } catch (error) {
         throw new ApiError(500, error || 'something went while generating refresh and access token')
     }
 }
+
+const isProduction = process.env.NODE_ENV === "production";
 const options = {
     httpOnly: true,
-    secure: true
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    path: "/",
 }
 
 const normalizeUsername = (value = "") => {

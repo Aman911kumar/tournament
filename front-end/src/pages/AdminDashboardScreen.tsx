@@ -16,13 +16,20 @@ import {
   Activity,
   AlertCircle,
   ArrowLeft,
+  Bug,
   CircleDollarSign,
+  Clock,
+  Cpu,
   Database,
   Crown,
+  Gauge,
+  HardDrive,
   LayoutDashboard,
   ListChecks,
+  Monitor,
   RefreshCcw,
   Search,
+  Server,
   ShieldCheck,
   Ticket,
   Trophy,
@@ -48,11 +55,13 @@ import {
   AdminDashboardData,
   AdminCollectionRecords,
   AdminCollectionSummary,
+  AdminMonitoringData,
   AdminWithdrawalRequest,
   CountBucket,
   getAdminCollectionRecords,
   getAdminCollections,
   getAdminDashboard,
+  getAdminMonitoring,
   getAdminWithdrawals,
   updateCreatorPermission,
   updateWithdrawalStatus,
@@ -68,6 +77,18 @@ const bucketColors = [
 ];
 
 const formatNumber = (value: number | undefined) => Number(value || 0).toLocaleString("en-IN");
+
+const formatDuration = (seconds: number | undefined) => {
+  const total = Math.max(Number(seconds || 0), 0);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+};
+
+const formatMs = (value: number | undefined) => `${Number(value || 0).toLocaleString("en-IN")} ms`;
 
 const formatShortDate = (value: string) => {
   const date = new Date(value);
@@ -436,6 +457,7 @@ const AdminDashboardScreen = () => {
   const navigate = useNavigate();
   const [days, setDays] = useState(30);
   const [dashboard, setDashboard] = useState<AdminDashboardData | null>(null);
+  const [monitoring, setMonitoring] = useState<AdminMonitoringData | null>(null);
   const [withdrawals, setWithdrawals] = useState<AdminWithdrawalRequest[]>([]);
   const [collections, setCollections] = useState<AdminCollectionSummary[]>([]);
   const [selectedCollection, setSelectedCollection] = useState("users");
@@ -445,6 +467,7 @@ const AdminDashboardScreen = () => {
   const [adminTournamentSearch, setAdminTournamentSearch] = useState("");
   const [selectedRecord, setSelectedRecord] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [monitoringLoading, setMonitoringLoading] = useState(true);
   const [withdrawalsLoading, setWithdrawalsLoading] = useState(true);
   const [collectionsLoading, setCollectionsLoading] = useState(true);
   const [updatingWithdrawalId, setUpdatingWithdrawalId] = useState<string | null>(null);
@@ -466,6 +489,19 @@ const AdminDashboardScreen = () => {
       setLoading(false);
     }
   }, [days]);
+
+  const fetchMonitoring = useCallback(async () => {
+    try {
+      setMonitoringLoading(true);
+      const res = await getAdminMonitoring();
+      setMonitoring(res.data);
+    } catch (err) {
+      const errorToast = getErrorToast(err, { action: "Load monitoring", fallback: "Failed to load monitoring data." });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setMonitoringLoading(false);
+    }
+  }, []);
 
   const fetchWithdrawals = useCallback(async () => {
     try {
@@ -520,6 +556,10 @@ const AdminDashboardScreen = () => {
   useEffect(() => {
     fetchWithdrawals();
   }, [fetchWithdrawals]);
+
+  useEffect(() => {
+    fetchMonitoring();
+  }, [fetchMonitoring]);
 
   useEffect(() => {
     fetchCollections();
@@ -752,6 +792,15 @@ const AdminDashboardScreen = () => {
 
   if (!dashboard) return null;
 
+  const backendRequests = monitoring?.backend.requests;
+  const backendHealth = backendRequests && backendRequests.serverErrors === 0 && backendRequests.p95DurationMs < 1000
+    ? "healthy"
+    : "watch";
+  const frontendHealth = monitoring && monitoring.frontend.errorsTotal === 0 ? "healthy" : "watch";
+  const memoryUsedPercent = monitoring?.backend.memory.heapTotalMb
+    ? Math.min(100, Math.round((monitoring.backend.memory.heapUsedMb / monitoring.backend.memory.heapTotalMb) * 100))
+    : 0;
+
   const kpis = [
     {
       icon: Users,
@@ -809,6 +858,15 @@ const AdminDashboardScreen = () => {
       color: "text-destructive",
       onClick: () => navigate("/admin/details/support"),
     },
+    {
+      icon: Server,
+      label: "Monitoring",
+      value: monitoringLoading ? "Loading" : cleanLabel(backendHealth),
+      note: monitoring
+        ? `${formatNumber(monitoring.backend.requests.rpm)} rpm, ${monitoring.backend.requests.errorRate}% errors`
+        : "Runtime health and frontend reports",
+      color: backendHealth === "healthy" ? "text-accent" : "text-secondary",
+    },
   ];
   const tournamentFinance = dashboard.tournamentAnalytics?.finance ?? {};
   const tournamentReceived = Number(tournamentFinance.receivedMoney || 0);
@@ -857,11 +915,12 @@ const AdminDashboardScreen = () => {
               onClick={() => {
                 fetchDashboard();
                 fetchWithdrawals();
+                fetchMonitoring();
               }}
-              disabled={loading || withdrawalsLoading}
+              disabled={loading || withdrawalsLoading || monitoringLoading}
               className="col-span-1 sm:col-span-1"
             >
-              <RefreshCcw className={`mr-2 h-4 w-4 ${loading || withdrawalsLoading ? "animate-spin" : ""}`} />
+              <RefreshCcw className={`mr-2 h-4 w-4 ${loading || withdrawalsLoading || monitoringLoading ? "animate-spin" : ""}`} />
               <span className="hidden sm:inline">Refresh</span>
             </Button>
           </div>
@@ -1068,7 +1127,7 @@ const AdminDashboardScreen = () => {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-5">
-          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 bg-card/60 p-1 md:grid-cols-6">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-card/60 p-1 sm:grid-cols-4 lg:grid-cols-7">
             <TabsTrigger value="overview" className="gap-2 text-xs">
               <LayoutDashboard className="h-3.5 w-3.5" /> Overview
             </TabsTrigger>
@@ -1083,6 +1142,9 @@ const AdminDashboardScreen = () => {
             </TabsTrigger>
             <TabsTrigger value="support" className="gap-2 text-xs">
               <Ticket className="h-3.5 w-3.5" /> Support
+            </TabsTrigger>
+            <TabsTrigger value="monitoring" className="gap-2 text-xs">
+              <Server className="h-3.5 w-3.5" /> Monitor
             </TabsTrigger>
             <TabsTrigger value="database" className="gap-2 text-xs">
               <Database className="h-3.5 w-3.5" /> Database
@@ -1580,6 +1642,245 @@ const AdminDashboardScreen = () => {
                   )}
                 </TableBody>
               </Table>
+            </GlassCard>
+          </TabsContent>
+
+          <TabsContent value="monitoring" className="space-y-5">
+            <GlassCard>
+              <SectionHeader
+                icon={Server}
+                title="Live Monitoring"
+                description="Lightweight in-memory backend metrics and sanitized frontend reports"
+                action={
+                  <Button type="button" size="sm" variant="outline" onClick={fetchMonitoring} disabled={monitoringLoading}>
+                    <RefreshCcw className={`mr-2 h-4 w-4 ${monitoringLoading ? "animate-spin" : ""}`} />
+                    Refresh
+                  </Button>
+                }
+              />
+
+              {monitoringLoading && !monitoring ? (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {[0, 1, 2, 3].map((item) => (
+                    <div key={item} className="h-28 animate-pulse rounded-lg bg-muted" />
+                  ))}
+                </div>
+              ) : !monitoring ? (
+                <div className="rounded-lg border border-glass-border py-10 text-center">
+                  <p className="font-heading text-sm">Monitoring data unavailable</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Refresh after the backend receives traffic.</p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-lg border border-glass-border bg-card/50 p-4">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="font-heading text-[10px] uppercase text-muted-foreground">Backend</p>
+                        <StatusBadge value={backendHealth} />
+                      </div>
+                      <p className="font-heading text-2xl font-bold">{formatNumber(monitoring.backend.requests.total)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatNumber(monitoring.backend.requests.rpm)} req/min - uptime {formatDuration(monitoring.service.uptimeSeconds)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-glass-border bg-card/50 p-4">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="font-heading text-[10px] uppercase text-muted-foreground">Latency</p>
+                        <Gauge className="h-4 w-4 text-primary" />
+                      </div>
+                      <p className="font-heading text-2xl font-bold">{formatMs(monitoring.backend.requests.p95DurationMs)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Avg {formatMs(monitoring.backend.requests.avgDurationMs)}</p>
+                    </div>
+                    <div className="rounded-lg border border-glass-border bg-card/50 p-4">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="font-heading text-[10px] uppercase text-muted-foreground">Errors</p>
+                        <Bug className="h-4 w-4 text-destructive" />
+                      </div>
+                      <p className="font-heading text-2xl font-bold">{monitoring.backend.requests.errorRate}%</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatNumber(monitoring.backend.requests.clientErrors)} client, {formatNumber(monitoring.backend.requests.serverErrors)} server
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-glass-border bg-card/50 p-4">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="font-heading text-[10px] uppercase text-muted-foreground">Frontend</p>
+                        <StatusBadge value={frontendHealth} />
+                      </div>
+                      <p className="font-heading text-2xl font-bold">{formatNumber(monitoring.frontend.eventsTotal)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatNumber(monitoring.frontend.errorsTotal)} errors, {formatNumber(monitoring.frontend.performanceSamples)} perf samples
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-3">
+                    <GlassCard>
+                      <h3 className="mb-4 flex items-center gap-2 font-heading text-sm font-bold">
+                        <HardDrive className="h-4 w-4 text-primary" />
+                        Runtime
+                      </h3>
+                      <div className="space-y-3 text-xs">
+                        <InsightBar label="Heap used" count={memoryUsedPercent} total={100} />
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-lg border border-glass-border p-3">
+                            <p className="text-[10px] text-muted-foreground">RSS</p>
+                            <p className="font-heading font-bold">{formatNumber(monitoring.backend.memory.rssMb)} MB</p>
+                          </div>
+                          <div className="rounded-lg border border-glass-border p-3">
+                            <p className="text-[10px] text-muted-foreground">Heap</p>
+                            <p className="font-heading font-bold">{formatNumber(monitoring.backend.memory.heapUsedMb)} MB</p>
+                          </div>
+                          <div className="rounded-lg border border-glass-border p-3">
+                            <p className="text-[10px] text-muted-foreground">Event loop p95</p>
+                            <p className="font-heading font-bold">{formatMs(monitoring.backend.eventLoop.p95Ms)}</p>
+                          </div>
+                          <div className="rounded-lg border border-glass-border p-3">
+                            <p className="text-[10px] text-muted-foreground">Env</p>
+                            <p className="font-heading font-bold">{monitoring.service.nodeEnv}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </GlassCard>
+
+                    <GlassCard>
+                      <h3 className="mb-4 flex items-center gap-2 font-heading text-sm font-bold">
+                        <Monitor className="h-4 w-4 text-secondary" />
+                        Browser Performance
+                      </h3>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-lg border border-glass-border p-3">
+                          <p className="text-[10px] text-muted-foreground">Avg load</p>
+                          <p className="font-heading font-bold">{formatMs(monitoring.frontend.avgPageLoadMs)}</p>
+                        </div>
+                        <div className="rounded-lg border border-glass-border p-3">
+                          <p className="text-[10px] text-muted-foreground">Avg TTFB</p>
+                          <p className="font-heading font-bold">{formatMs(monitoring.frontend.avgTtfbMs)}</p>
+                        </div>
+                        <div className="rounded-lg border border-glass-border p-3">
+                          <p className="text-[10px] text-muted-foreground">p95 LCP</p>
+                          <p className="font-heading font-bold">{formatMs(monitoring.frontend.p95LcpMs)}</p>
+                        </div>
+                        <div className="rounded-lg border border-glass-border p-3">
+                          <p className="text-[10px] text-muted-foreground">p95 CLS</p>
+                          <p className="font-heading font-bold">{monitoring.frontend.p95Cls}</p>
+                        </div>
+                      </div>
+                    </GlassCard>
+
+                    <GlassCard>
+                      <h3 className="mb-4 flex items-center gap-2 font-heading text-sm font-bold">
+                        <Cpu className="h-4 w-4 text-accent" />
+                        Top Routes
+                      </h3>
+                      <div className="space-y-2">
+                        {monitoring.frontend.topRoutes.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No frontend route data yet</p>
+                        ) : (
+                          monitoring.frontend.topRoutes.map((route) => (
+                            <div key={route.route} className="flex items-center justify-between gap-3 rounded-lg border border-glass-border px-3 py-2">
+                              <span className="min-w-0 truncate text-xs">{route.route}</span>
+                              <span className="shrink-0 font-heading text-xs text-primary">{formatNumber(route.count)}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </GlassCard>
+                  </div>
+
+                  <GlassCard>
+                    <SectionHeader
+                      icon={Activity}
+                      title="Backend Hot Endpoints"
+                      description="Most-used routes with latency and error counts"
+                    />
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Endpoint</TableHead>
+                          <TableHead className="text-right">Hits</TableHead>
+                          <TableHead className="text-right">Errors</TableHead>
+                          <TableHead className="text-right">Avg</TableHead>
+                          <TableHead className="text-right">p95</TableHead>
+                          <TableHead>Last</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {monitoring.backend.endpoints.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                              No backend requests captured yet
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          monitoring.backend.endpoints.map((endpoint) => (
+                            <TableRow key={`${endpoint.method}-${endpoint.path}`}>
+                              <TableCell>
+                                <p className="font-heading text-xs font-bold">{endpoint.method}</p>
+                                <p className="max-w-[420px] truncate text-xs text-muted-foreground">{endpoint.path}</p>
+                              </TableCell>
+                              <TableCell className="text-right">{formatNumber(endpoint.count)}</TableCell>
+                              <TableCell className="text-right text-destructive">{formatNumber(endpoint.errorCount)}</TableCell>
+                              <TableCell className="text-right">{formatMs(endpoint.avgDurationMs)}</TableCell>
+                              <TableCell className="text-right">{formatMs(endpoint.p95DurationMs)}</TableCell>
+                              <TableCell>
+                                <StatusBadge value={String(endpoint.lastStatus)} />
+                                <p className="mt-1 text-[10px] text-muted-foreground">{formatDateTime(endpoint.lastSeen)}</p>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </GlassCard>
+
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <GlassCard>
+                      <h3 className="mb-4 flex items-center gap-2 font-heading text-sm font-bold">
+                        <Clock className="h-4 w-4 text-primary" />
+                        Recent Backend Requests
+                      </h3>
+                      <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                        {monitoring.backend.recentRequests.slice(0, 12).map((request) => (
+                          <div key={`${request.requestId}-${request.timestamp}`} className="rounded-lg border border-glass-border p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="truncate font-heading text-xs">{request.method} {request.path}</p>
+                              <StatusBadge value={String(request.statusCode)} />
+                            </div>
+                            <p className="mt-1 text-[10px] text-muted-foreground">
+                              {formatMs(request.durationMs)} - {formatDateTime(request.timestamp)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </GlassCard>
+
+                    <GlassCard>
+                      <h3 className="mb-4 flex items-center gap-2 font-heading text-sm font-bold">
+                        <Bug className="h-4 w-4 text-destructive" />
+                        Recent Frontend Issues
+                      </h3>
+                      <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                        {monitoring.frontend.recentErrors.length === 0 ? (
+                          <p className="rounded-lg border border-glass-border py-8 text-center text-sm text-muted-foreground">
+                            No frontend errors reported
+                          </p>
+                        ) : (
+                          monitoring.frontend.recentErrors.slice(0, 12).map((event) => (
+                            <div key={`${event.type}-${event.timestamp}`} className="rounded-lg border border-glass-border p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="truncate font-heading text-xs">{cleanLabel(event.type)}</p>
+                                <span className="text-[10px] text-muted-foreground">{formatDateTime(event.timestamp)}</span>
+                              </div>
+                              <p className="mt-1 break-words text-xs text-muted-foreground">{event.message || "No message"}</p>
+                              <p className="mt-1 truncate text-[10px] text-muted-foreground">{event.route}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </GlassCard>
+                  </div>
+                </div>
+              )}
             </GlassCard>
           </TabsContent>
 

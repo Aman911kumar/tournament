@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -99,7 +99,7 @@ const PaymentDetailScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadPayment = async () => {
+  const loadPayment = useCallback(async () => {
     if (!id) return;
     try {
       setLoading(true);
@@ -111,11 +111,11 @@ const PaymentDetailScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     loadPayment();
-  }, [id]);
+  }, [loadPayment]);
 
   const details = useMemo(() => {
     if (!payment) return null;

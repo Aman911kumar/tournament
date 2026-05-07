@@ -557,7 +557,7 @@ const AdminDetailScreen = () => {
     setPage(1);
     setSearch("");
     setData(null);
-  }, [section]);
+  }, [config.collections, section]);
 
   const loadRecords = useCallback(async () => {
     try {

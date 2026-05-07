@@ -4,9 +4,12 @@ import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { Analytics } from "@vercel/analytics/react";
 import ProtectedRoute from "./components/ProtectedRoute";
 import BottomNav from "./components/BottomNav";
 import { toast } from "@/components/ui/sonner";
+import AppErrorBoundary from "@/components/AppErrorBoundary";
+import { ApiError } from "@/api/client";
 
 const Index = lazy(() => import("./pages/Index.tsx"));
 const LoginScreen = lazy(() => import("./pages/LoginScreen.tsx"));
@@ -41,7 +44,19 @@ const PrivacyPolicyScreen = lazy(() => import("./pages/PrivacyPolicyScreen.tsx")
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 const VITE_GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: (failureCount, error) => {
+        if (error instanceof ApiError && [401, 403, 404].includes(error.status)) return false;
+        return failureCount < 1;
+      },
+    },
+  },
+});
 
 const ProtectedShell = () => (
   <ProtectedRoute>
@@ -63,62 +78,63 @@ const RouteLoader = () => (
 );
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Sonner />
-      <BrowserRouter>
-        <GoogleOAuthProvider
-          clientId={VITE_GOOGLE_CLIENT_ID}
-          onScriptLoadSuccess={() => {
-            console.log("Google Loaded")
-          }}
-          onScriptLoadError={() => {
-            toast.error("Failed to load")
-            console.log("Failed to load")
-          }}
-        >
-          <Suspense fallback={<RouteLoader />}>
-            <Routes>
-              <Route path="/login" element={<LoginScreen />} />
-              <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
-              <Route path="/test" element={<Test />} />
-              <Route element={<ProtectedShell />}>
-                <Route path="/" element={<Index />} />
-                <Route path="/tournaments" element={<TournamentsScreen />} />
-                <Route path="/my-tournaments" element={<MyTournamentsScreen />} />
-                <Route path="/tournament/:id" element={<TournamentDetailScreen />} />
-                <Route path="/tournament/:id/slots" element={<SlotSelectionScreen />} />
-                <Route path="/tournament/:id/comments" element={<TournamentCommentsScreen />} />
-                <Route path="/tournament/:id/distribute-prizes" element={<PrizeDistributionScreen />} />
-                <Route path="/wallet" element={<WalletScreen />} />
-                <Route path="/wallet/transaction/:id" element={<TransactionDetailScreen />} />
-                <Route path="/wallet/payment/:id" element={<PaymentDetailScreen />} />
-                <Route path="/wallet/add" element={<AddMoneyScreen />} />
-                <Route path="/wallet/withdraw" element={<WithdrawScreen />} />
-                <Route path="/wallet/transfer" element={<TransferMoneyScreen />} />
-                <Route path="/profile" element={<ProfileScreen />} />
-                <Route path="/edit-profile" element={<EditProfileScreen />} />
-                <Route path="/change-password" element={<ChangePasswordScreen />} />
-                <Route path="/game-accounts" element={<GameAccountsScreen />} />
-                <Route path="/creator/:id" element={<CreatorProfileScreen />} />
-                <Route path="/create-tournament" element={<CreateTournamentScreen />} />
-                <Route path="/edit-tournament/:id" element={<CreateTournamentScreen />} />
-                <Route path="/creator-dashboard" element={<CreatorDashboardScreen />} />
-                <Route path="/admin" element={<AdminDashboardScreen />} />
-                <Route path="/admin/details/:section" element={<AdminDetailScreen />} />
-                <Route path="/notifications" element={<NotificationsScreen />} />
-                <Route path="/subscriptions" element={<SubscriptionsScreen />} />
-                <Route path="/help" element={<HelpCenterScreen />} />
-                <Route path="/rules" element={<RulesScreen />} />
-                <Route path="/privacy" element={<PrivacyPolicyScreen />} />
-              </Route>
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </GoogleOAuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <AppErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Sonner />
+        <Analytics />
+        <BrowserRouter>
+          <GoogleOAuthProvider
+            clientId={VITE_GOOGLE_CLIENT_ID}
+            onScriptLoadError={() => {
+              toast.error("Google login unavailable", {
+                description: "Try phone/email login or refresh this page.",
+              });
+            }}
+          >
+            <Suspense fallback={<RouteLoader />}>
+              <Routes>
+                <Route path="/login" element={<LoginScreen />} />
+                <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
+                <Route path="/test" element={<Test />} />
+                <Route element={<ProtectedShell />}>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/tournaments" element={<TournamentsScreen />} />
+                  <Route path="/my-tournaments" element={<MyTournamentsScreen />} />
+                  <Route path="/tournament/:id" element={<TournamentDetailScreen />} />
+                  <Route path="/tournament/:id/slots" element={<SlotSelectionScreen />} />
+                  <Route path="/tournament/:id/comments" element={<TournamentCommentsScreen />} />
+                  <Route path="/tournament/:id/distribute-prizes" element={<PrizeDistributionScreen />} />
+                  <Route path="/wallet" element={<WalletScreen />} />
+                  <Route path="/wallet/transaction/:id" element={<TransactionDetailScreen />} />
+                  <Route path="/wallet/payment/:id" element={<PaymentDetailScreen />} />
+                  <Route path="/wallet/add" element={<AddMoneyScreen />} />
+                  <Route path="/wallet/withdraw" element={<WithdrawScreen />} />
+                  <Route path="/wallet/transfer" element={<TransferMoneyScreen />} />
+                  <Route path="/profile" element={<ProfileScreen />} />
+                  <Route path="/edit-profile" element={<EditProfileScreen />} />
+                  <Route path="/change-password" element={<ChangePasswordScreen />} />
+                  <Route path="/game-accounts" element={<GameAccountsScreen />} />
+                  <Route path="/creator/:id" element={<CreatorProfileScreen />} />
+                  <Route path="/create-tournament" element={<CreateTournamentScreen />} />
+                  <Route path="/edit-tournament/:id" element={<CreateTournamentScreen />} />
+                  <Route path="/creator-dashboard" element={<CreatorDashboardScreen />} />
+                  <Route path="/admin" element={<AdminDashboardScreen />} />
+                  <Route path="/admin/details/:section" element={<AdminDetailScreen />} />
+                  <Route path="/notifications" element={<NotificationsScreen />} />
+                  <Route path="/subscriptions" element={<SubscriptionsScreen />} />
+                  <Route path="/help" element={<HelpCenterScreen />} />
+                  <Route path="/rules" element={<RulesScreen />} />
+                  <Route path="/privacy" element={<PrivacyPolicyScreen />} />
+                </Route>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </GoogleOAuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </AppErrorBoundary>
   
 );
 

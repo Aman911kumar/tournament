@@ -10,8 +10,16 @@ import channelRoutes from "./channel.routes.js";
 import adminRoutes from "./admin.routes.js";
 import walletRoutes from "./wallet.routes.js";
 import notificationRoutes from "./notification.routes.js";
+import healthRoutes from "./health.routes.js";
+import monitoringRoutes from "./monitoring.routes.js";
 
 const router = express.Router();
+
+// Health and readiness checks
+router.use("/health", healthRoutes);
+
+// Frontend monitoring ingest. Admin-only reads live under /admin/monitoring.
+router.use("/monitoring", monitoringRoutes);
 
 // Auth routes
 router.use("/auth", authRoutes);

@@ -50,6 +50,8 @@ const ledgerSchema = new mongoose.Schema(
 ledgerSchema.index({ transactionId: 1 });
 ledgerSchema.index({ referenceId: 1, category: 1 });
 ledgerSchema.index({ status: 1, creditAccount: 1, category: 1 });
+ledgerSchema.index({ fromUser: 1, createdAt: -1 });
+ledgerSchema.index({ toUser: 1, createdAt: -1 });
 ledgerSchema.index({ createdAt: -1 });
 
 export const Ledger = mongoose.model("Ledger", ledgerSchema);

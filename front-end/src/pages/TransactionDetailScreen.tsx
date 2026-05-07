@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -104,7 +104,7 @@ const TransactionDetailScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadTransaction = async () => {
+  const loadTransaction = useCallback(async () => {
     if (!id) return;
     try {
       setLoading(true);
@@ -116,11 +116,11 @@ const TransactionDetailScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     loadTransaction();
-  }, [id]);
+  }, [loadTransaction]);
 
   const details = useMemo(() => {
     if (!tx) return null;

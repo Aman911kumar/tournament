@@ -202,6 +202,87 @@ export interface AdminUserTransactionHistory {
   records: AdminUserTransactionRecord[];
 }
 
+export interface AdminMonitoringRequest {
+  requestId?: string;
+  method: string;
+  path: string;
+  statusCode: number;
+  durationMs: number;
+  timestamp: string;
+}
+
+export interface AdminMonitoringEndpoint {
+  method: string;
+  path: string;
+  count: number;
+  errorCount: number;
+  avgDurationMs: number;
+  p95DurationMs: number;
+  maxDurationMs: number;
+  lastStatus: number;
+  lastSeen: string;
+  statusGroups: Record<string, number>;
+}
+
+export interface AdminFrontendEvent {
+  type: string;
+  route: string;
+  message?: string;
+  value?: number;
+  timestamp: string;
+  userAgent?: string;
+}
+
+export interface AdminMonitoringData {
+  service: {
+    status: "healthy" | "watch" | string;
+    startedAt: string;
+    uptimeSeconds: number;
+    nodeEnv: string;
+    pid: number;
+  };
+  backend: {
+    requests: {
+      total: number;
+      success: number;
+      clientErrors: number;
+      serverErrors: number;
+      rpm: number;
+      avgDurationMs: number;
+      p95DurationMs: number;
+      maxDurationMs: number;
+      errorRate: number;
+    };
+    memory: {
+      rssMb: number;
+      heapUsedMb: number;
+      heapTotalMb: number;
+      externalMb: number;
+    };
+    eventLoop: {
+      meanMs: number;
+      maxMs: number;
+      p95Ms: number;
+    };
+    endpoints: AdminMonitoringEndpoint[];
+    recentRequests: AdminMonitoringRequest[];
+    recentErrors: AdminMonitoringRequest[];
+  };
+  frontend: {
+    eventsTotal: number;
+    errorsTotal: number;
+    performanceSamples: number;
+    avgPageLoadMs: number;
+    avgTtfbMs: number;
+    p95LcpMs: number;
+    p95Cls: number;
+    p95FcpMs: number;
+    topRoutes: { route: string; count: number; lastSeen: string }[];
+    recentEvents: AdminFrontendEvent[];
+    recentErrors: AdminFrontendEvent[];
+  };
+}
+
 export interface AdminAuditLog {
   _id: string;
   actor?: {
@@ -310,6 +391,13 @@ export interface RecentTicket {
 
 export async function getAdminDashboard(days = 30): Promise<AdminApiResponse> {
   return apiFetch(`/admin/dashboard?days=${days}`, {
+    method: "GET",
+    credentials: "include",
+  });
+}
+
+export async function getAdminMonitoring() {
+  return apiFetch<ApiResponse<AdminMonitoringData>>("/admin/monitoring", {
     method: "GET",
     credentials: "include",
   });

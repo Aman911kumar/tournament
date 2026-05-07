@@ -20,6 +20,7 @@ import { AdminAuditLog } from "../models/adminAuditLog.model.js";
 import ApiError from "../utils/ApiError.js";
 import { creditWallet } from "../services/wallet.service.js";
 import { expireStaleRazorpayPayments } from "../services/paymentExpiry.service.js";
+import { getMonitoringSnapshot } from "../services/monitoring.service.js";
 
 const adminCollections = {
     users: { model: User, label: "Users", sort: { createdAt: -1 } },
@@ -1276,6 +1277,12 @@ const getAdminUserTransactionHistory = asyncHandler(async (req, res) => {
     );
 });
 
+const getAdminMonitoring = asyncHandler(async (req, res) => {
+    return res.status(200).json(
+        new ApiResponse(200, getMonitoringSnapshot(), "Admin monitoring fetched successfully")
+    );
+});
+
 export {
     getAdminDashboard,
     getWithdrawalRequests,
@@ -1284,4 +1291,5 @@ export {
     getAdminCollections,
     getAdminCollectionRecords,
     getAdminUserTransactionHistory,
+    getAdminMonitoring,
 };

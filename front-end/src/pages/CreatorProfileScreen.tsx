@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { AnimatePresence } from "framer-motion";
@@ -53,7 +53,7 @@ const CreatorProfileScreen = () => {
   const [reportLoading, setReportLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"tournaments" | "about">("tournaments");
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     if (!id) return;
     const cachedProfile = readCache<CreatorProfileData>(CACHE_KEYS.creatorProfile(id));
     if (cachedProfile) {
@@ -72,11 +72,11 @@ const CreatorProfileScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     loadProfile();
-  }, [id]);
+  }, [loadProfile]);
 
   const channel = profile?.channel;
   const creator = profile?.creator ?? channel?.owner;

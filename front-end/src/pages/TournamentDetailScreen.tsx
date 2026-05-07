@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, ArrowLeft, Award, Calendar, Crosshair, Users, Trophy, DollarSign, Shield, CheckCircle, Star, MessageCircle, RefreshCcw, KeyRound, Hash, Lock, Flag } from "lucide-react";
@@ -39,7 +39,7 @@ const TournamentDetailScreen = () => {
   const [reportTargetUser, setReportTargetUser] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
 
-  const loadTournament = async () => {
+  const loadTournament = useCallback(async () => {
     if (!id) return;
     const cachedTournament = readCache<Tournament>(CACHE_KEYS.tournamentDetail(id));
     const cachedRegistrations = readCache<Awaited<ReturnType<typeof getMyTournamentRegistrations>>>(CACHE_KEYS.myRegistrations);
@@ -65,11 +65,11 @@ const TournamentDetailScreen = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     loadTournament();
-  }, [id]);
+  }, [loadTournament]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30000);
