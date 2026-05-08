@@ -10,6 +10,9 @@ export const ENDPOINTS = {
   verifyAddMoney: "/wallet/add/verify",
   updateAddMoneyStatus: "/wallet/add/status",
   withdraw: "/wallet/withdraw",
+  transferPin: "/wallet/transfer-pin",
+  payoutMethods: "/wallet/payout-methods",
+  payoutMethod: (id: string) => `/wallet/payout-methods/${id}`,
   transfer: "/wallet/transfer",
   creatorEarnings: "/wallet/creator-earnings",
   playerEarnings: "/wallet/player-earnings",
@@ -27,8 +30,37 @@ export interface UpdateAddMoneyStatusPayload {
   reason?: string;
   response?: unknown;
 }
-export interface WithdrawPayload { amount: number; method: "upi" | "bank"; destination: string; password: string }
-export interface TransferPayload { recipient: string; amount: number; note?: string }
+export interface WithdrawPayload { amount: number; method?: "upi" | "bank"; destination?: string; payoutMethodId?: string; password: string }
+export interface TransferPayload { recipient: string; amount: number; note?: string; transferPin: string }
+export interface TransferPinPayload { accountPassword: string; transferPin: string }
+
+export interface PayoutMethod {
+  _id: string;
+  type: "upi" | "bank";
+  label?: string;
+  upiId?: string;
+  accountHolderName?: string;
+  accountNumberLast4?: string;
+  maskedAccountNumber?: string;
+  ifsc?: string;
+  bankName?: string;
+  display?: string;
+  isDefault?: boolean;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PayoutMethodPayload {
+  type: "upi" | "bank";
+  label?: string;
+  upiId?: string;
+  accountHolderName?: string;
+  accountNumber?: string;
+  ifsc?: string;
+  bankName?: string;
+  isDefault?: boolean;
+}
 
 export interface WalletUserRef {
   _id: string;
@@ -365,9 +397,54 @@ export async function withdraw(payload: WithdrawPayload): Promise<WalletMutation
   });
 }
 
+export async function getPayoutMethods(): Promise<ApiResponse<PayoutMethod[]>> {
+  return apiFetch<ApiResponse<PayoutMethod[]>>(ENDPOINTS.payoutMethods, {
+    method: "GET",
+    credentials: "include",
+  });
+}
+
+export async function savePayoutMethod(payload: PayoutMethodPayload): Promise<ApiResponse<PayoutMethod>> {
+  return apiFetch<ApiResponse<PayoutMethod>>(ENDPOINTS.payoutMethods, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+}
+
+export async function updatePayoutMethod(id: string, payload: PayoutMethodPayload): Promise<ApiResponse<PayoutMethod>> {
+  return apiFetch<ApiResponse<PayoutMethod>>(ENDPOINTS.payoutMethod(id), {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+}
+
+export async function deletePayoutMethod(id: string): Promise<ApiResponse<unknown>> {
+  return apiFetch<ApiResponse<unknown>>(ENDPOINTS.payoutMethod(id), {
+    method: "DELETE",
+    credentials: "include",
+  });
+}
+
 export async function transferMoney(payload: TransferPayload): Promise<WalletMutationResponse> {
   return apiFetch<WalletMutationResponse>(ENDPOINTS.transfer, {
     method: "POST",
+    body: JSON.stringify(payload),
+    credentials: "include",
+  });
+}
+
+export async function getTransferPinStatus(): Promise<ApiResponse<{ hasTransferPin: boolean }>> {
+  return apiFetch<ApiResponse<{ hasTransferPin: boolean }>>(ENDPOINTS.transferPin, {
+    method: "GET",
+    credentials: "include",
+  });
+}
+
+export async function setupTransferPin(payload: TransferPinPayload): Promise<ApiResponse<{ hasTransferPin: boolean }>> {
+  return apiFetch<ApiResponse<{ hasTransferPin: boolean }>>(ENDPOINTS.transferPin, {
+    method: "PUT",
     body: JSON.stringify(payload),
     credentials: "include",
   });

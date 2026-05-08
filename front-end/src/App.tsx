@@ -7,6 +7,7 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 import { Analytics } from "@vercel/analytics/react";
 import ProtectedRoute from "./components/ProtectedRoute";
 import BottomNav from "./components/BottomNav";
+import NotificationRealtimeBridge from "./components/NotificationRealtimeBridge";
 import { toast } from "@/components/ui/sonner";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { ApiError } from "@/api/client";
@@ -14,6 +15,8 @@ import { ApiError } from "@/api/client";
 const Index = lazy(() => import("./pages/Index.tsx"));
 const LoginScreen = lazy(() => import("./pages/LoginScreen.tsx"));
 const ForgotPasswordScreen = lazy(() => import("./pages/ForgotPasswordScreen.tsx"));
+const VerifyEmailScreen = lazy(() => import("./pages/VerifyEmailScreen.tsx"));
+const VerifyPhoneScreen = lazy(() => import("./pages/VerifyPhoneScreen.tsx"));
 const Test = lazy(() => import("./pages/test.tsx"));
 const TournamentsScreen = lazy(() => import("./pages/TournamentsScreen.tsx"));
 const TournamentDetailScreen = lazy(() => import("./pages/TournamentDetailScreen.tsx"));
@@ -23,6 +26,7 @@ const WalletScreen = lazy(() => import("./pages/WalletScreen.tsx"));
 const AddMoneyScreen = lazy(() => import("./pages/AddMoneyScreen.tsx"));
 const WithdrawScreen = lazy(() => import("./pages/WithdrawScreen.tsx"));
 const TransferMoneyScreen = lazy(() => import("./pages/TransferMoneyScreen.tsx"));
+const TransferPinSetupScreen = lazy(() => import("./pages/TransferPinSetupScreen.tsx"));
 const TransactionDetailScreen = lazy(() => import("./pages/TransactionDetailScreen.tsx"));
 const PaymentDetailScreen = lazy(() => import("./pages/PaymentDetailScreen.tsx"));
 const ProfileScreen = lazy(() => import("./pages/ProfileScreen.tsx"));
@@ -64,6 +68,7 @@ const ProtectedShell = () => (
     <div className="min-h-screen pb-24">
       <Outlet />
     </div>
+    <NotificationRealtimeBridge />
     <BottomNav />
   </ProtectedRoute>
 );
@@ -97,6 +102,8 @@ const App = () => (
               <Routes>
                 <Route path="/login" element={<LoginScreen />} />
                 <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
+                <Route path="/verify-email" element={<VerifyEmailScreen />} />
+                <Route path="/verify-phone" element={<VerifyPhoneScreen />} />
                 <Route path="/test" element={<Test />} />
                 <Route element={<ProtectedShell />}>
                   <Route path="/" element={<Index />} />
@@ -112,6 +119,7 @@ const App = () => (
                   <Route path="/wallet/add" element={<AddMoneyScreen />} />
                   <Route path="/wallet/withdraw" element={<WithdrawScreen />} />
                   <Route path="/wallet/transfer" element={<TransferMoneyScreen />} />
+                  <Route path="/wallet/transfer-pin" element={<TransferPinSetupScreen />} />
                   <Route path="/profile" element={<ProfileScreen />} />
                   <Route path="/edit-profile" element={<EditProfileScreen />} />
                   <Route path="/change-password" element={<ChangePasswordScreen />} />

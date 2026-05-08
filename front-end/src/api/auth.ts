@@ -1,6 +1,6 @@
 import { apiFetch ,ApiResponse} from "./client";
 
-export interface LoginPayload { phone_number: string; password: string }
+export interface LoginPayload { identifier: string; password: string }
 export interface SignupPayload { email: string; password: string; username: string; phone_number: string }
 export interface GoogleLoginPayload {
   access_token?: string;

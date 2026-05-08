@@ -4,6 +4,7 @@ import ApiResponse from '../utils/ApiResponse.js';
 import { Tournament } from '../models/tournament.model.js';
 import { Team } from '../models/team.model.js';
 import { Channel } from '../models/channel.model.js';
+import { ChannelSubscription } from '../models/channelSubscription.model.js';
 import { Registration } from '../models/registration.model.js';
 import { Wallet } from '../models/wallet.model.js';
 import { WalletTransaction } from '../models/walletTransaction.model.js';
@@ -13,6 +14,7 @@ import { Notification } from '../models/notification.model.js';
 import { hasRole } from '../middlewares/auth.middleware.js';
 import { calculateFeeSplit, getPlatformFeePercent, roundCurrency } from '../utils/money.js';
 import { applyPrizeSettings, assignTournamentResults, updatePrizePool } from '../services/tournamentPrize.service.js';
+import { createNotification, createNotifications } from '../services/notification.service.js';
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from "uuid";
 
@@ -287,15 +289,33 @@ const notifyJoinedUsersAboutRoom = async (tournament) => {
 
     if (recipients.size === 0) return;
 
-    await Notification.insertMany(
-        [...recipients].map((user) => ({
+    const credentialParts = [
+        room.roomId ? `Room ID: ${room.roomId}` : "",
+        room.roomPass ? `Pass: ${room.roomPass}` : "",
+        room.roomJoinTime ? `Join: ${formatDateTime(new Date(room.roomJoinTime))}` : "",
+    ].filter(Boolean);
+
+    const notifications = [...recipients].map((user) => ({
             user,
-            title: "Tournament room details updated",
-            body: `Room details are available for ${plain.title}. Open the tournament page to view room ID and password.`,
-            type: "tournament_update",
-        })),
-        { ordered: false }
-    );
+            title: "Room ID and pass available",
+            body: `${plain.title}: ${credentialParts.join(" | ")}`,
+            type: "room",
+            actionUrl: `/tournament/${plain._id}`,
+            data: {
+                tournament: plain._id,
+                roomId: room.roomId || "",
+                roomPass: room.roomPass || "",
+                hasRoomPass: Boolean(room.roomPass),
+                roomJoinTime: room.roomJoinTime || null,
+            },
+        }));
+
+    await createNotifications(notifications).catch((error) => {
+        console.error("Failed to notify joined users about room details:", error);
+        return [];
+    });
+
+    return recipients.size;
 };
 
 const CANCEL_TOURNAMENT_CONFIRM_TEXT = "cancel";
@@ -319,7 +339,7 @@ const serializeTournament = (tournament, participantStats = new Map(), resultDet
     const platformFeeAmount = Number(plain.platformFeeAmount || stats.platformFeeAmount || 0);
     const paidMoney = (plain.results || []).reduce((sum, result) => sum + Number(result.prizeWon || 0), 0);
     const tournamentId = plain._id?.toString?.() || String(plain._id);
-    const results = (plain.results || []).map((result) => {
+    const results = options.includeResults === false ? [] : (plain.results || []).map((result) => {
         const playerId = result.player?._id?.toString?.() || result.player?.toString?.() || String(result.player || "");
         const detail = resultDetails.get(`${tournamentId}:${playerId}`) || {};
         return {
@@ -444,6 +464,8 @@ const getAllTournaments = asyncHandler(async (req, res) => {
     const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
     const safePage = Math.max(Number(page) || 1, 1);
     const safeSkip = page ? (safePage - 1) * safeLimit : Math.max(Number(skip) || 0, 0);
+    const includeResults = req.query.includeResults === "true";
+    const includeAggregations = req.query.includeAggregations === "true";
     const query = {};
     const organizerId = organizer && mongoose.Types.ObjectId.isValid(organizer)
         ? new mongoose.Types.ObjectId(organizer)
@@ -452,6 +474,7 @@ const getAllTournaments = asyncHandler(async (req, res) => {
         req.user && organizerId && organizerId.toString() === req.user._id.toString()
     );
     const canViewPrivateTournaments = isOwnOrganizerView;
+    const canViewManagedDetails = canViewPrivateTournaments || hasRole(req.user, "admin");
 
     if (search && search.trim() !== "") {
         query.title = { $regex: search.trim(), $options: "i" };
@@ -461,7 +484,7 @@ const getAllTournaments = asyncHandler(async (req, res) => {
         const normalizedStatus = normalizeStatus(status);
         query.status = !canViewPrivateTournaments && normalizedStatus === "draft" ? "__hidden__" : normalizedStatus;
     } else if (req.query.excludeCompleted === "true") {
-        query.status = canViewPrivateTournaments ? { $ne: "completed" } : { $nin: ["completed", "draft"] };
+        query.status = canViewPrivateTournaments ? { $nin: ["completed", "cancelled"] } : { $nin: ["completed", "cancelled", "draft"] };
     } else if (!canViewPrivateTournaments) {
         query.status = { $ne: "draft" };
     }
@@ -482,36 +505,47 @@ const getAllTournaments = asyncHandler(async (req, res) => {
                 ? { prizePool: 1, killPrizeAmount: 1, createdAt: -1 }
                 : { createdAt: -1, startAt: -1 };
 
-    const tournaments = await Tournament.find(query)
+    let tournamentQuery = Tournament.find(query)
         .populate("organizer", "username avatar stats")
         .populate("channel", "name handle avatar")
-        .populate("results.player", "username avatar")
         .sort(sortConfig)
         .skip(safeSkip)
         .limit(safeLimit);
+
+    if (includeResults) {
+        tournamentQuery = tournamentQuery.populate("results.player", "username avatar");
+    }
+
+    const tournaments = await tournamentQuery;
     const syncedTournaments = await Promise.all(
         tournaments.map((tournament) => syncTournamentLifecycle(tournament, { save: true }))
     );
     const participantStats = await getParticipantStats(syncedTournaments.map((tournament) => tournament._id));
-    const resultDetails = await getResultRegistrationDetails(syncedTournaments.map((tournament) => tournament._id));
+    const resultDetails = includeResults
+        ? await getResultRegistrationDetails(syncedTournaments.map((tournament) => tournament._id))
+        : new Map();
 
     const [total, statusCounts, gameCounts] = await Promise.all([
         Tournament.countDocuments(query),
-        Tournament.aggregate([
-            { $match: query },
-            { $group: { _id: "$status", count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-        ]),
-        Tournament.aggregate([
-            { $match: query },
-            { $group: { _id: "$game", count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-        ])
+        includeAggregations
+            ? Tournament.aggregate([
+                { $match: query },
+                { $group: { _id: "$status", count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ])
+            : Promise.resolve([]),
+        includeAggregations
+            ? Tournament.aggregate([
+                { $match: query },
+                { $group: { _id: "$game", count: { $sum: 1 } } },
+                { $sort: { count: -1 } }
+            ])
+            : Promise.resolve([])
     ]);
 
     return res.status(200).json(
         new ApiResponse(200, {
-            tournaments: syncedTournaments.map((tournament) => serializeTournament(tournament, participantStats, resultDetails, { hideRoomCredentials: true })),
+            tournaments: syncedTournaments.map((tournament) => serializeTournament(tournament, participantStats, resultDetails, { hideRoomCredentials: !canViewManagedDetails, includeResults })),
             total,
             page: page ? safePage : Math.floor(safeSkip / safeLimit) + 1,
             limit: safeLimit,
@@ -585,6 +619,48 @@ const createTournament = asyncHandler(async (req, res) => {
     const creatorChannel = await Channel.findOne({ owner: req.user._id, isActive: true });
     const payload = buildTournamentPayload(req.body, req.user._id, creatorChannel?._id || null);
     const tournament = await Tournament.create(payload);
+    await tournament.populate([
+        { path: "organizer", select: "username avatar stats" },
+        { path: "channel", select: "name handle avatar" },
+    ]);
+
+    await createNotification({
+        user: req.user._id,
+        title: "Tournament created",
+        body: `${tournament.title} is now saved and ready to manage.`,
+        type: "tournament",
+        actionUrl: `/tournament/${tournament._id}`,
+        data: {
+            tournament: tournament._id,
+            channel: creatorChannel?._id || null,
+        },
+        channels: { email: false, push: true, inApp: true },
+    }).catch((error) => {
+        console.error("Failed to notify tournament creator:", error);
+    });
+
+    if (creatorChannel && tournament.visibility === "public" && tournament.status !== "draft") {
+        const subscriptions = await ChannelSubscription.find({
+            channel: creatorChannel._id,
+            notificationsEnabled: true,
+            user: { $ne: req.user._id },
+        }).select("user").lean();
+
+        await createNotifications(subscriptions.map((subscription) => ({
+            user: subscription.user,
+            title: "New tournament from followed creator",
+            body: `${creatorChannel.name || req.user.username} created ${tournament.title}. Join before slots fill.`,
+            type: "creator",
+            actionUrl: `/tournament/${tournament._id}`,
+            data: {
+                tournament: tournament._id,
+                channel: creatorChannel._id,
+                creator: req.user._id,
+            },
+        }))).catch((error) => {
+            console.error("Failed to notify channel followers:", error);
+        });
+    }
 
     return res.status(201).json(
         new ApiResponse(201, serializeTournament(tournament), "Tournament created successfully")
@@ -713,6 +789,55 @@ const updateTournament = asyncHandler(async (req, res) => {
 
     return res.status(200).json(
         new ApiResponse(200, serializeTournament(tournament, participantStats), "Tournament updated successfully")
+    );
+});
+
+const notifyTournamentRoomDetails = asyncHandler(async (req, res) => {
+    const tournamentId = getParamId(req, "tournamentId");
+
+    if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
+        throw new ApiError(400, "Invalid tournament ID");
+    }
+
+    const tournament = await Tournament.findById(tournamentId);
+    if (!tournament) throw new ApiError(404, "Tournament not found");
+
+    if (!userCanManageTournament(req.user, tournament)) {
+        throw new ApiError(403, "Not authorized to manage this tournament");
+    }
+
+    if (tournament.visibility === "private") {
+        throw new ApiError(400, "Publish the tournament before sending room notifications");
+    }
+
+    if (["completed", "cancelled"].includes(tournament.status)) {
+        throw new ApiError(400, "Room notifications are disabled for completed or cancelled tournaments");
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "room_details")) {
+        const nextRoomDetails = normalizeRoomDetails(req.body.room_details);
+        validateRoomJoinTime(nextRoomDetails, tournament.startAt);
+        tournament.room_details = nextRoomDetails;
+        await tournament.save();
+    }
+
+    const room = tournament.room_details || {};
+    if (!room.roomId && !room.roomPass && !room.roomJoinTime) {
+        throw new ApiError(400, "Add Room ID or password before sending notifications");
+    }
+
+    const notifiedCount = await notifyJoinedUsersAboutRoom(tournament);
+    const participantStats = await getParticipantStats([tournament._id]);
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                tournament: serializeTournament(tournament, participantStats),
+                notifiedCount,
+            },
+            notifiedCount > 0 ? "Room details sent to joined users" : "Room details saved. No joined users to notify yet"
+        )
     );
 });
 
@@ -1221,6 +1346,33 @@ const joinTournament = asyncHandler(async (req, res) => {
 
         await session.commitTransaction();
 
+        const joinedRoom = tournament.room_details || {};
+        if (joinedRoom.roomId || joinedRoom.roomPass || joinedRoom.roomJoinTime) {
+            const credentialParts = [
+                joinedRoom.roomId ? `Room ID: ${joinedRoom.roomId}` : "",
+                joinedRoom.roomPass ? `Pass: ${joinedRoom.roomPass}` : "",
+                joinedRoom.roomJoinTime ? `Join: ${formatDateTime(new Date(joinedRoom.roomJoinTime))}` : "",
+            ].filter(Boolean);
+
+            await createNotifications(memberIds.map((user) => ({
+                user,
+                title: "Tournament room details",
+                body: `${tournament.title}: ${credentialParts.join(" | ")}`,
+                type: "room",
+                actionUrl: `/tournament/${tournament._id}`,
+                data: {
+                    tournament: tournament._id,
+                    registration: registrationArr[0]._id,
+                    roomId: joinedRoom.roomId || "",
+                    roomPass: joinedRoom.roomPass || "",
+                    hasRoomPass: Boolean(joinedRoom.roomPass),
+                    roomJoinTime: joinedRoom.roomJoinTime || null,
+                },
+            }))).catch((error) => {
+                console.error("Failed to notify joined tournament members about room details:", error);
+            });
+        }
+
         return res.status(201).json(
             new ApiResponse(201, registrationArr[0], "Tournament registered successfully")
         );
@@ -1289,7 +1441,6 @@ const getTournamentParticipants = asyncHandler(async (req, res) => {
 
 const getMyTournamentRegistrations = asyncHandler(async (req, res) => {
     const registrations = await Registration.find({
-        status: { $ne: "cancelled" },
         $or: [
             { user: req.user._id },
             { team: req.user._id }
@@ -1648,6 +1799,7 @@ export {
     createTournament,
     updateTournament,
     deleteTournament,
+    notifyTournamentRoomDetails,
     cancelTournament,
     joinTournament,
     getTournamentParticipants,

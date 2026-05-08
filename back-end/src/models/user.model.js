@@ -79,6 +79,10 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    transferPinHash: {
+        type: String,
+        select: false,
+    },
     avatar: {
         public_id: { type: String, trim: true },
         url: { type: String, trim: true }
@@ -125,7 +129,31 @@ const userSchema = new mongoose.Schema({
     },
     refreshToken: {
         type: String
-    }
+    },
+    emailVerificationToken: {
+        type: String,
+        select: false,
+    },
+    emailVerificationExpires: {
+        type: Date,
+        select: false,
+    },
+    phoneVerificationToken: {
+        type: String,
+        select: false,
+    },
+    phoneVerificationExpires: {
+        type: Date,
+        select: false,
+    },
+    resetPasswordToken: {
+        type: String,
+        select: false,
+    },
+    resetPasswordExpires: {
+        type: Date,
+        select: false,
+    },
 }, { timestamps: true });
 
 userSchema.index(

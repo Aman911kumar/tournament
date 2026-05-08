@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, ArrowLeft, Award, Calendar, Crosshair, Users, Trophy, DollarSign, Shield, CheckCircle, Star, MessageCircle, RefreshCcw, KeyRound, Hash, Lock, Flag } from "lucide-react";
+import { AlertCircle, ArrowLeft, Award, Calendar, Crosshair, Users, Trophy, DollarSign, Shield, CheckCircle, Star, MessageCircle, RefreshCcw, KeyRound, Hash, Lock, Flag, Copy } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import { getMyTournamentRegistrations, getTournamentById, Tournament } from "@/api/tournaments";
+import { getMyTournamentRegistrations, getTournamentById, Tournament, TournamentRegistration } from "@/api/tournaments";
 import { formatCurrency, getErrorMessage } from "@/lib/page-utils";
 import { CACHE_KEYS, readCache, writeAuthenticatedCache, writeCache } from "@/lib/offline-cache";
 import { createSupportTicket, SupportReason } from "@/api/support";
@@ -28,6 +28,7 @@ const TournamentDetailScreen = () => {
   const { id } = useParams();
   const [showConfirm, setShowConfirm] = useState(false);
   const [registered, setRegistered] = useState(false);
+  const [myRegistration, setMyRegistration] = useState<TournamentRegistration | null>(null);
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +46,9 @@ const TournamentDetailScreen = () => {
     const cachedRegistrations = readCache<Awaited<ReturnType<typeof getMyTournamentRegistrations>>>(CACHE_KEYS.myRegistrations);
     if (cachedTournament) {
       setTournament(cachedTournament.data);
-      setRegistered(Boolean(cachedRegistrations?.data.some((registration) => getRegistrationTournamentId(registration) === id)));
+      const cachedRegistration = cachedRegistrations?.data.find((registration) => getRegistrationTournamentId(registration) === id && registration.status !== "cancelled") ?? null;
+      setMyRegistration(cachedRegistration);
+      setRegistered(Boolean(cachedRegistration));
       setLoading(false);
     }
 
@@ -56,8 +59,10 @@ const TournamentDetailScreen = () => {
         getTournamentById(id),
         getMyTournamentRegistrations().catch(() => []),
       ]);
+      const activeRegistration = registrations.find((registration) => getRegistrationTournamentId(registration) === id && registration.status !== "cancelled") ?? null;
       setTournament(tournamentRes);
-      setRegistered(registrations.some((registration) => getRegistrationTournamentId(registration) === id));
+      setMyRegistration(activeRegistration);
+      setRegistered(Boolean(activeRegistration));
       writeCache(CACHE_KEYS.tournamentDetail(id), tournamentRes);
       writeAuthenticatedCache(CACHE_KEYS.myRegistrations, registrations);
     } catch (err) {
@@ -79,6 +84,7 @@ const TournamentDetailScreen = () => {
   const creator = {
     id: tournament?.channel?._id ?? tournament?.organizer?._id ?? "",
     name: tournament?.channel?.name ?? tournament?.organizer?.username ?? "Creator",
+    avatarUrl: tournament?.channel?.avatar?.url ?? tournament?.organizer?.avatar?.url ?? "",
     verified: Boolean(tournament?.channel || tournament?.organizer),
     rating: tournament?.organizer?.stats?.rating ?? 4.5,
   };
@@ -134,6 +140,30 @@ const TournamentDetailScreen = () => {
   const reportablePlayers = (tournament?.results ?? [])
     .map((result) => result.player)
     .filter((player): player is { _id?: string; username?: string; avatar?: { url?: string } } => typeof player !== "string" && Boolean(player?._id));
+
+  const copyValue = async (label: string, value?: string | null) => {
+    const text = String(value || "").trim();
+    if (!text) return;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error("Copy failed", { description: `Could not copy ${label.toLowerCase()}.` });
+    }
+  };
 
   const submitReport = async () => {
     if (!tournament) return;
@@ -215,14 +245,26 @@ const TournamentDetailScreen = () => {
                 onClick={() => creator.id && navigate(`/creator/${creator.id}`)}
                 className="w-full glass rounded-lg p-2.5 flex items-center gap-3 mb-4"
               >
-                <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center">
-                  <span className="font-display text-xs font-bold text-primary-foreground">{creator.name[0]}</span>
-                </div>
+                {creator.avatarUrl ? (
+                  <img
+                    src={creator.avatarUrl}
+                    alt={creator.name}
+                    className="h-9 w-9 rounded-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center">
+                    <span className="font-display text-xs font-bold text-primary-foreground">{creator.name[0]}</span>
+                  </div>
+                )}
                 <div className="text-left flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-heading font-bold">{creator.name}</span>
                     {creator.verified && (
-                      <Shield className="w-3 h-3 text-secondary fill-secondary" />
+                      <span className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-heading font-semibold text-accent">
+                        <Shield className="h-3 w-3 fill-accent" />
+                        Verified
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1">
@@ -239,6 +281,7 @@ const TournamentDetailScreen = () => {
                   { icon: Users, label: "Slots", value: `${registeredSlots}/${tournament.maxPlayers}` },
                   { icon: DollarSign, label: "Entry Fee", value: entryFee === 0 ? "FREE" : formatCurrency(entryFee) },
                   { icon: Trophy, label: "Position Prize", value: usesPositionPrize ? formatCurrency(prize) : "No position prize" },
+                  ...(myRegistration?.slotNumber ? [{ icon: Hash, label: "Your Slot", value: `#${myRegistration.slotNumber}` }] : []),
                 ].map((item) => (
                   <div key={item.label} className="glass rounded-lg p-3">
                     <item.icon className="w-4 h-4 text-primary mb-1" />
@@ -302,7 +345,21 @@ const TournamentDetailScreen = () => {
                       <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                         <Hash className="w-3 h-3" /> Room ID
                       </p>
-                      <p className="font-heading font-bold truncate">{tournament.room_details.roomId || (registered ? "Not shared yet" : "Join to view")}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <p className="min-w-0 flex-1 font-heading font-bold truncate">
+                          {tournament.room_details.roomId || (registered ? "Not shared yet" : "Join to view")}
+                        </p>
+                        {tournament.room_details.roomId && (
+                          <button
+                            type="button"
+                            onClick={() => copyValue("Room ID", tournament.room_details?.roomId)}
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-primary transition hover:bg-primary/20 active:scale-95"
+                            aria-label="Copy Room ID"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                   {(tournament.room_details?.roomPass || tournament.room_details?.hasRoomPass) && (
@@ -310,7 +367,21 @@ const TournamentDetailScreen = () => {
                       <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                         <Lock className="w-3 h-3" /> Room Pass
                       </p>
-                      <p className="font-heading font-bold truncate">{tournament.room_details.roomPass || (registered ? "Not shared yet" : "Join to view")}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <p className="min-w-0 flex-1 font-heading font-bold truncate">
+                          {tournament.room_details.roomPass || (registered ? "Not shared yet" : "Join to view")}
+                        </p>
+                        {tournament.room_details.roomPass && (
+                          <button
+                            type="button"
+                            onClick={() => copyValue("Room Pass", tournament.room_details?.roomPass)}
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-primary transition hover:bg-primary/20 active:scale-95"
+                            aria-label="Copy Room Pass"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

@@ -12,7 +12,7 @@ export async function creditWallet({ user, amount, category, idempotencyKey, fro
 
     try {
         // 🔁 Idempotency check
-        const existing = await WalletTransaction.findOne({ idempotencyKey });
+        const existing = await WalletTransaction.findOne({ idempotencyKey }).session(session);
         if (existing) {
             await session.abortTransaction();
             return existing;
@@ -22,16 +22,16 @@ export async function creditWallet({ user, amount, category, idempotencyKey, fro
         const { grossAmount, platformFee, netAmount } = calculateFeeSplit(amount, feePercent);
         const transactionMetadata = { ...metadata, feePercent };
 
-        const wallet = await Wallet.findOne({ user }).session(session);
+        const wallet = await Wallet.findOneAndUpdate(
+            { user, status: "ACTIVE" },
+            { $inc: { balance: netAmount }, $set: { lastTransactionAt: new Date() } },
+            { session, new: false }
+        );
 
-        if (!wallet) throw new ApiError(1002, "Wallet not found");
+        if (!wallet) throw new ApiError(1002, "Wallet not found or inactive");
 
-        const before = wallet.balance;
+        const before = Number(wallet.balance || 0);
         const after = before + netAmount;
-
-        wallet.balance = after;
-        wallet.lastTransactionAt = new Date();
-        await wallet.save({ session });
 
         const tx = await WalletTransaction.create(
             [
@@ -98,6 +98,11 @@ export async function creditWallet({ user, amount, category, idempotencyKey, fro
         return tx[0];
     } catch (err) {
         await session.abortTransaction();
+        if (err instanceof ApiError) throw err;
+        if (err?.code === 11000 && idempotencyKey) {
+            const existing = await WalletTransaction.findOne({ idempotencyKey });
+            if (existing) return existing;
+        }
         throw new ApiError(500, err.message, err);
     } finally {
         session.endSession();
@@ -109,7 +114,7 @@ export async function debitWallet({ user, amount, category, idempotencyKey, from
     session.startTransaction();
 
     try {
-        const existing = await WalletTransaction.findOne({ idempotencyKey });
+        const existing = await WalletTransaction.findOne({ idempotencyKey }).session(session);
         if (existing) {
             await session.abortTransaction();
             return existing;
@@ -119,20 +124,19 @@ export async function debitWallet({ user, amount, category, idempotencyKey, from
         const { grossAmount, platformFee, netAmount } = calculateFeeSplit(amount, feePercent);
         const transactionMetadata = { ...metadata, feePercent };
 
-        const wallet = await Wallet.findOne({ user }).session(session);
+        const wallet = await Wallet.findOneAndUpdate(
+            { user, status: "ACTIVE", balance: { $gte: grossAmount } },
+            { $inc: { balance: -grossAmount }, $set: { lastTransactionAt: new Date() } },
+            { session, new: false }
+        );
 
-        if (!wallet) throw new ApiError(1002, "Wallet not found");
-
-        if (wallet.balance < grossAmount) {
-            throw new ApiError(1001, "Insufficient balance");
+        if (!wallet) {
+            const exists = await Wallet.exists({ user }).session(session);
+            throw new ApiError(exists ? 1001 : 1002, exists ? "Insufficient balance" : "Wallet not found");
         }
 
-        const before = wallet.balance;
+        const before = Number(wallet.balance || 0);
         const after = before - grossAmount;
-
-        wallet.balance = after;
-        wallet.lastTransactionAt = new Date();
-        await wallet.save({ session });
 
         const tx = await WalletTransaction.create(
             [
@@ -199,6 +203,10 @@ export async function debitWallet({ user, amount, category, idempotencyKey, from
         return tx[0];
     } catch (err) {
         await session.abortTransaction();
+        if (err?.code === 11000 && idempotencyKey) {
+            const existing = await WalletTransaction.findOne({ idempotencyKey });
+            if (existing) return existing;
+        }
         throw err;
     } finally {
         session.endSession();

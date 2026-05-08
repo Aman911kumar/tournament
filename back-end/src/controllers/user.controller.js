@@ -6,6 +6,7 @@ import { WalletTransaction } from '../models/walletTransaction.model.js'
 import { Wallet } from '../models/wallet.model.js'
 import { Payment } from '../models/payment.model.js'
 import { Notification } from '../models/notification.model.js'
+import { PushSubscription } from '../models/pushSubscription.model.js'
 import { Tournament } from '../models/tournament.model.js'
 import { Registration } from '../models/registration.model.js'
 import { hasRole } from '../middlewares/auth.middleware.js'
@@ -21,6 +22,8 @@ import {
     REFRESH_TOKEN_SECRET
 } from '../../env.js'
 import { expireStaleRazorpayPayments } from '../services/paymentExpiry.service.js'
+import { sendEmailVerification, sendPasswordResetEmail, sendPhoneVerificationEmail } from '../services/auth.service.js'
+import { getPushPublicKey } from '../services/notification.service.js'
 
 const generateAccessTokenAndRefreshToken = async (userId) => {
     try {
@@ -460,6 +463,7 @@ const registerUser = asyncHandler(async (req, res) => {
     // Validate required fields
     [
         { field: username, name: "username" },
+        { field: email, name: "email" },
         { field: phone_number, name: "phone number" },
         { field: password, name: "password" }
     ].forEach(item => {
@@ -468,7 +472,7 @@ const registerUser = asyncHandler(async (req, res) => {
         }
     });
 
-    if (normalizedEmail && !isValidEmail(normalizedEmail)) {
+    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
         throw new ApiError(400, "Invalid email address");
     }
 
@@ -503,7 +507,7 @@ const registerUser = asyncHandler(async (req, res) => {
                 linkedProviders: [
                     { provider: "password", providerId: username, verified: true },
                     { provider: "phone", providerId: normalizedPhone, verified: false },
-                    ...(normalizedEmail ? [{ provider: "email", providerId: normalizedEmail, verified: false }] : [])
+                    { provider: "email", providerId: normalizedEmail, verified: false }
                 ]
             }],
             { session }
@@ -712,23 +716,35 @@ const forgotPassword = asyncHandler(async (req, res) => {
         );
     }
 
+    if (!user.email || !isValidEmail(user.email)) {
+        throw new ApiError(400, "This account does not have a valid email for password reset");
+    }
+
     // Generate a reset token (expires in 10 min)
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const resetTokenExpires = Date.now() + 10 * 60 * 1000;
+    const resetTokenHash = crypto.createHash("sha256").update(resetToken).digest("hex");
+    const expiresInMinutes = 10;
+    const resetTokenExpires = Date.now() + expiresInMinutes * 60 * 1000;
 
-    user.resetPasswordToken = resetToken;
+    user.resetPasswordToken = resetTokenHash;
     user.resetPasswordExpires = resetTokenExpires;
     await user.save({ validateBeforeSave: false });
 
-    // TODO: send token via SMS or email
-    // e.g., sendSMS(user.phone_number, `Your reset code: ${resetToken}`)
+    await sendPasswordResetEmail({
+        to: user.email,
+        username: user.username,
+        token: resetToken,
+        expiresInMinutes,
+    });
+
     const responseData = {
-        expiresInMinutes: 10,
+        delivery: "email",
+        expiresInMinutes,
         ...(process.env.NODE_ENV !== "production" ? { resetToken } : {})
     };
 
     return res.status(200).json(
-        new ApiResponse(200, responseData, "Password reset token generated successfully")
+        new ApiResponse(200, responseData, "Password reset email sent")
     );
 });
 const resetPassword = asyncHandler(async (req, res) => {
@@ -739,10 +755,11 @@ const resetPassword = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Token and new password are required");
     }
 
+    const tokenHash = crypto.createHash("sha256").update(String(token).trim()).digest("hex");
     const user = await User.findOne({
-        resetPasswordToken: token,
+        resetPasswordToken: tokenHash,
         resetPasswordExpires: { $gt: Date.now() } // token not expired
-    });
+    }).select("+resetPasswordToken +resetPasswordExpires");
 
     if (!user) {
         throw new ApiError(400, "Invalid or expired reset token");
@@ -797,7 +814,9 @@ const changePassword = asyncHandler(async (req, res) => {
 //profile Management________________________________________________________________________________________________
 
 const getUserProfile = asyncHandler(async (req, res) => {
-    const user = req.user;
+    const user = await User.findById(req.user._id).select("-password -refreshToken -accessToken");
+    if (!user) throw new ApiError(404, "User not found");
+
     if (isProviderPhoneNumber(user.phone_number)) {
         user.set("phone_number", undefined);
         await user.save({ validateBeforeSave: false });
@@ -829,7 +848,7 @@ const getUserById = asyncHandler(async (req, res) => {
 const updateUserProfile = asyncHandler(async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) throw new ApiError(404, "User not found");
-    const { username, email, phone_number, gamename, gameid, dateOfBirth, gender, password } = req.body;
+    const { username, email, phone_number, gamename, gameid, dateOfBirth, gender } = req.body;
     // console.log(username, gamename, gameid, dateOfBirth, gender, password)
     const isSocialUser = Boolean(user.socialProvider);
     const wantsPhoneUpdate = Object.prototype.hasOwnProperty.call(req.body, "phone_number");
@@ -852,20 +871,24 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     const wantsOtherUpdate = usernameChanged || emailChanged || gamenameChanged || gameidChanged || dateOfBirthChanged || genderChanged;
     const hasAnyUpdate = phoneChanged || wantsOtherUpdate;
 
+    if (wantsEmailUpdate && !nextEmail) {
+        throw new ApiError(400, "Email is required");
+    }
+
+    if (wantsPhoneUpdate && !nextPhoneNumber) {
+        throw new ApiError(400, "Phone number is required");
+    }
+
+    if (!wantsEmailUpdate && !currentEmail) {
+        throw new ApiError(400, "Email is required");
+    }
+
+    if (!wantsPhoneUpdate && !currentPhoneNumber) {
+        throw new ApiError(400, "Phone number is required");
+    }
+
     if (emailChanged && nextEmail && !isValidEmail(nextEmail)) {
         throw new ApiError(400, "Invalid email address");
-    }
-
-    // Validate current password
-    if (hasAnyUpdate && (!isSocialUser || wantsOtherUpdate) && (!password || password.trim() === "")) {
-        throw new ApiError(400, "Password is required to update profile");
-    }
-
-    if (hasAnyUpdate && (!isSocialUser || wantsOtherUpdate)) {
-        const isCorrect = await user.isPasswordCorrect(password);
-        if (!isCorrect) {
-            throw new ApiError(400, "Incorrect password");
-        }
     }
 
     // Build update object dynamically
@@ -880,31 +903,21 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     }
 
     if (phoneChanged) {
-        if (!nextPhoneNumber) {
-            updates.phone_number = undefined;
-            updates.phoneVerified = false;
-        } else {
-            const existingPhoneUser = await User.findOne({ phone_number: nextPhoneNumber });
-            if (existingPhoneUser && existingPhoneUser._id.toString() !== user._id.toString()) {
-                throw new ApiError(400, "Phone number already exists");
-            }
-            updates.phone_number = nextPhoneNumber;
-            updates.phoneVerified = false;
+        const existingPhoneUser = await User.findOne({ phone_number: nextPhoneNumber });
+        if (existingPhoneUser && existingPhoneUser._id.toString() !== user._id.toString()) {
+            throw new ApiError(400, "Phone number already exists");
         }
+        updates.phone_number = nextPhoneNumber;
+        updates.phoneVerified = false;
     }
 
     if (emailChanged) {
-        if (!nextEmail) {
-            updates.email = undefined;
-            updates.emailVerified = false;
-        } else {
-            const existingEmailUser = await User.findOne({ email: nextEmail });
-            if (existingEmailUser && existingEmailUser._id.toString() !== user._id.toString()) {
-                throw new ApiError(400, "Email already exists");
-            }
-            updates.email = nextEmail;
-            updates.emailVerified = false;
+        const existingEmailUser = await User.findOne({ email: nextEmail });
+        if (existingEmailUser && existingEmailUser._id.toString() !== user._id.toString()) {
+            throw new ApiError(400, "Email already exists");
         }
+        updates.email = nextEmail;
+        updates.emailVerified = false;
     }
 
     if (gamenameChanged) updates.gamename = gamename.trim();
@@ -933,6 +946,150 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 
     return res.status(200).json(
         new ApiResponse(200, { user: await buildUserProfileResponse(updatedUser) }, "User profile updated successfully")
+    );
+});
+
+const verifyProfileEmail = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id).select("+emailVerificationToken +emailVerificationExpires");
+    if (!user) throw new ApiError(404, "User not found");
+    if (!user.email || !isValidEmail(user.email)) {
+        throw new ApiError(400, "Add a valid email before verification");
+    }
+
+    if (user.emailVerified) {
+        const currentUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
+        return res.status(200).json(
+            new ApiResponse(200, { user: await buildUserProfileResponse(currentUser) }, "Email is already verified")
+        );
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const expiresInMinutes = 30;
+
+    user.emailVerificationToken = tokenHash;
+    user.emailVerificationExpires = new Date(Date.now() + expiresInMinutes * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    await sendEmailVerification({
+        to: user.email,
+        username: user.username,
+        token: rawToken,
+        expiresInMinutes,
+    });
+
+    const updatedUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
+    return res.status(200).json(
+        new ApiResponse(200, { user: await buildUserProfileResponse(updatedUser) }, "Verification email sent")
+    );
+});
+
+const confirmEmailVerification = asyncHandler(async (req, res) => {
+    const { token } = req.body;
+    if (!token || String(token).trim() === "") {
+        throw new ApiError(400, "Verification token is required");
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(String(token).trim()).digest("hex");
+    const user = await User.findOne({
+        emailVerificationToken: tokenHash,
+        emailVerificationExpires: { $gt: new Date() },
+    }).select("+emailVerificationToken +emailVerificationExpires");
+
+    if (!user) {
+        throw new ApiError(400, "Verification link is invalid or expired");
+    }
+
+    user.emailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpires = undefined;
+    user.linkedProviders = [
+        ...(user.linkedProviders || []).filter((link) => link.provider !== "email"),
+        { provider: "email", providerId: normalizeEmail(user.email), verified: true },
+    ];
+    await user.save({ validateBeforeSave: false });
+
+    const updatedUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
+    return res.status(200).json(
+        new ApiResponse(200, { user: await buildUserProfileResponse(updatedUser) }, "Email verified successfully")
+    );
+});
+
+const verifyProfilePhone = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id).select("+phoneVerificationToken +phoneVerificationExpires");
+    if (!user) throw new ApiError(404, "User not found");
+
+    const phoneNumber = normalizePhoneNumber(user.phone_number);
+    if (!phoneNumber) {
+        throw new ApiError(400, "Add a phone number before verification");
+    }
+
+    if (!user.email || !isValidEmail(user.email)) {
+        throw new ApiError(400, "Add a valid email before phone verification");
+    }
+
+    if (user.phoneVerified) {
+        const currentUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
+        return res.status(200).json(
+            new ApiResponse(200, { user: await buildUserProfileResponse(currentUser) }, "Phone is already verified")
+        );
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const expiresInMinutes = 30;
+
+    user.phoneVerificationToken = tokenHash;
+    user.phoneVerificationExpires = new Date(Date.now() + expiresInMinutes * 60 * 1000);
+    await user.save({ validateBeforeSave: false });
+
+    await sendPhoneVerificationEmail({
+        to: user.email,
+        username: user.username,
+        phoneNumber,
+        token: rawToken,
+        expiresInMinutes,
+    });
+
+    const updatedUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
+    return res.status(200).json(
+        new ApiResponse(200, { user: await buildUserProfileResponse(updatedUser) }, "Phone verification email sent")
+    );
+});
+
+const confirmPhoneVerification = asyncHandler(async (req, res) => {
+    const { token } = req.body;
+    if (!token || String(token).trim() === "") {
+        throw new ApiError(400, "Verification token is required");
+    }
+
+    const tokenHash = crypto.createHash("sha256").update(String(token).trim()).digest("hex");
+    const user = await User.findOne({
+        phoneVerificationToken: tokenHash,
+        phoneVerificationExpires: { $gt: new Date() },
+    }).select("+phoneVerificationToken +phoneVerificationExpires");
+
+    if (!user) {
+        throw new ApiError(400, "Verification link is invalid or expired");
+    }
+
+    const phoneNumber = normalizePhoneNumber(user.phone_number);
+    if (!phoneNumber) {
+        throw new ApiError(400, "Phone number is missing");
+    }
+
+    user.phoneVerified = true;
+    user.phoneVerificationToken = undefined;
+    user.phoneVerificationExpires = undefined;
+    user.linkedProviders = [
+        ...(user.linkedProviders || []).filter((link) => link.provider !== "phone"),
+        { provider: "phone", providerId: phoneNumber, verified: true },
+    ];
+    await user.save({ validateBeforeSave: false });
+
+    const updatedUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
+    return res.status(200).json(
+        new ApiResponse(200, { user: await buildUserProfileResponse(updatedUser) }, "Phone verified successfully")
     );
 });
 const becomeCreator = asyncHandler(async (req, res) => {
@@ -1342,6 +1499,61 @@ const markAllNotificationsAsRead = asyncHandler(async (req, res) => {
         new ApiResponse(200, { modifiedCount: result.modifiedCount }, "All notifications marked as read")
     );
 });
+
+const getNotificationPushConfig = asyncHandler(async (req, res) => {
+    const publicKey = getPushPublicKey();
+
+    return res.status(200).json(
+        new ApiResponse(200, {
+            enabled: Boolean(publicKey),
+            publicKey,
+        }, publicKey ? "Push notifications are available" : "Push notifications are not configured")
+    );
+});
+
+const savePushSubscription = asyncHandler(async (req, res) => {
+    const { subscription, platform = "web" } = req.body;
+    const endpoint = subscription?.endpoint;
+    const keys = subscription?.keys || {};
+
+    if (!endpoint || !keys.p256dh || !keys.auth) {
+        throw new ApiError(400, "Valid push subscription is required");
+    }
+
+    const saved = await PushSubscription.findOneAndUpdate(
+        { endpoint },
+        {
+            $set: {
+                user: req.user._id,
+                endpoint,
+                keys: {
+                    p256dh: keys.p256dh,
+                    auth: keys.auth,
+                },
+                platform: ["web", "android", "ios"].includes(platform) ? platform : "unknown",
+                userAgent: req.headers["user-agent"] || "",
+                enabled: true,
+                lastSeenAt: new Date(),
+            },
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    return res.status(200).json(
+        new ApiResponse(200, { subscribed: true, subscriptionId: saved._id }, "Push notifications enabled")
+    );
+});
+
+const deletePushSubscription = asyncHandler(async (req, res) => {
+    const endpoint = req.body?.endpoint;
+    const query = endpoint ? { user: req.user._id, endpoint } : { user: req.user._id };
+    const result = await PushSubscription.deleteMany(query);
+
+    return res.status(200).json(
+        new ApiResponse(200, { deletedCount: result.deletedCount }, "Push notifications disabled")
+    );
+});
+
 const deleteNotification = asyncHandler(async (req, res) => {
     const userId = req.user._id;
     const { notificationId } = req.params;
@@ -1473,6 +1685,10 @@ export {
     getUserProfile,
     getUserById,
     updateUserProfile,
+    verifyProfileEmail,
+    confirmEmailVerification,
+    verifyProfilePhone,
+    confirmPhoneVerification,
     becomeCreator,
     leaveCreator,
     uploadAvatar,
@@ -1485,6 +1701,9 @@ export {
     getCreatorEarnings,
     getPlayerEarnings,
     getUserNotifications,
+    getNotificationPushConfig,
+    savePushSubscription,
+    deletePushSubscription,
     markNotificationAsRead,
     markAllNotificationsAsRead,
     deleteNotification,

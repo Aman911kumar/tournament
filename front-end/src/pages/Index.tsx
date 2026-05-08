@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Bell, Search, ChevronRight, Crosshair, Flame, Zap, Star, Users, Crown } from "lucide-react";
+import { Search, ChevronRight, Crosshair, Flame, Zap, Star, Users, Crown } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
+import NotificationBell from "@/components/NotificationBell";
 import { getMyTournamentRegistrations, getTournamentPage, Tournament } from "@/api/tournaments";
 import { getCreators, CreatorChannel } from "@/api/creators";
 import { formatPrizeSummary } from "@/lib/page-utils";
@@ -32,6 +33,8 @@ const getRegistrationTournamentId = (registration: Awaited<ReturnType<typeof get
   typeof registration.tournament === "string" ? registration.tournament : registration.tournament?._id;
 
 const getPrizeSummary = (tournament?: Tournament) => formatPrizeSummary(tournament);
+const isHomeTournament = (tournament: Tournament) =>
+  tournament.visibility !== "private" && !["draft", "completed", "cancelled"].includes(tournament.status);
 const PAGE_SIZE = 6;
 
 const Index = () => {
@@ -52,7 +55,7 @@ const Index = () => {
       hasMore?: boolean;
     }>(CACHE_KEYS.home);
     if (nextPage === 1 && cachedHome) {
-      setTrendingTournaments(cachedHome.data.tournaments);
+      setTrendingTournaments(cachedHome.data.tournaments.filter(isHomeTournament));
       setRecommendedCreators(cachedHome.data.creators);
       setJoinedTournamentIds(new Set(cachedHome.data.joinedIds));
       setPage(cachedHome.data.page ?? 1);
@@ -66,15 +69,19 @@ const Index = () => {
         getCreators(),
         getMyTournamentRegistrations().catch(() => []),
       ]);
-      setTrendingTournaments((previous) => nextPage === 1 ? tournaments.tournaments : [...previous, ...tournaments.tournaments]);
+      const visibleTournaments = tournaments.tournaments.filter(isHomeTournament);
+      setTrendingTournaments((previous) => nextPage === 1 ? visibleTournaments : [...previous, ...visibleTournaments]);
       setRecommendedCreators(creators.slice(0, 4));
       setPage(tournaments.page ?? nextPage);
       setHasMore(Boolean(tournaments.hasMore));
-      const joinedIds = registrations.map(getRegistrationTournamentId).filter(Boolean);
+      const joinedIds = registrations
+        .filter((registration) => registration.status !== "cancelled")
+        .map(getRegistrationTournamentId)
+        .filter(Boolean);
       setJoinedTournamentIds(new Set(joinedIds));
       if (nextPage === 1) {
         writeCache(CACHE_KEYS.home, {
-          tournaments: tournaments.tournaments,
+          tournaments: visibleTournaments,
           creators: creators.slice(0, 4),
           joinedIds,
           page: tournaments.page ?? nextPage,
@@ -113,16 +120,10 @@ const Index = () => {
           </h1>
           <p className="text-xs text-muted-foreground font-heading">Welcome back, Warrior</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
+          <NotificationBell />
           <button className="w-9 h-9 glass rounded-full flex items-center justify-center">
             <Search className="w-4 h-4 text-muted-foreground" />
-          </button>
-          <button
-            onClick={() => navigate("/notifications")}
-            className="w-9 h-9 glass rounded-full flex items-center justify-center relative"
-          >
-            <Bell className="w-4 h-4 text-muted-foreground" />
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-accent" />
           </button>
         </div>
       </div>
@@ -139,7 +140,10 @@ const Index = () => {
             </div>
             <h2 className="font-heading text-lg font-bold">{liveTournament.title}</h2>
             <p className="text-xs text-muted-foreground font-body mb-1">
-              by <span className="text-primary">{liveTournament.channel?.name ?? liveTournament.organizer?.username ?? "Creator"}</span> - Verified Creator
+              by <span className="text-primary">{liveTournament.channel?.name ?? liveTournament.organizer?.username ?? "Creator"}</span>{" "}
+              <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-heading font-semibold text-accent">
+                Verified Creator
+              </span>
             </p>
             <p className="text-xs text-muted-foreground font-body mb-3">
               Prize: {getPrizeSummary(liveTournament)} - {Number(liveTournament.participantCount || liveTournament.registrationCount || 0)}/{liveTournament.maxPlayers} playing
@@ -177,11 +181,20 @@ const Index = () => {
               className="glass rounded-xl p-3 min-w-[120px] flex flex-col items-center gap-2 shrink-0"
             >
               <div className="relative">
-                <div className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center">
-                  <span className="font-display text-lg font-bold text-primary-foreground">
-                    {creator.name[0]}
-                  </span>
-                </div>
+                {creator.avatar?.url || creator.owner?.avatar?.url ? (
+                  <img
+                    src={creator.avatar?.url ?? creator.owner?.avatar?.url}
+                    alt={creator.name}
+                    className="h-14 w-14 rounded-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center">
+                    <span className="font-display text-lg font-bold text-primary-foreground">
+                      {creator.name[0]}
+                    </span>
+                  </div>
+                )}
                 {creator.isActive && (
                   <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-secondary flex items-center justify-center">
                     <Star className="w-3 h-3 text-secondary-foreground fill-secondary-foreground" />

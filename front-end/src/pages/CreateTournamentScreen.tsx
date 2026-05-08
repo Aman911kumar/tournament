@@ -24,6 +24,7 @@ import NeonButton from "@/components/NeonButton";
 import { toast } from "@/components/ui/sonner";
 import { createTournament, getTournamentById, updateTournament } from "@/api/tournaments";
 import { getErrorToast } from "@/lib/page-utils";
+import { CACHE_KEYS, removeCache, removeCacheByPrefix, writeCache } from "@/lib/offline-cache";
 
 type GameKey = "freefire" | "bgmi" | "callofduty" | "valorant";
 type TeamType = "solo" | "duo" | "squad" | "team";
@@ -225,6 +226,7 @@ const CreateTournamentScreen = () => {
   const { id } = useParams();
   const isEditing = Boolean(id);
   const [published, setPublished] = useState(false);
+  const [publishedTournamentId, setPublishedTournamentId] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [currentVisibility, setCurrentVisibility] = useState<"public" | "private">("public");
   const [form, setForm] = useState<FormState>(() => makeEmptyForm());
@@ -378,11 +380,24 @@ const CreateTournamentScreen = () => {
 
     try {
       setPublishing(true);
+      let savedTournamentId = id || null;
       if (isEditing && id) {
-        await updateTournament(id, payload);
+        const res = await updateTournament(id, payload);
+        if (res.data?._id) {
+          savedTournamentId = res.data._id;
+          writeCache(CACHE_KEYS.tournamentDetail(res.data._id), res.data);
+        }
       } else {
-        await createTournament(payload);
+        const res = await createTournament(payload);
+        if (res.data?._id) {
+          savedTournamentId = res.data._id;
+          writeCache(CACHE_KEYS.tournamentDetail(res.data._id), res.data);
+        }
       }
+      removeCache(CACHE_KEYS.home);
+      removeCacheByPrefix("tournaments.page.");
+      removeCacheByPrefix("creatorDashboard.");
+      setPublishedTournamentId(savedTournamentId);
       setPublished(true);
     } catch (error) {
       const errorToast = getErrorToast(error, {
@@ -703,9 +718,15 @@ const CreateTournamentScreen = () => {
               <p className="text-xs text-muted-foreground font-body mb-4">
                 {isEditing ? `Your changes to "${form.title}" have been saved.` : `"${form.title}" is ready for players.`}
               </p>
-              <NeonButton full variant="purple" onClick={() => navigate("/creator-dashboard")}>
-                VIEW DASHBOARD
+              <NeonButton full variant="purple" onClick={() => navigate(publishedTournamentId ? `/tournament/${publishedTournamentId}` : "/creator-dashboard")}>
+                VIEW TOURNAMENT
               </NeonButton>
+              <button
+                onClick={() => navigate("/creator-dashboard")}
+                className="mt-3 text-xs font-heading text-muted-foreground hover:text-primary"
+              >
+                Open creator dashboard
+              </button>
             </motion.div>
           </motion.div>
         )}

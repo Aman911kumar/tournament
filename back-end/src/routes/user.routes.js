@@ -2,6 +2,10 @@ import express from "express";
 import {
   getUserProfile,
   updateUserProfile,
+  verifyProfileEmail,
+  confirmEmailVerification,
+  verifyProfilePhone,
+  confirmPhoneVerification,
   becomeCreator,
   leaveCreator,
   getAllUsers,
@@ -16,6 +20,10 @@ const router = express.Router();
 // Protected routes
 router.get("/profile", protect, getUserProfile);
 router.patch("/profile", protect, updateUserProfile);
+router.post("/profile/verify-email", protect, verifyProfileEmail);
+router.post("/profile/confirm-email", confirmEmailVerification);
+router.post("/profile/verify-phone", protect, verifyProfilePhone);
+router.post("/profile/confirm-phone", confirmPhoneVerification);
 router.post("/creator", protect, becomeCreator);
 router.delete("/creator", protect, leaveCreator);
 

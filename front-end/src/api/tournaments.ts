@@ -20,6 +20,7 @@ export const ENDPOINTS = {
   update: (id: string) => `/tournaments/${id}`,
   remove: (id: string) => `/tournaments/${id}`,
   cancel: (id: string) => `/tournaments/${id}/cancel`,
+  notifyRoom: (id: string) => `/tournaments/${id}/notify-room`,
   join: (id: string) => `/tournaments/${id}/join`,
   participants: (id: string) => `/tournaments/${id}/participants`,
   distributePrizes: (id: string) => `/tournaments/${id}/distribute-prizes`,
@@ -226,6 +227,17 @@ export async function deleteTournament(id: string) {
 
 export async function cancelTournament(id: string, payload: CancelTournamentPayload) {
   const res = await apiFetch<ApiResponse<CancelTournamentResult>>(ENDPOINTS.cancel(id), {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return res.data;
+}
+
+export async function notifyTournamentRoom(
+  id: string,
+  payload: { room_details?: { roomId?: string; roomPass?: string; roomJoinTime?: string } } = {},
+) {
+  const res = await apiFetch<ApiResponse<{ tournament: Tournament; notifiedCount: number }>>(ENDPOINTS.notifyRoom(id), {
     method: "POST",
     body: JSON.stringify(payload),
   });

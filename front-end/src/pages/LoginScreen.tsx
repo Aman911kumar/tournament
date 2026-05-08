@@ -73,7 +73,7 @@ const LoginScreen = () => {
   const [isSignup, setIsSignup] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [username, setUsername] = useState("");
-  const [phone_number, setPhone_number] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -154,21 +154,21 @@ const LoginScreen = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const identifier = phone_number.trim();
-    const normalizedPhone = normalizePhoneNumber(identifier);
-    const loginIdentifier = isValidEmail(identifier)
-      ? identifier.toLowerCase()
-      : isValidPhoneNumber(identifier)
+    const identifierValue = identifier.trim();
+    const normalizedPhone = normalizePhoneNumber(identifierValue);
+    const loginIdentifier = isValidEmail(identifierValue)
+      ? identifierValue.toLowerCase()
+      : isValidPhoneNumber(identifierValue)
         ? normalizedPhone
-        : identifier;
+        : identifierValue;
     const normalizedEmail = email.trim().toLowerCase();
 
-    if (!identifier || !password) {
+    if (!identifierValue || !password) {
       toast.error("Phone/email and password are required.");
       return;
     }
 
-    if (!isValidPhoneNumber(identifier) && !isValidEmail(identifier) && !isValidUsername(identifier)) {
+    if (!isValidPhoneNumber(identifierValue) && !isValidEmail(identifierValue) && !isValidUsername(identifierValue)) {
       toast.error("Enter a valid username, phone number, or email.");
       return;
     }
@@ -188,7 +188,7 @@ const LoginScreen = () => {
       return;
     }
 
-    if (isSignup && !isValidPhoneNumber(identifier)) {
+    if (isSignup && !isValidPhoneNumber(identifierValue)) {
       toast.error("Enter a valid 10 digit phone number.");
       return;
     }
@@ -202,7 +202,7 @@ const LoginScreen = () => {
           username: username.trim(),
           phone_number: normalizedPhone,
         })
-        : await login({ phone_number: loginIdentifier, password });
+        : await login({ identifier: loginIdentifier, password });
       completeLogin(res);
     }
     catch (err) {
@@ -264,12 +264,17 @@ const LoginScreen = () => {
             </>
           )}
           <div className="glass rounded-lg flex items-center gap-3 px-4 py-3">
-            <Phone className="w-4 h-4 text-muted-foreground" />
+            {!isSignup && isValidEmail(identifier) ? (
+              <Mail className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <Phone className="w-4 h-4 text-muted-foreground" />
+            )}
             <input
-              type="tel"
-              placeholder={isSignup ? "Phone no." : "Phone no. or email"}
-              value={phone_number}
-              onChange={(e) => setPhone_number(e.target.value)}
+              type={isSignup ? "tel" : "text"}
+              inputMode={isSignup ? "tel" : "text"}
+              placeholder={isSignup ? "Phone no." : "Username, phone, or email"}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               disabled={loading}
               className="bg-transparent flex-1 text-sm font-body text-foreground placeholder:text-muted-foreground focus:outline-none"
             />

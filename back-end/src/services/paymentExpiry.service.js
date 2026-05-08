@@ -5,6 +5,14 @@ const PAYMENT_EXPIRY_THROTTLE_MS = 30 * 1000;
 let lastGlobalRunAt = 0;
 const lastUserRunAt = new Map();
 
+const cleanupUserThrottle = (now = Date.now()) => {
+    for (const [key, lastRunAt] of lastUserRunAt.entries()) {
+        if (now - lastRunAt > PAYMENT_EXPIRY_THROTTLE_MS * 4) {
+            lastUserRunAt.delete(key);
+        }
+    }
+};
+
 export const getRazorpayPaymentExpiryCutoff = () => {
     const cutoff = new Date();
     cutoff.setMinutes(cutoff.getMinutes() - RAZORPAY_PAYMENT_TIMEOUT_MINUTES);
@@ -13,6 +21,7 @@ export const getRazorpayPaymentExpiryCutoff = () => {
 
 export const expireStaleRazorpayPayments = async ({ user = null } = {}) => {
     const now = Date.now();
+    cleanupUserThrottle(now);
     const cacheKey = user?.toString?.() || String(user || "");
 
     if (cacheKey) {

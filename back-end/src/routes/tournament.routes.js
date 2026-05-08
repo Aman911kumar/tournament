@@ -5,6 +5,7 @@ import {
     getTournamentById,
     updateTournament,
     deleteTournament,
+    notifyTournamentRoomDetails,
     cancelTournament,
     joinTournament,
     getTournamentParticipants,
@@ -25,6 +26,7 @@ router.post("/:id/join", protect, joinTournament);
 // Creator/Admin routes
 router.post("/", protect, creatorOrAdmin, createTournament);
 router.put("/:id", protect, creatorOrAdmin, updateTournament);
+router.post("/:id/notify-room", protect, creatorOrAdmin, notifyTournamentRoomDetails);
 router.post("/:id/cancel", protect, creatorOrAdmin, cancelTournament);
 router.post("/:id/distribute-prizes", protect, creatorOrAdmin, distributeTournamentPrizes);
 router.delete("/:id", protect, creatorOrAdmin, deleteTournament);

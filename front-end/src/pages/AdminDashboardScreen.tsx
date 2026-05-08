@@ -847,7 +847,7 @@ const AdminDashboardScreen = () => {
       label: "Verified IDs",
       value: formatNumber(dashboard.totals.verifiedGameAccounts),
       note: `${formatNumber(dashboard.totals.registrations)} tournament registrations`,
-      color: "text-secondary",
+      color: "text-accent",
       onClick: () => navigate("/admin/details/verified"),
     },
     {

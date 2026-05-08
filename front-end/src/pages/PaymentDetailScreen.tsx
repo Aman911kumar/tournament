@@ -19,6 +19,7 @@ import GlassCard from "@/components/GlassCard";
 import { toast } from "@/components/ui/sonner";
 import { getPaymentDetail, type PaymentDetail } from "@/api/wallet";
 import { formatCurrency, getErrorMessage } from "@/lib/page-utils";
+import { copyText } from "@/lib/clipboard";
 
 const statusConfig = {
   success: { icon: CheckCircle2, color: "text-accent", bg: "bg-accent/10", label: "Success" },
@@ -42,9 +43,10 @@ const formatDate = (iso?: string) => {
   });
 };
 
-const copyToClipboard = (value: string, label: string) => {
-  navigator.clipboard.writeText(value);
-  toast.success(`${label} copied`);
+const copyToClipboard = async (value: string, label: string) => {
+  const copied = await copyText(value);
+  if (copied) toast.success(`${label} copied`);
+  else toast.error("Copy failed", { description: `Could not copy ${label.toLowerCase()}.` });
 };
 
 interface DetailRowProps {

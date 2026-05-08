@@ -686,7 +686,7 @@ const AdminDetailScreen = () => {
             </button>
             <div>
               <h1 className="flex items-center gap-2 font-heading text-2xl font-bold">
-                <Icon className="h-5 w-5 text-primary" />
+                <Icon className={`h-5 w-5 ${section === "verified" ? "text-accent" : "text-primary"}`} />
                 {config.title} Details
               </h1>
               <p className="text-xs text-muted-foreground">{config.description}</p>

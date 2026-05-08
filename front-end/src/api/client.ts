@@ -5,6 +5,7 @@ import { clearAuthTokens, getAccessToken, getRefreshToken, hasAuthSession, setAu
 
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 export const API_BASE_URL = String(configuredApiBaseUrl).replace(/\/$/, "");
+const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 20000);
 
 export type ApiErrorDetail = Record<string, unknown>;
 
@@ -79,6 +80,29 @@ const buildHeaders = (options: RequestInit, token: string | null, isFormData: bo
   ...(options.headers ?? {}),
 });
 
+const withTimeoutSignal = (signal?: AbortSignal | null) => {
+  if (!API_TIMEOUT_MS || API_TIMEOUT_MS <= 0 || typeof AbortController === "undefined") {
+    return { signal, cleanup: () => undefined };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  const abort = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener("abort", abort, { once: true });
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      window.clearTimeout(timeoutId);
+      signal?.removeEventListener("abort", abort);
+    },
+  };
+};
+
 const parseJsonResponse = async (res: Response): Promise<BackendErrorBody | unknown> => {
   const text = await res.text();
   if (!text) return null;
@@ -151,21 +175,29 @@ export async function apiFetch<T>(
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const method = options.method ?? "GET";
 
-  const sendRequest = async () =>
-    fetch(url, {
+  const sendRequest = async () => {
+    const timeout = withTimeoutSignal(options.signal);
+    try {
+      return await fetch(url, {
       credentials: "include",
       ...options,
+      signal: timeout.signal,
       headers: buildHeaders(options, getAccessToken(), isFormData),
-    });
+      });
+    } finally {
+      timeout.cleanup();
+    }
+  };
 
   let res: Response;
 
   try {
     res = await sendRequest();
   } catch (error) {
+    const isAbort = error instanceof DOMException && error.name === "AbortError";
     throw new ApiError(
       0,
-      error instanceof Error ? error.message : "Could not reach the API server",
+      isAbort ? "Request timed out. Please check your connection and try again." : error instanceof Error ? error.message : "Could not reach the API server",
       false,
       [],
       { endpoint: path, method, source: "network" },
@@ -179,9 +211,10 @@ export async function apiFetch<T>(
         try {
           res = await sendRequest();
         } catch (error) {
+          const isAbort = error instanceof DOMException && error.name === "AbortError";
           throw new ApiError(
             0,
-            error instanceof Error ? error.message : "Could not reach the API server",
+            isAbort ? "Request timed out. Please check your connection and try again." : error instanceof Error ? error.message : "Could not reach the API server",
             false,
             [],
             { endpoint: path, method, source: "network" },

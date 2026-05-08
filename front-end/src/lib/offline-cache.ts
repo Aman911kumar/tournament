@@ -68,7 +68,19 @@ export const writeCache = <T,>(key: string, data: T) => {
     verified: true,
   };
 
-  window.localStorage.setItem(`${PREFIX}${key}`, JSON.stringify(value));
+  const storageKey = `${PREFIX}${key}`;
+  const serialized = JSON.stringify(value);
+
+  try {
+    window.localStorage.setItem(storageKey, serialized);
+  } catch {
+    removeExpiredCaches();
+    try {
+      window.localStorage.setItem(storageKey, serialized);
+    } catch {
+      // Storage can be full or blocked in private browsing; cache writes are optional.
+    }
+  }
 };
 
 export const writeAuthenticatedCache = <T,>(
@@ -91,6 +103,37 @@ export const writeAuthenticatedCache = <T,>(
 export const removeCache = (key: string) => {
   if (!canUseStorage()) return;
   window.localStorage.removeItem(`${PREFIX}${key}`);
+};
+
+export const removeCacheByPrefix = (keyPrefix: string) => {
+  if (!canUseStorage()) return;
+  const storagePrefix = `${PREFIX}${keyPrefix}`;
+
+  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+    const key = window.localStorage.key(index);
+    if (key?.startsWith(storagePrefix)) {
+      window.localStorage.removeItem(key);
+    }
+  }
+};
+
+export const removeExpiredCaches = () => {
+  if (!canUseStorage()) return;
+
+  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+    const key = window.localStorage.key(index);
+    if (!key?.startsWith(PREFIX)) continue;
+
+    try {
+      const raw = window.localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) as Partial<CachedValue<unknown>> : null;
+      if (!parsed?.expiresAt || new Date(parsed.expiresAt).getTime() <= Date.now()) {
+        window.localStorage.removeItem(key);
+      }
+    } catch {
+      window.localStorage.removeItem(key);
+    }
+  }
 };
 
 export const getSavedDataLabel = (savedAt?: string | null) => {

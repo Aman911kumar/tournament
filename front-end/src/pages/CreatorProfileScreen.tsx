@@ -239,8 +239,8 @@ const CreatorProfileScreen = () => {
                       <span className="font-display text-2xl font-bold text-primary-foreground">{displayName[0]}</span>
                     </div>
                   )}
-                  <div className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-secondary flex items-center justify-center border-2 border-background">
-                    <Shield className="w-3 h-3 text-secondary-foreground fill-secondary-foreground" />
+                  <div className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full border-2 border-background bg-accent flex items-center justify-center">
+                    <Shield className="w-3 h-3 text-accent-foreground fill-accent-foreground" />
                   </div>
                 </div>
               </div>
@@ -252,7 +252,7 @@ const CreatorProfileScreen = () => {
                   <div className="flex items-center gap-2 min-w-0">
                     <h2 className="font-heading text-lg font-bold truncate">{displayName}</h2>
                     {isVerifiedCreator && (
-                      <span className="text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full bg-secondary/20 text-secondary">
+                      <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-heading font-semibold text-accent">
                         Verified
                       </span>
                     )}

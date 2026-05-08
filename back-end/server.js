@@ -1,4 +1,6 @@
 import express from 'express';
+import { createServer } from 'http';
+import mongoose from 'mongoose';
 import cors from 'cors';
 import compression from 'compression';
 import { PORT, CORS_ORIGIN } from './env.js';
@@ -12,13 +14,43 @@ import requestMetrics from './src/middlewares/requestMetrics.middleware.js';
 import ApiError from './src/utils/ApiError.js';
 import path from "path";
 import { expireStaleRazorpayPayments } from './src/services/paymentExpiry.service.js';
+import { initSocket } from './src/services/socket.service.js';
 
 const __dirname = path.resolve();
 const distPath = path.join(__dirname, "dist");
 
 // App configuration
 const app = express();
+const httpServer = createServer(app);
 const serverPort = PORT || 8000;
+let paymentExpiryRunning = false;
+let paymentExpiryTimer = null;
+
+const runPaymentExpiry = async () => {
+    if (paymentExpiryRunning) return;
+    paymentExpiryRunning = true;
+    try {
+        await expireStaleRazorpayPayments();
+    } catch (err) {
+        console.error("Razorpay payment expiry failed:", err);
+    } finally {
+        paymentExpiryRunning = false;
+    }
+};
+
+const shutdown = (signal) => {
+    console.log(`${signal} received. Shutting down gracefully...`);
+    if (paymentExpiryTimer) clearInterval(paymentExpiryTimer);
+    httpServer.close(async () => {
+        await mongoose.connection.close(false).catch((error) => {
+            console.error("MongoDB close failed:", error);
+        });
+        console.log("HTTP server closed");
+        process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10000).unref();
+};
+
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
 app.use(securityHeaders);
@@ -100,19 +132,18 @@ app.use(errorHandler);
 
 connect_db()
     .then(() => {
-        expireStaleRazorpayPayments().catch((err) => {
-            console.error("Initial Razorpay payment expiry failed:", err);
-        });
-        setInterval(() => {
-            expireStaleRazorpayPayments().catch((err) => {
-                console.error("Razorpay payment expiry failed:", err);
-            });
-        }, 60 * 1000);
+        initSocket(httpServer, allowedOrigins);
+        runPaymentExpiry();
+        paymentExpiryTimer = setInterval(runPaymentExpiry, 60 * 1000);
+        paymentExpiryTimer.unref?.();
 
-        app.listen(serverPort, () => {
+        httpServer.listen(serverPort, () => {
             console.log(`Server is listening on http://localhost:${serverPort}`);
         });
     })
     .catch((err) => {
         console.error("DB connection failed: ", err);
     });
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

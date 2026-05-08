@@ -7,6 +7,10 @@ export const ENDPOINTS = {
   stats: "/profile/stats",
   becomeCreator: "/user/creator",
   leaveCreator: "/user/creator",
+  verifyEmail: "/user/profile/verify-email",
+  confirmEmail: "/user/profile/confirm-email",
+  verifyPhone: "/user/profile/verify-phone",
+  confirmPhone: "/user/profile/confirm-phone",
 };
 
 export interface ProfileUpdatePayload {
@@ -25,6 +29,15 @@ export interface User {
   username: string;
   email: string;
   phone_number?: string;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
+  email_verified?: boolean;
+  phone_verified?: boolean;
+  linkedProviders?: Array<{
+    provider: "password" | "google" | "facebook" | "phone" | "email";
+    providerId?: string;
+    verified?: boolean;
+  }>;
   socialProvider?: "google" | "facebook";
   passwordLoginEnabled?: boolean;
   avatar?: { public_id?: string; url?: string };
@@ -69,6 +82,28 @@ export async function getMyProfile(): Promise<ApiResponse<{ user: User }>> {
 export async function updateProfile(payload: ProfileUpdatePayload):Promise<ApiResponse> {
   return apiFetch(ENDPOINTS.update, { method: "PATCH", body: JSON.stringify(payload) , credentials:"include"});
   // return { success: true };
+}
+
+export async function verifyEmail(): Promise<ApiResponse<{ user: User }>> {
+  return apiFetch(ENDPOINTS.verifyEmail, { method: "POST", credentials: "include" });
+}
+
+export async function confirmEmailVerification(token: string): Promise<ApiResponse<{ user: User }>> {
+  return apiFetch(ENDPOINTS.confirmEmail, {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+export async function verifyPhone(): Promise<ApiResponse<{ user: User }>> {
+  return apiFetch(ENDPOINTS.verifyPhone, { method: "POST", credentials: "include" });
+}
+
+export async function confirmPhoneVerification(token: string): Promise<ApiResponse<{ user: User }>> {
+  return apiFetch(ENDPOINTS.confirmPhone, {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
 }
 
 export async function becomeCreator(): Promise<ApiResponse<{ user: User }>> {

@@ -11,6 +11,9 @@ import {
   Edit,
   Eye,
   EyeOff,
+  Bell,
+  KeyRound,
+  Lock,
   PieChart,
   PlayCircle,
   Plus,
@@ -23,7 +26,7 @@ import {
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import { cancelTournament, deleteTournament, getTournaments, Tournament, updateTournamentStatus, updateTournamentVisibility } from "@/api/tournaments";
+import { cancelTournament, deleteTournament, getTournaments, notifyTournamentRoom, Tournament, updateTournamentStatus, updateTournamentVisibility } from "@/api/tournaments";
 import { getMyProfile, User as ProfileUser } from "@/api/profile";
 import {
   Dialog,
@@ -34,7 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatCurrency, formatPrizeSummary, getErrorToast } from "@/lib/page-utils";
 import { toast } from "@/components/ui/sonner";
-import { CACHE_KEYS, readCache, writeAuthenticatedCache } from "@/lib/offline-cache";
+import { CACHE_KEYS, readCache, removeCache, removeCacheByPrefix, writeAuthenticatedCache } from "@/lib/offline-cache";
 
 const statusFilters = ["all", "live", "upcoming", "completed", "cancelled", "draft"] as const;
 type DashboardStatus = Exclude<(typeof statusFilters)[number], "all">;
@@ -111,6 +114,8 @@ const CreatorDashboardScreen = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [updatingVisibilityId, setUpdatingVisibilityId] = useState<string | null>(null);
+  const [pushingRoomId, setPushingRoomId] = useState<string | null>(null);
+  const [roomDrafts, setRoomDrafts] = useState<Record<string, { roomId: string; roomPass: string }>>({});
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Tournament | null>(null);
   const [cancelUsernameInput, setCancelUsernameInput] = useState("");
@@ -149,6 +154,21 @@ const CreatorDashboardScreen = () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    setRoomDrafts((previous) => {
+      const next = { ...previous };
+      tournaments.forEach((tournament) => {
+        if (!next[tournament._id]) {
+          next[tournament._id] = {
+            roomId: tournament.room_details?.roomId || "",
+            roomPass: tournament.room_details?.roomPass || "",
+          };
+        }
+      });
+      return next;
+    });
+  }, [tournaments]);
 
   const stats = useMemo(() => {
     const totalReceived = tournaments.reduce((sum, tournament) => sum + getReceivedMoney(tournament), 0);
@@ -255,9 +275,64 @@ const CreatorDashboardScreen = () => {
     setCancelPhraseInput("");
   };
 
+  const persistDashboardTournaments = (nextTournaments: Tournament[]) => {
+    if (creatorProfile?._id) {
+      writeAuthenticatedCache(CACHE_KEYS.creatorDashboard(creatorProfile._id), nextTournaments);
+    }
+    removeCache(CACHE_KEYS.home);
+    removeCacheByPrefix("tournaments.page.");
+  };
+
   const openCancelDialog = (tournament: Tournament) => {
     setCancelTarget(tournament);
     resetCancelDialog();
+  };
+
+  const updateRoomDraft = (tournamentId: string, field: "roomId" | "roomPass", value: string) => {
+    setRoomDrafts((previous) => ({
+      ...previous,
+      [tournamentId]: {
+        roomId: previous[tournamentId]?.roomId || "",
+        roomPass: previous[tournamentId]?.roomPass || "",
+        [field]: value,
+      },
+    }));
+  };
+
+  const handlePushRoomDetails = async (tournament: Tournament) => {
+    const draft = roomDrafts[tournament._id] || { roomId: "", roomPass: "" };
+    const roomId = draft.roomId.trim();
+    const roomPass = draft.roomPass.trim();
+
+    if (!roomId && !roomPass) {
+      toast.error("Room details required", { description: "Add Room ID or password before sending notifications." });
+      return;
+    }
+
+    try {
+      setPushingRoomId(tournament._id);
+      const result = await notifyTournamentRoom(tournament._id, {
+        room_details: {
+          roomId,
+          roomPass,
+          ...(tournament.room_details?.roomJoinTime ? { roomJoinTime: tournament.room_details.roomJoinTime } : {}),
+        },
+      });
+      const updatedTournament = result?.tournament;
+      if (updatedTournament) {
+        const nextTournaments = tournaments.map((item) => (item._id === tournament._id ? updatedTournament : item));
+        setTournaments(nextTournaments);
+        persistDashboardTournaments(nextTournaments);
+      }
+      toast.success("Room details pushed", {
+        description: `${result?.notifiedCount ?? 0} joined user${result?.notifiedCount === 1 ? "" : "s"} notified.`,
+      });
+    } catch (error) {
+      const errorToast = getErrorToast(error, { action: "Push room details", fallback: "Could not send room details." });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setPushingRoomId(null);
+    }
   };
 
   const handleDelete = async (tournament: Tournament) => {
@@ -270,8 +345,10 @@ const CreatorDashboardScreen = () => {
 
     try {
       setDeletingId(tournament._id);
-      setTournaments((current) => current.filter((item) => item._id !== tournament._id));
+      const nextTournaments = tournaments.filter((item) => item._id !== tournament._id);
+      setTournaments(nextTournaments);
       await deleteTournament(tournament._id);
+      persistDashboardTournaments(nextTournaments);
       toast.success("Tournament deleted", { description: `${tournament.title} was removed.` });
     } catch (error) {
       setTournaments(previous);
@@ -290,7 +367,9 @@ const CreatorDashboardScreen = () => {
       setTournaments((current) => current.map((item) => (item._id === tournament._id ? { ...item, status: nextStatus } : item)));
       const updated = await updateTournamentStatus(tournament._id, nextStatus);
       if (updated) {
-        setTournaments((current) => current.map((item) => (item._id === tournament._id ? updated : item)));
+        const nextTournaments = tournaments.map((item) => (item._id === tournament._id ? updated : item));
+        setTournaments(nextTournaments);
+        persistDashboardTournaments(nextTournaments);
       }
       toast.success(getStatusActionToast(nextStatus), { description: tournament.title });
     } catch (error) {
@@ -316,7 +395,9 @@ const CreatorDashboardScreen = () => {
       setTournaments((current) => current.map((item) => (item._id === tournament._id ? { ...item, visibility } : item)));
       const updated = await updateTournamentVisibility(tournament._id, visibility);
       if (updated) {
-        setTournaments((current) => current.map((item) => (item._id === tournament._id ? updated : item)));
+        const nextTournaments = tournaments.map((item) => (item._id === tournament._id ? updated : item));
+        setTournaments(nextTournaments);
+        persistDashboardTournaments(nextTournaments);
       }
       toast.success(visibility === "public" ? "Tournament published" : "Tournament moved to private", {
         description: tournament.title,
@@ -351,7 +432,7 @@ const CreatorDashboardScreen = () => {
       const updatedTournament = result?.tournament ?? { ...cancelTarget, status: "cancelled" as const };
       const nextTournaments = tournaments.map((item) => (item._id === cancelTarget._id ? updatedTournament : item));
       setTournaments(nextTournaments);
-      writeAuthenticatedCache(CACHE_KEYS.creatorDashboard(creatorProfile._id), nextTournaments);
+      persistDashboardTournaments(nextTournaments);
       toast.success("Tournament cancelled", {
         description: `${result?.refundCount ?? 0} joined entries refunded. Creator paid ${formatCurrency(result?.refundTotal ?? 0)} including ${formatCurrency(result?.platformFeeCoveredByCreator ?? 0)} platform fee.`,
       });
@@ -623,9 +704,15 @@ const CreatorDashboardScreen = () => {
             const canCancelTournament = tournament.status !== "cancelled" && getPaidMoney(tournament) === 0;
             const isUpdatingTournament = updatingStatusId === tournament._id;
             const isUpdatingVisibility = updatingVisibilityId === tournament._id;
+            const isPushingRoom = pushingRoomId === tournament._id;
             const visibility = getTournamentVisibility(tournament);
             const joinedCount = getJoinedCount(tournament);
             const canMakePrivate = joinedCount === 0;
+            const canPushRoomDetails = visibility === "public" && tournament.status !== "completed" && tournament.status !== "cancelled";
+            const roomDraft = roomDrafts[tournament._id] || {
+              roomId: tournament.room_details?.roomId || "",
+              roomPass: tournament.room_details?.roomPass || "",
+            };
             return (
             <GlassCard key={tournament._id} delay={index * 0.04} className="relative overflow-hidden">
               <div className="space-y-3">
@@ -660,6 +747,42 @@ const CreatorDashboardScreen = () => {
                     <span>{formatDateTime(tournament.startAt)}</span>
                   </div>
                 </div>
+
+                {canPushRoomDetails && (
+                  <div className="grid grid-cols-1 gap-2 rounded-lg border border-glass-border/70 bg-background/35 p-3 sm:grid-cols-[1fr_1fr_auto]">
+                    <label className="min-w-0">
+                      <span className="mb-1 flex items-center gap-1 text-[10px] font-heading text-muted-foreground">
+                        <KeyRound className="h-3 w-3" /> Room ID
+                      </span>
+                      <input
+                        value={roomDraft.roomId}
+                        onChange={(event) => updateRoomDraft(tournament._id, "roomId", event.target.value)}
+                        placeholder="Custom room ID"
+                        className="w-full rounded-md border border-glass-border bg-transparent px-3 py-2 text-xs font-heading outline-none transition-colors focus:border-primary"
+                      />
+                    </label>
+                    <label className="min-w-0">
+                      <span className="mb-1 flex items-center gap-1 text-[10px] font-heading text-muted-foreground">
+                        <Lock className="h-3 w-3" /> Password
+                      </span>
+                      <input
+                        value={roomDraft.roomPass}
+                        onChange={(event) => updateRoomDraft(tournament._id, "roomPass", event.target.value)}
+                        placeholder="Room password"
+                        className="w-full rounded-md border border-glass-border bg-transparent px-3 py-2 text-xs font-heading outline-none transition-colors focus:border-primary"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handlePushRoomDetails(tournament)}
+                      disabled={isPushingRoom}
+                      className="inline-flex h-10 items-center justify-center gap-1.5 self-end rounded-md border border-secondary/40 bg-secondary/10 px-3 text-[10px] font-heading font-semibold text-secondary transition-colors hover:bg-secondary/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Bell className="h-3.5 w-3.5" />
+                      {isPushingRoom ? "Sending" : "Push"}
+                    </button>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center gap-2 border-t border-glass-border/60 pt-3">
                   {visibility === "private" && tournament.status !== "completed" && tournament.status !== "cancelled" && (
@@ -741,6 +864,15 @@ const CreatorDashboardScreen = () => {
                   >
                     <Edit className="w-3.5 h-3.5" />
                     Edit
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => navigate(`/tournament/${tournament._id}`)}
+                    className={`${tournamentActionButtonBase} ${actionButtonClass.secondary}`}
+                    title="Open tournament page"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    View
                   </motion.button>
                   <motion.button
                     whileTap={{ scale: 0.96 }}

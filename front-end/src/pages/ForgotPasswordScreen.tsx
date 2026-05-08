@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Eye, EyeOff, KeyRound, Lock, Phone } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
 import ButtonLoadingScreen from "@/components/ui/buttonLoadingScreen";
@@ -22,6 +22,7 @@ const isValidUsername = (value: string) => /^[a-zA-Z0-9_]{4,30}$/.test(value.tri
 
 const ForgotPasswordScreen = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [identifier, setIdentifier] = useState("");
   const [token, setToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -30,6 +31,14 @@ const ForgotPasswordScreen = () => {
   const [loadingRequest, setLoadingRequest] = useState(false);
   const [loadingReset, setLoadingReset] = useState(false);
   const [tokenRequested, setTokenRequested] = useState(false);
+
+  useEffect(() => {
+    const urlToken = searchParams.get("token");
+    if (urlToken) {
+      setToken(urlToken);
+      setTokenRequested(true);
+    }
+  }, [searchParams]);
 
   const handleRequestToken = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -51,7 +60,7 @@ const ForgotPasswordScreen = () => {
       const resetToken = response.data?.resetToken;
       if (resetToken) setToken(resetToken);
       setTokenRequested(true);
-      toast.success("Reset token generated", {
+      toast.success("Reset email sent", {
         description: resetToken ? "Token filled below for local development." : response.message,
       });
     } catch (error) {
@@ -109,7 +118,7 @@ const ForgotPasswordScreen = () => {
         <div>
           <h1 className="font-display text-3xl font-bold tracking-wider neon-text-purple">Reset Password</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-            Enter your registered username, phone number, or email, then set a new password with the reset token.
+            Enter your registered username, phone number, or email. We will send a reset link to your saved email.
           </p>
         </div>
 
@@ -137,7 +146,7 @@ const ForgotPasswordScreen = () => {
         <form onSubmit={handleResetPassword} className="space-y-4 rounded-xl border border-border bg-card/70 p-4">
           <div>
             <p className="font-heading text-sm font-bold">Set New Password</p>
-            <p className="mt-1 text-xs text-muted-foreground">Reset tokens expire after 10 minutes.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Open the email link or paste the reset token. Tokens expire after 10 minutes.</p>
           </div>
           <div className="glass rounded-lg flex items-center gap-3 px-4 py-3">
             <KeyRound className="h-4 w-4 text-muted-foreground" />

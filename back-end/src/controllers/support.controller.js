@@ -2,9 +2,9 @@ import asyncHandler from '../utils/AsyncHandler.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 import { SupportTicket } from '../models/SupportTicket.model.js';
-import { Notification } from '../models/notification.model.js';
 import { Tournament } from '../models/tournament.model.js';
 import { hasRole } from '../middlewares/auth.middleware.js';
+import { createNotification } from '../services/notification.service.js';
 import mongoose from 'mongoose';
 
 const getParamId = (req, key) => req.params[key] || req.params.id;
@@ -59,11 +59,13 @@ const createTicket = asyncHandler(async (req, res) => {
     });
 
     if (tournamentDoc?.organizer && tournamentDoc.organizer.toString() !== req.user._id.toString()) {
-        await Notification.create({
+        await createNotification({
             user: tournamentDoc.organizer,
             title: ticketType === "dispute" ? "Tournament dispute opened" : "Tournament report opened",
             body: `${req.user.username || "A user"} submitted ${ticketType === "dispute" ? "a dispute" : "a report"} for ${tournamentDoc.title}. Admin will review it.`,
             type: "system",
+            priority: ticketPriority === "high" ? "high" : "normal",
+            actionUrl: `/tournament/${tournamentDoc._id}`,
         });
     }
 

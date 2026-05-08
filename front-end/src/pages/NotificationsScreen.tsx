@@ -1,28 +1,50 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { AlertCircle, ArrowLeft, Bell, Megaphone, RefreshCcw, Trophy, Wallet } from "lucide-react";
+import { AlertCircle, ArrowLeft, Bell, Megaphone, RefreshCcw, Shield, Sparkles, Trophy, Wallet } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import { toast } from "@/components/ui/sonner";
 import {
   getNotifications,
+  getPushConfig,
   markAllNotificationsRead,
   markNotificationRead,
   NotificationItem,
+  savePushSubscription,
 } from "@/api/notifications";
 import { getErrorMessage, getErrorToast } from "@/lib/page-utils";
 import { CACHE_KEYS, readCache, writeAuthenticatedCache } from "@/lib/offline-cache";
+import { copyText } from "@/lib/clipboard";
 
 const iconColorMap: Record<string, string> = {
   tournament_update: "text-destructive",
   payment: "text-accent",
+  wallet: "text-accent",
+  creator: "text-primary",
+  room: "text-secondary",
+  tournament: "text-secondary",
+  reward: "text-accent",
+  security: "text-destructive",
   system: "text-neon-pink",
 };
 
 const iconMap = {
   tournament_update: Trophy,
   payment: Wallet,
+  wallet: Wallet,
+  creator: Sparkles,
+  room: Trophy,
+  tournament: Trophy,
+  reward: Sparkles,
+  security: Shield,
   system: Megaphone,
+};
+
+const urlBase64ToUint8Array = (base64String: string) => {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 };
 
 const NotificationsScreen = () => {
@@ -30,6 +52,13 @@ const NotificationsScreen = () => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushSupported] = useState(
+    typeof window !== "undefined" &&
+      "serviceWorker" in navigator &&
+      "PushManager" in window &&
+      "Notification" in window,
+  );
 
   const loadNotifications = async () => {
     const cachedNotifications = readCache<NotificationItem[]>(CACHE_KEYS.notifications);
@@ -41,9 +70,9 @@ const NotificationsScreen = () => {
     try {
       setLoading(!cachedNotifications);
       setError(null);
-      const nextNotifications = await getNotifications();
-      setNotifications(nextNotifications);
-      writeAuthenticatedCache(CACHE_KEYS.notifications, nextNotifications);
+      const nextNotifications = await getNotifications({ limit: 50 });
+      setNotifications(nextNotifications.notifications);
+      writeAuthenticatedCache(CACHE_KEYS.notifications, nextNotifications.notifications);
     } catch (err) {
       if (!cachedNotifications) setError(getErrorMessage(err, "Failed to load notifications."));
     } finally {
@@ -70,20 +99,65 @@ const NotificationsScreen = () => {
     }
   };
 
-  const handleOpenNotification = async (notification: NotificationItem) => {
-    if (notification.read) return;
+  const copyValue = async (label: string, value: unknown) => {
+    const copied = await copyText(value);
+    if (copied) toast.success(`${label} copied`);
+    else toast.error("Copy failed", { description: `Could not copy ${label.toLowerCase()}.` });
+  };
 
-    setNotifications((prev) =>
-      prev.map((item) => (item._id === notification._id ? { ...item, read: true } : item)),
-    );
+  const enablePushNotifications = async () => {
+    if (!pushSupported) {
+      toast.error("Push not supported", { description: "Use Chrome/Edge or install the app on a supported mobile browser." });
+      return;
+    }
 
     try {
-      await markNotificationRead(notification._id);
-    } catch {
-      setNotifications((prev) =>
-        prev.map((item) => (item._id === notification._id ? { ...item, read: false } : item)),
-      );
+      setPushLoading(true);
+      const config = await getPushConfig();
+      if (!config?.enabled || !config.publicKey) {
+        toast.error("Push not configured", { description: "Add VAPID keys on the backend to enable real browser notifications." });
+        return;
+      }
+
+      const permission = await window.Notification.requestPermission();
+      if (permission !== "granted") {
+        toast.error("Notifications blocked", { description: "Allow notifications from browser settings to receive alerts." });
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      const existing = await registration.pushManager.getSubscription();
+      const subscription = existing || await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(config.publicKey),
+      });
+
+      await savePushSubscription(subscription.toJSON());
+      toast.success("Push notifications enabled", { description: "Money, room, and creator alerts can now reach this device." });
+    } catch (err) {
+      const errorToast = getErrorToast(err, { action: "Enable push notifications", fallback: "Could not enable push." });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setPushLoading(false);
     }
+  };
+
+  const handleOpenNotification = async (notification: NotificationItem) => {
+    if (!notification.read) {
+      setNotifications((prev) =>
+        prev.map((item) => (item._id === notification._id ? { ...item, read: true } : item)),
+      );
+
+      try {
+        await markNotificationRead(notification._id);
+      } catch {
+        setNotifications((prev) =>
+          prev.map((item) => (item._id === notification._id ? { ...item, read: false } : item)),
+        );
+      }
+    }
+
+    if (notification.actionUrl) navigate(notification.actionUrl);
   };
 
   return (
@@ -102,6 +176,22 @@ const NotificationsScreen = () => {
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 space-y-3">
+        <GlassCard className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-heading text-sm font-bold">Device notifications</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Receive wallet, creator, and room alerts even when the app is closed.
+            </p>
+          </div>
+          <button
+            onClick={enablePushNotifications}
+            disabled={pushLoading}
+            className="shrink-0 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-heading text-primary transition-colors hover:bg-primary/20 disabled:opacity-60"
+          >
+            {pushLoading ? "Enabling" : "Enable"}
+          </button>
+        </GlassCard>
+
         {loading && [0, 1, 2].map((item) => (
           <GlassCard key={item}>
             <div className="flex gap-3 animate-pulse">
@@ -150,6 +240,34 @@ const NotificationsScreen = () => {
                   {!n.read && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1" />}
                 </div>
                 <p className="text-[11px] text-muted-foreground font-body mt-0.5 line-clamp-2">{n.body}</p>
+                {n.type === "room" && (n.data?.roomId || n.data?.roomPass) && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {n.data?.roomId && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          copyValue("Room ID", n.data?.roomId);
+                        }}
+                        className="rounded-md border border-secondary/30 bg-secondary/10 px-2 py-1 text-[10px] font-heading text-secondary hover:bg-secondary/20"
+                      >
+                        Copy Room ID: {String(n.data.roomId)}
+                      </button>
+                    )}
+                    {n.data?.roomPass && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          copyValue("Password", n.data?.roomPass);
+                        }}
+                        className="rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-[10px] font-heading text-primary hover:bg-primary/20"
+                      >
+                        Copy Pass: {String(n.data.roomPass)}
+                      </button>
+                    )}
+                  </div>
+                )}
                 <p className="text-[10px] text-muted-foreground/60 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
               </div>
             </div>

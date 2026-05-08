@@ -22,7 +22,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
-      position="top-center"
+      position="top-right"
       expand={true}
       gap={8}
       visibleToasts={3}
@@ -31,12 +31,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
         classNames: {
           // SAFE BASE STYLE
           toast:
-            "group toast rounded-xl border shadow-lg group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border",
+            "group toast w-[min(440px,calc(100vw-24px))] rounded-xl border px-4 py-3 text-left shadow-lg backdrop-blur group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border",
 
-          title: "font-semibold text-sm",
+          title: "font-semibold text-sm leading-5 text-foreground",
 
           description:
-            "group-[.toast]:text-foreground/80 text-sm",
+            "max-h-36 overflow-y-auto whitespace-pre-wrap break-words pr-1 text-sm leading-5 group-[.toast]:text-foreground/85",
 
           actionButton:
             "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
@@ -46,16 +46,16 @@ const Toaster = ({ ...props }: ToasterProps) => {
 
           // IMPROVED COLORS
           success:
-            "!border-[hsl(var(--neon-green)/0.65)] !bg-[hsl(var(--neon-green)/0.22)]",
+            "!border-[hsl(var(--neon-green)/0.75)] !bg-[hsl(155_55%_10%/0.96)]",
 
           error:
-            "!border-destructive/60 !bg-destructive/20",
+            "!border-destructive/80 !bg-[hsl(350_55%_12%/0.96)]",
 
           warning:
-            "!border-[hsl(38_95%_55%/0.65)] !bg-[hsl(38_95%_55%/0.22)]",
+            "!border-[hsl(38_95%_55%/0.75)] !bg-[hsl(32_65%_11%/0.96)]",
 
           info:
-            "!border-[hsl(var(--neon-blue)/0.65)] !bg-[hsl(var(--neon-blue)/0.22)]",
+            "!border-[hsl(var(--neon-blue)/0.75)] !bg-[hsl(220_55%_11%/0.96)]",
         },
       }}
       icons={{

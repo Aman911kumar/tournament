@@ -20,6 +20,7 @@ const statusClass: Record<string, string> = {
   confirmed: "bg-secondary/10 text-secondary",
   pending: "bg-muted text-muted-foreground",
   rejected: "bg-destructive/10 text-destructive",
+  cancelled: "bg-destructive/10 text-destructive",
 };
 
 const asTournament = (registration: TournamentRegistration) =>
@@ -111,6 +112,7 @@ const MyTournamentsScreen = () => {
 
         {!loading && !error && filtered.map((registration) => {
           const tournament = asTournament(registration) as Tournament;
+          const isCancelled = registration.status === "cancelled" || tournament.status === "cancelled";
           return (
             <GlassCard key={registration._id} neon className="cursor-pointer" onClick={() => navigate(`/tournament/${tournament._id}`)}>
               <div className="flex items-start justify-between gap-3 mb-3">
@@ -121,7 +123,7 @@ const MyTournamentsScreen = () => {
                   </p>
                 </div>
                 <span className={`text-[10px] font-heading font-semibold px-2 py-1 rounded-full ${statusClass[registration.status] ?? "bg-muted text-muted-foreground"}`}>
-                  {registration.status}
+                  {isCancelled ? "cancelled" : registration.status}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-2">

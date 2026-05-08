@@ -14,6 +14,8 @@ const hasRole = (user, ...allowedRoles) => {
     return allowedRoles.some((role) => userRoles.includes(role));
 };
 
+const authUserSelect = "_id username email emailVerified phone_number phoneVerified linkedProviders avatar role isActive creatorRequest preferences walletBalance socialProvider passwordLoginEnabled dateOfBirth gender lastLoginAt createdAt updatedAt";
+
 // Middleware to protect routes
 const protect = asyncHandler(async (req, res, next) => {
     try {
@@ -29,8 +31,7 @@ const protect = asyncHandler(async (req, res, next) => {
         // const user = await User.findById(decodedToken?._id).select(
         //     "-password -refreshToken"
         // );
-        const user = await User.findById(decodedToken?._id)
-            .select("_id username email phone_number avatar role isActive creatorRequest preferences walletBalance socialProvider passwordLoginEnabled dateOfBirth gender lastLoginAt createdAt updatedAt");
+        const user = await User.findById(decodedToken?._id).select(authUserSelect);
 
         if (!user) {
             throw new ApiError(402, "Invalid access token");
@@ -56,8 +57,7 @@ const optionalProtect = asyncHandler(async (req, res, next) => {
 
     try {
         const decodedToken = jwt.verify(token, ACCESS_TOKEN_SECRET);
-        const user = await User.findById(decodedToken?._id)
-            .select("_id username email phone_number avatar role isActive creatorRequest preferences walletBalance socialProvider passwordLoginEnabled dateOfBirth gender lastLoginAt createdAt updatedAt");
+        const user = await User.findById(decodedToken?._id).select(authUserSelect);
 
         if (user && user.isActive && !hasRole(user, "banned")) {
             req.user = user;

@@ -7,6 +7,8 @@ import NeonButton from "@/components/NeonButton";
 import { formatCurrency, formatPrizeSummary, getErrorMessage, getPrizeSortValue } from "@/lib/page-utils";
 import { getMyTournamentRegistrations, getTournamentPage, Tournament } from "@/api/tournaments";
 import { CACHE_KEYS, readCache, stableCacheKey, writeAuthenticatedCache, writeCache } from "@/lib/offline-cache";
+import { getNotificationSocket } from "@/lib/notification-socket";
+import type { NotificationItem } from "@/api/notifications";
 
 const gameFilters = ["All", "Free Fire", "BGMI", "Valorant", "COD"];
 const feeFilters = ["All Fees", "Free", "Paid"];
@@ -46,7 +48,7 @@ const getRegistrationTournamentId = (registration: Awaited<ReturnType<typeof get
 
 const getPrizeSummary = (tournament: Tournament) => formatPrizeSummary(tournament, { killPrefix: true });
 const isPublicTournament = (tournament: Tournament) =>
-  tournament.visibility !== "private" && tournament.status !== "draft";
+  tournament.visibility !== "private" && !["draft", "cancelled"].includes(tournament.status);
 const PAGE_SIZE = 12;
 
 const TournamentsScreen = () => {
@@ -118,7 +120,10 @@ const TournamentsScreen = () => {
       setTournaments((previous) => nextPage === 1 ? publicTournaments : [...previous, ...publicTournaments]);
       setPage(data.page ?? nextPage);
       setHasMore(Boolean(data.hasMore));
-      const joinedIds = registrations.map(getRegistrationTournamentId).filter(Boolean);
+      const joinedIds = registrations
+        .filter((registration) => registration.status !== "cancelled")
+        .map(getRegistrationTournamentId)
+        .filter(Boolean);
       setJoinedTournamentIds(new Set(joinedIds));
       if (nextPage === 1) {
         writeCache(cacheKey, {
@@ -144,13 +149,29 @@ const TournamentsScreen = () => {
     loadTournaments(1);
   }, [loadTournaments]);
 
+  useEffect(() => {
+    const socket = getNotificationSocket();
+    if (!socket) return;
+
+    const refreshOnTournamentNotification = (notification: NotificationItem) => {
+      if (["creator", "tournament", "tournament_update", "room"].includes(notification.type)) {
+        loadTournaments(1);
+      }
+    };
+
+    socket.on("notification:new", refreshOnTournamentNotification);
+    return () => {
+      socket.off("notification:new", refreshOnTournamentNotification);
+    };
+  }, [loadTournaments]);
+
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     let list = activeGame === "All"
-      ? tournaments.filter((t) => isPublicTournament(t) && t.status !== "completed")
+      ? tournaments.filter((t) => isPublicTournament(t) && !["completed", "cancelled"].includes(t.status))
       : tournaments.filter((t) => {
         if (!isPublicTournament(t)) return false;
-        if (t.status === "completed") return false;
+        if (["completed", "cancelled"].includes(t.status)) return false;
         const gameName = gameLabels[t.game] ?? t.game;
         return gameName === activeGame || gameName === gameMap[activeGame];
       });

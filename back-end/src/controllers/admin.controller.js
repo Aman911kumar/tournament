@@ -21,6 +21,7 @@ import ApiError from "../utils/ApiError.js";
 import { creditWallet } from "../services/wallet.service.js";
 import { expireStaleRazorpayPayments } from "../services/paymentExpiry.service.js";
 import { getMonitoringSnapshot } from "../services/monitoring.service.js";
+import { createNotification } from "../services/notification.service.js";
 
 const adminCollections = {
     users: { model: User, label: "Users", sort: { createdAt: -1 } },
@@ -1052,11 +1053,14 @@ const updateCreatorPermission = asyncHandler(async (req, res) => {
         rejected: adminNote || "Your creator request was rejected by admin.",
         removed: adminNote || "Your creator access was removed by admin.",
     };
-    await Notification.create({
+    await createNotification({
         user: user._id,
         title: status === "approved" ? "Creator access approved" : status === "removed" ? "Creator access removed" : "Creator request rejected",
         body: notificationBody[status],
         type: "system",
+        priority: status === "approved" ? "normal" : "high",
+        actionUrl: "/profile",
+        email: status !== "removed",
     });
     await AdminAuditLog.create({
         actor: req.user._id,
