@@ -11,6 +11,7 @@ import errorHandler from './src/middlewares/errorHandler.middleware.js';
 import { globalApiLimiter } from './src/middlewares/rateLimit.middleware.js';
 import securityHeaders from './src/middlewares/securityHeaders.middleware.js';
 import requestMetrics from './src/middlewares/requestMetrics.middleware.js';
+import sanitizeRequest from './src/middlewares/sanitizeRequest.middleware.js';
 import ApiError from './src/utils/ApiError.js';
 import path from "path";
 import { expireStaleRazorpayPayments } from './src/services/paymentExpiry.service.js';
@@ -103,6 +104,7 @@ app.use((req, res, next) => {
 });
 
 app.use(requestMetrics);
+app.use(sanitizeRequest);
 
 // // Serve static files
 // app.use(express.static("public"));

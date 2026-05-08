@@ -84,4 +84,16 @@ const creatorOrAdmin = (req, res, next) => {
     next();
 };
 
-export { protect, optionalProtect, admin, creatorOrAdmin, hasRole };
+const requireVerifiedContact = (req, res, next) => {
+    if (!req.user?.emailVerified || !req.user?.phoneVerified) {
+        throw new ApiError(403, "Verify both email and phone before using this feature", [
+            {
+                field: "verification",
+                message: "Email and phone verification are required for wallet transfers, withdrawals, and tournament registration.",
+            },
+        ]);
+    }
+    next();
+};
+
+export { protect, optionalProtect, admin, creatorOrAdmin, requireVerifiedContact, hasRole };

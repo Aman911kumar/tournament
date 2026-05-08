@@ -20,7 +20,7 @@ import {
   updatePayoutMethod,
   deletePayoutMethod,
 } from "../controllers/wallet.controller.js";
-import { protect } from "../middlewares/auth.middleware.js";
+import { protect, requireVerifiedContact } from "../middlewares/auth.middleware.js";
 import { walletLimiter } from "../middlewares/rateLimit.middleware.js";
 
 const router = express.Router();
@@ -40,7 +40,7 @@ router.delete("/payout-methods/:id", walletLimiter, protect, deletePayoutMethod)
 router.post("/add", walletLimiter, protect, addMoney);
 router.post("/add/verify", walletLimiter, protect, verifyAddMoney);
 router.post("/add/status", walletLimiter, protect, updateAddMoneyStatus);
-router.post("/withdraw", walletLimiter, protect, withdrawMoney);
-router.post("/transfer", walletLimiter, protect, transferMoney);
+router.post("/withdraw", walletLimiter, protect, requireVerifiedContact, withdrawMoney);
+router.post("/transfer", walletLimiter, protect, requireVerifiedContact, transferMoney);
 
 export default router;

@@ -98,7 +98,8 @@ const TransferMoneyScreen = () => {
   const amountValue = Number(amount || 0);
   const fee = useMemo(() => Math.round(amountValue * 2) / 100, [amountValue]);
   const receiverGets = Math.max(amountValue - fee, 0);
-  const canSubmit = recipient.trim() !== "" && amountValue > 0 && /^\d{6}$/.test(transferPin) && hasTransferPin === true && !submitting;
+  const contactVerified = Boolean(profile?.emailVerified && profile?.phoneVerified);
+  const canSubmit = recipient.trim() !== "" && amountValue > 0 && /^\d{6}$/.test(transferPin) && hasTransferPin === true && contactVerified && !submitting;
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -268,6 +269,22 @@ const TransferMoneyScreen = () => {
                 className="rounded-lg border border-secondary/40 px-3 py-2 text-xs font-heading font-semibold text-secondary"
               >
                 Set PIN
+              </button>
+            </div>
+          )}
+
+          {profile && !contactVerified && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/10 px-3 py-3">
+              <div>
+                <p className="font-heading text-sm font-bold text-primary">Verify email and phone</p>
+                <p className="mt-1 text-xs text-muted-foreground">Required for secure wallet transfers and withdrawals.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate("/edit-profile")}
+                className="rounded-lg border border-primary/40 px-3 py-2 text-xs font-heading font-semibold text-primary"
+              >
+                Verify now
               </button>
             </div>
           )}

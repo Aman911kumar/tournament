@@ -8,6 +8,7 @@ import { Analytics } from "@vercel/analytics/react";
 import ProtectedRoute from "./components/ProtectedRoute";
 import BottomNav from "./components/BottomNav";
 import NotificationRealtimeBridge from "./components/NotificationRealtimeBridge";
+import NetworkStatusBanner from "./components/NetworkStatusBanner";
 import { toast } from "@/components/ui/sonner";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { ApiError } from "@/api/client";
@@ -88,6 +89,7 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Sonner />
+        <NetworkStatusBanner />
         <Analytics />
         <BrowserRouter>
           <GoogleOAuthProvider

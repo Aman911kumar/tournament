@@ -120,6 +120,14 @@ const SlotSelectionScreen = () => {
     try {
       setConfirming(true);
       const profile = await getMyProfile();
+      if (!profile.data.user.emailVerified || !profile.data.user.phoneVerified) {
+        toast.error("Verification required", {
+          description: "Verify both email and phone before joining tournaments.",
+        });
+        navigate("/edit-profile");
+        return;
+      }
+
       if (!hasRealPhoneNumber(profile.data.user.phone_number)) {
         toast.error("Phone number required", {
           description: "Add your phone number before joining any tournament.",
