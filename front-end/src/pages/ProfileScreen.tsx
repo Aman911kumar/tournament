@@ -15,6 +15,7 @@ import {
   Mail,
   Phone,
   RefreshCcw,
+  Settings,
   ShieldCheck,
   Trophy,
   User,
@@ -57,6 +58,7 @@ const helpMenu = [
 
 const creatorMenu = [
   { icon: Crown, label: "Creator Dashboard", route: "/creator-dashboard" },
+  { icon: Settings, label: "Channel Setup", route: "/channel-setup" },
   { icon: BarChart3, label: "Create Tournament", route: "/create-tournament" },
   { icon: Users, label: "My Subscribers", route: "/subscriptions" },
 ];

@@ -24,6 +24,26 @@ const getRequestedHandle = (handle, name) => {
     return normalized.length >= 3 ? normalized : null;
 };
 
+const getAvailableHandle = async (baseHandle, ownerId, currentChannelId = null) => {
+    const fallback = `creator-${ownerId.toString().slice(-6)}`;
+    const normalizedBase = getRequestedHandle(baseHandle, fallback) || fallback;
+    const base = normalizedBase.slice(0, 30);
+    let handle = base;
+    let suffix = 0;
+
+    while (await Channel.exists({
+        handle,
+        owner: { $ne: ownerId },
+        ...(currentChannelId ? { _id: { $ne: currentChannelId } } : {})
+    })) {
+        suffix += 1;
+        const nextSuffix = `-${suffix}`;
+        handle = `${base.slice(0, 30 - nextSuffix.length)}${nextSuffix}`;
+    }
+
+    return handle;
+};
+
 const resolveChannel = async (identifier, includeInactive = false) => {
     if (!identifier) {
         throw new ApiError(400, "Channel identifier is required");
@@ -74,25 +94,31 @@ const createChannel = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Channel name is required");
     }
 
-    const existingChannel = await Channel.findOne({ owner: userId });
-    if (existingChannel) {
-        throw new ApiError(400, "You already have a channel");
-    }
-
     const requestedHandle = getRequestedHandle(handle, name);
     if (!requestedHandle) {
         throw new ApiError(400, "Channel handle must be at least 3 valid characters");
     }
 
-    const handleExists = await Channel.findOne({ handle: requestedHandle });
-    if (handleExists) {
-        throw new ApiError(400, "Channel handle is already taken");
+    const existingChannel = await Channel.findOne({ owner: userId });
+    if (existingChannel) {
+        existingChannel.name = name.trim();
+        existingChannel.handle = await getAvailableHandle(requestedHandle, userId, existingChannel._id);
+        existingChannel.description = description;
+        if (avatar) existingChannel.avatar = avatar;
+        if (banner) existingChannel.banner = banner;
+        if (socialLinks) existingChannel.socialLinks = socialLinks;
+        existingChannel.isActive = true;
+        await existingChannel.save();
+
+        return res.status(200).json(
+            new ApiResponse(200, existingChannel, "Channel setup updated successfully")
+        );
     }
 
     const channel = await Channel.create({
         owner: userId,
         name: name.trim(),
-        handle: requestedHandle,
+        handle: await getAvailableHandle(requestedHandle, userId),
         description,
         avatar,
         banner,

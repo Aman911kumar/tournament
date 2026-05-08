@@ -30,6 +30,7 @@ const EditProfileScreen = lazy(() => import("./pages/EditProfileScreen.tsx"));
 const ChangePasswordScreen = lazy(() => import("./pages/ChangePasswordScreen.tsx"));
 const GameAccountsScreen = lazy(() => import("./pages/GameAccountsScreen.tsx"));
 const CreatorProfileScreen = lazy(() => import("./pages/CreatorProfileScreen.tsx"));
+const ChannelSetupScreen = lazy(() => import("./pages/ChannelSetupScreen.tsx"));
 const CreateTournamentScreen = lazy(() => import("./pages/CreateTournamentScreen.tsx"));
 const CreatorDashboardScreen = lazy(() => import("./pages/CreatorDashboardScreen.tsx"));
 const PrizeDistributionScreen = lazy(() => import("./pages/PrizeDistributionScreen.tsx"));
@@ -116,6 +117,7 @@ const App = () => (
                   <Route path="/change-password" element={<ChangePasswordScreen />} />
                   <Route path="/game-accounts" element={<GameAccountsScreen />} />
                   <Route path="/creator/:id" element={<CreatorProfileScreen />} />
+                  <Route path="/channel-setup" element={<ChannelSetupScreen />} />
                   <Route path="/create-tournament" element={<CreateTournamentScreen />} />
                   <Route path="/edit-tournament/:id" element={<CreateTournamentScreen />} />
                   <Route path="/creator-dashboard" element={<CreatorDashboardScreen />} />

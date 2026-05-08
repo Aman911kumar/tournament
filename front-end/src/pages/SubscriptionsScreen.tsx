@@ -4,13 +4,17 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Star, Shield, Search } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import { CreatorChannel, getCreators } from "@/api/creators";
+import { CreatorChannel, followCreator, getCreators, getJoinedChannels, unfollowCreator } from "@/api/creators";
 import { CACHE_KEYS, readCache, writeCache } from "@/lib/offline-cache";
+import { toast } from "@/components/ui/sonner";
+import { getErrorToast } from "@/lib/page-utils";
 
 const SubscriptionsScreen = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [creators, setCreators] = useState<(CreatorChannel & { tournamentCount?: number })[]>([]);
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [followLoadingId, setFollowLoadingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,6 +39,14 @@ const SubscriptionsScreen = () => {
         if (active) setLoading(false);
       });
 
+    getJoinedChannels()
+      .then((channels) => {
+        if (active) setFollowingIds(new Set(channels.map((channel) => channel._id)));
+      })
+      .catch(() => {
+        if (active) setFollowingIds(new Set());
+      });
+
     return () => {
       active = false;
     };
@@ -49,6 +61,40 @@ const SubscriptionsScreen = () => {
       creator.owner?.username?.toLowerCase().includes(query)
     );
   }, [creators, search]);
+
+  const handleFollowToggle = async (creator: CreatorChannel) => {
+    if (creator.virtual) {
+      toast.info("Channel setup pending", { description: "You can follow this creator once the channel is ready." });
+      return;
+    }
+
+    const isFollowing = followingIds.has(creator._id);
+    const previous = new Set(followingIds);
+    const next = new Set(followingIds);
+    if (isFollowing) {
+      next.delete(creator._id);
+    } else {
+      next.add(creator._id);
+    }
+    setFollowingIds(next);
+
+    try {
+      setFollowLoadingId(creator._id);
+      if (isFollowing) {
+        await unfollowCreator(creator._id);
+        toast.success("Unfollowed", { description: creator.name });
+      } else {
+        await followCreator(creator._id);
+        toast.success("Following", { description: creator.name });
+      }
+    } catch (error) {
+      setFollowingIds(previous);
+      const errorToast = getErrorToast(error, { action: isFollowing ? "Unfollow creator" : "Follow creator", fallback: "Could not update follow." });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setFollowLoadingId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -91,8 +137,8 @@ const SubscriptionsScreen = () => {
             <GlassCard key={creator._id} neon delay={index * 0.08}>
               <div className="flex items-center gap-3">
                 <button onClick={() => navigate(`/creator/${creator._id}`)} className="relative shrink-0">
-                  {creator.avatar?.url ? (
-                    <img src={creator.avatar.url} alt="" className="w-12 h-12 rounded-full object-cover" />
+                  {creator.avatar?.url || creator.owner?.avatar?.url ? (
+                    <img src={creator.avatar?.url ?? creator.owner?.avatar?.url} alt="" className="w-12 h-12 rounded-full object-cover" />
                   ) : (
                     <div className="w-12 h-12 rounded-full gradient-primary flex items-center justify-center">
                       <span className="font-display text-sm font-bold text-primary-foreground">{creator.name[0]}</span>
@@ -104,6 +150,7 @@ const SubscriptionsScreen = () => {
                 </button>
                 <button className="flex-1 min-w-0 text-left" onClick={() => navigate(`/creator/${creator._id}`)}>
                   <p className="font-heading font-bold text-sm truncate">{creator.name}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">@{creator.handle}</p>
                   <p className="text-[10px] text-muted-foreground">
                     {creator.memberCount.toLocaleString("en-IN")} followers - {creator.tournamentCount ?? 0} tournaments
                   </p>
@@ -114,8 +161,13 @@ const SubscriptionsScreen = () => {
                     {creator.virtual && <span className="text-[10px] text-muted-foreground">- channel pending</span>}
                   </div>
                 </button>
-                <NeonButton variant="purple" className="text-[10px] py-1.5 px-3" onClick={() => navigate(`/creator/${creator._id}`)}>
-                  View
+                <NeonButton
+                  variant={followingIds.has(creator._id) ? "blue" : "purple"}
+                  className="text-[10px] py-1.5 px-3"
+                  onClick={() => handleFollowToggle(creator)}
+                  disabled={creator.virtual || followLoadingId === creator._id}
+                >
+                  {followLoadingId === creator._id ? "..." : followingIds.has(creator._id) ? "Following" : "Follow"}
                 </NeonButton>
               </div>
             </GlassCard>

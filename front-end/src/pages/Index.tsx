@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Bell, Search, ChevronRight, Crosshair, Flame, Zap, Star, Users, Crown } from "lucide-react";
@@ -15,10 +15,10 @@ import gameCod from "@/assets/game-cod.jpg";
 import gameValorant from "@/assets/game-valorant.jpg";
 
 const games = [
-  { name: "Free Fire", image: gameFreefire, players: "2.4M", query: "freefire" },
-  { name: "BGMI", image: gameBgmi, players: "1.8M", query: "bgmi" },
-  { name: "Call of Duty", image: gameCod, players: "3.1M", query: "callofduty" },
-  { name: "Valorant", image: gameValorant, players: "2.9M", query: "valorant" },
+  { name: "Free Fire", image: gameFreefire, query: "freefire" },
+  { name: "BGMI", image: gameBgmi, query: "bgmi" },
+  { name: "Call of Duty", image: gameCod, query: "callofduty" },
+  { name: "Valorant", image: gameValorant, query: "valorant" },
 ];
 
 const gameLabels: Record<string, string> = {
@@ -94,7 +94,14 @@ const Index = () => {
     loadHome(1);
   }, [loadHome]);
 
-  const liveTournament = trendingTournaments.find((tournament) => tournament.status === "running") ?? trendingTournaments[0];
+  const liveTournament = trendingTournaments.find((tournament) => tournament.status === "running");
+  const gamePlayingCounts = useMemo(() => {
+    return trendingTournaments.reduce<Record<string, number>>((counts, tournament) => {
+      if (tournament.status !== "running") return counts;
+      counts[tournament.game] = (counts[tournament.game] || 0) + Number(tournament.participantCount || tournament.registrationCount || 0);
+      return counts;
+    }, {});
+  }, [trendingTournaments]);
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -120,28 +127,29 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Live Banner */}
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-6">
-        <GlassCard neon className="relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
-          <div className="flex items-center gap-2 mb-2">
-            <Flame className="w-4 h-4 text-accent animate-glow-pulse" />
-            <span className="text-xs font-heading font-semibold text-accent uppercase tracking-wider">
-              Live Now
-            </span>
-          </div>
-          <h2 className="font-heading text-lg font-bold">{liveTournament?.title ?? "Grand Championship"}</h2>
-          <p className="text-xs text-muted-foreground font-body mb-1">
-            by <span className="text-primary">{liveTournament?.channel?.name ?? liveTournament?.organizer?.username ?? "Creator"}</span> - Verified Creator
-          </p>
-          <p className="text-xs text-muted-foreground font-body mb-3">
-            Prize: {getPrizeSummary(liveTournament)} - {liveTournament?.maxPlayers ?? 0} Players
-          </p>
-          <NeonButton variant="green" className="text-xs py-2 px-4" onClick={() => liveTournament?._id && navigate(`/tournament/${liveTournament._id}`)}>
-            Watch Live
-          </NeonButton>
-        </GlassCard>
-      </div>
+      {liveTournament && (
+        <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-6">
+          <GlassCard neon className="relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
+            <div className="flex items-center gap-2 mb-2">
+              <Flame className="w-4 h-4 text-accent animate-glow-pulse" />
+              <span className="text-xs font-heading font-semibold text-accent uppercase tracking-wider">
+                Live Now
+              </span>
+            </div>
+            <h2 className="font-heading text-lg font-bold">{liveTournament.title}</h2>
+            <p className="text-xs text-muted-foreground font-body mb-1">
+              by <span className="text-primary">{liveTournament.channel?.name ?? liveTournament.organizer?.username ?? "Creator"}</span> - Verified Creator
+            </p>
+            <p className="text-xs text-muted-foreground font-body mb-3">
+              Prize: {getPrizeSummary(liveTournament)} - {Number(liveTournament.participantCount || liveTournament.registrationCount || 0)}/{liveTournament.maxPlayers} playing
+            </p>
+            <NeonButton variant="green" className="text-xs py-2 px-4" onClick={() => navigate(`/tournament/${liveTournament._id}`)}>
+              Watch Live
+            </NeonButton>
+          </GlassCard>
+        </div>
+      )}
 
       {/* Recommended Creators */}
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-6">
@@ -227,7 +235,9 @@ const Index = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-3">
                   <p className="font-heading font-bold text-sm text-foreground">{game.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{game.players} playing</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {(gamePlayingCounts[game.query] || 0).toLocaleString("en-IN")} playing
+                  </p>
                 </div>
               </div>
             </motion.button>

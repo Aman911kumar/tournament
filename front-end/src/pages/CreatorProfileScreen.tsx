@@ -17,6 +17,7 @@ import {
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { followCreator, getCreatorProfile, rateCreator, unfollowCreator, CreatorProfileData } from "@/api/creators";
+import { getMyProfile } from "@/api/profile";
 import { Tournament } from "@/api/tournaments";
 import { toast } from "@/components/ui/sonner";
 import { formatCurrency, formatPrizeSummary, getErrorMessage, getErrorToast } from "@/lib/page-utils";
@@ -42,6 +43,7 @@ const CreatorProfileScreen = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const [profile, setProfile] = useState<CreatorProfileData | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -78,6 +80,22 @@ const CreatorProfileScreen = () => {
     loadProfile();
   }, [loadProfile]);
 
+  useEffect(() => {
+    let active = true;
+
+    getMyProfile()
+      .then((res) => {
+        if (active) setCurrentUserId(res.data.user._id);
+      })
+      .catch(() => {
+        if (active) setCurrentUserId(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const channel = profile?.channel;
   const creator = profile?.creator ?? channel?.owner;
   const displayName = channel?.name ?? creator?.username ?? "Creator";
@@ -89,6 +107,7 @@ const CreatorProfileScreen = () => {
   const tournaments = useMemo(() => profile?.tournaments ?? [], [profile]);
   const canFollow = Boolean(channel?._id && !channel.virtual);
   const isVerifiedCreator = Boolean(creator?.role?.includes("creator") || channel?._id);
+  const isOwnCreatorProfile = Boolean(currentUserId && creator?._id === currentUserId);
 
   const handleFollow = async () => {
     if (!channel?._id) {
@@ -286,6 +305,15 @@ const CreatorProfileScreen = () => {
                   <div className="rounded-lg border border-secondary/20 bg-secondary/10 px-3 py-2 text-center">
                     <p className="text-xs font-heading text-secondary">Creator approved</p>
                     <p className="text-[10px] text-muted-foreground">Channel setup is pending, but ratings and tournaments are available.</p>
+                    {isOwnCreatorProfile && (
+                      <button
+                        type="button"
+                        onClick={() => navigate("/channel-setup")}
+                        className="mt-2 rounded-lg border border-secondary/30 px-3 py-1.5 text-[10px] font-heading font-semibold text-secondary transition-colors hover:bg-secondary/10"
+                      >
+                        Setup Channel
+                      </button>
+                    )}
                   </div>
                 )}
                 <div className="rounded-lg border border-glass-border bg-card/60 p-3">

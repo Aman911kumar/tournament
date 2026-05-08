@@ -32,7 +32,7 @@ const allowedOrigins = [
     "http://localhost:3000",
     // "tournament4-shubham9876794207-3100s-projects.vercel.app",
     "https://battle4arena.vercel.app",
-    // "http://192.168.29.138:8080",
+    "http://192.168.29.138:8080",
     "http://localhost:8080",
     ...configuredOrigins,
 ];

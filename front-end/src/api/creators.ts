@@ -45,9 +45,27 @@ export interface CreatorProfileData {
   totalPrize?: number;
 }
 
+export interface ChannelSetupPayload {
+  name: string;
+  handle: string;
+  description?: string;
+  avatar?: { url?: string };
+  banner?: { url?: string };
+  socialLinks?: {
+    youtube?: string;
+    instagram?: string;
+    discord?: string;
+    website?: string;
+  };
+}
+
 export const ENDPOINTS = {
   list: "/channels",
+  create: "/channels",
+  mine: "/channels/me",
+  joined: "/channels/joined",
   channelProfile: (id: string) => `/channels/${id}`,
+  update: (id: string) => `/channels/${id}`,
   userProfile: (id: string) => `/channels/creator/${id}`,
   follow: (id: string) => `/channels/${id}/join`,
   rateChannel: (id: string) => `/channels/${id}/rating`,
@@ -59,6 +77,11 @@ export async function getCreators() {
   return res.data?.channels ?? [];
 }
 
+export async function getJoinedChannels() {
+  const res = await apiFetch<ApiResponse<{ channels: CreatorChannel[]; total: number }>>(ENDPOINTS.joined);
+  return res.data?.channels ?? [];
+}
+
 export async function getCreatorProfile(id: string) {
   try {
     const res = await apiFetch<ApiResponse<CreatorProfileData>>(ENDPOINTS.channelProfile(id));
@@ -67,6 +90,27 @@ export async function getCreatorProfile(id: string) {
     const res = await apiFetch<ApiResponse<CreatorProfileData>>(ENDPOINTS.userProfile(id));
     return res.data;
   }
+}
+
+export async function getMyChannel() {
+  const res = await apiFetch<ApiResponse<{ channel: CreatorChannel; tournamentCount: number }>>(ENDPOINTS.mine);
+  return res.data;
+}
+
+export async function createChannel(payload: ChannelSetupPayload) {
+  const res = await apiFetch<ApiResponse<CreatorChannel>>(ENDPOINTS.create, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return res.data;
+}
+
+export async function updateChannel(channelId: string, payload: ChannelSetupPayload) {
+  const res = await apiFetch<ApiResponse<CreatorChannel>>(ENDPOINTS.update(channelId), {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  return res.data;
 }
 
 export async function followCreator(channelId: string) {
