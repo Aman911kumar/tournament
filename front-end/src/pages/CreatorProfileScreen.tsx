@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Calendar,
   Flag,
+  LoaderCircle,
   MessageCircle,
   RefreshCcw,
   Shield,
@@ -39,42 +40,149 @@ const statusClass: Record<Tournament["status"], string> = {
   cancelled: "bg-muted text-muted-foreground",
 };
 
+const ratingSteps = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
+
+const normalizeRatingValue = (value?: number | null) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  return Math.min(5, Math.max(1, Math.round(numeric * 2) / 2));
+};
+
+const getRatingDraftValue = (profile?: CreatorProfileData | null) => {
+  const ownRating = normalizeRatingValue(profile?.viewer?.myRating);
+  const averageRating = normalizeRatingValue((profile?.creator ?? profile?.channel?.owner)?.stats?.rating);
+  return ownRating ?? averageRating ?? 4;
+};
+
+const stripViewerState = (profile: CreatorProfileData): CreatorProfileData => ({
+  ...profile,
+  viewer: undefined,
+});
+
+const RatingStars = ({ value, className = "h-4 w-4" }: { value: number; className?: string }) => (
+  <div className="flex items-center gap-1" aria-label={`${Number(value || 0).toFixed(1)} out of 5`}>
+    {[1, 2, 3, 4, 5].map((star) => {
+      const fillPercent = Math.max(0, Math.min(1, Number(value || 0) - (star - 1))) * 100;
+      return (
+        <span key={star} className={`relative inline-flex ${className}`}>
+          <Star className={`${className} text-muted-foreground/35`} />
+          <span className="absolute inset-0 overflow-hidden text-accent" style={{ width: `${fillPercent}%` }}>
+            <Star className={`${className} fill-accent text-accent`} />
+          </span>
+        </span>
+      );
+    })}
+  </div>
+);
+
+const SkeletonBlock = ({ className }: { className: string }) => (
+  <div className={`animate-pulse rounded-lg bg-muted/70 ${className}`} />
+);
+
+const CreatorProfileSkeleton = () => (
+  <div className="space-y-4">
+    <div className="relative overflow-hidden rounded-xl">
+      <SkeletonBlock className="h-28 w-full" />
+      <div className="absolute -bottom-8 left-4">
+        <SkeletonBlock className="h-20 w-20 rounded-full border-4 border-background" />
+      </div>
+    </div>
+    <div className="pt-8 space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-2">
+          <SkeletonBlock className="h-5 w-44 max-w-full" />
+          <SkeletonBlock className="h-3 w-28" />
+          <SkeletonBlock className="h-3 w-full max-w-md" />
+        </div>
+        <div className="flex gap-2">
+          <SkeletonBlock className="h-8 w-8 rounded-full" />
+          <SkeletonBlock className="h-8 w-8 rounded-full" />
+        </div>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {[0, 1, 2, 3].map((item) => (
+          <SkeletonBlock key={item} className="h-14" />
+        ))}
+      </div>
+      <SkeletonBlock className="h-10 w-full" />
+      <GlassCard>
+        <div className="space-y-3">
+          <SkeletonBlock className="h-4 w-36" />
+          <SkeletonBlock className="h-10 w-full" />
+          <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-9">
+            {ratingSteps.map((value) => (
+              <SkeletonBlock key={value} className="h-8" />
+            ))}
+          </div>
+        </div>
+      </GlassCard>
+      <div className="flex gap-2">
+        <SkeletonBlock className="h-8 w-28 rounded-full" />
+        <SkeletonBlock className="h-8 w-20 rounded-full" />
+      </div>
+      {[0, 1].map((item) => (
+        <GlassCard key={item}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-2">
+              <SkeletonBlock className="h-4 w-48 max-w-full" />
+              <SkeletonBlock className="h-3 w-36" />
+            </div>
+            <SkeletonBlock className="h-8 w-20" />
+          </div>
+        </GlassCard>
+      ))}
+    </div>
+  </div>
+);
+
 const CreatorProfileScreen = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const [profile, setProfile] = useState<CreatorProfileData | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [ratingLoading, setRatingLoading] = useState(false);
+  const [myRating, setMyRating] = useState<number | null>(null);
+  const [draftRating, setDraftRating] = useState(4);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportDescription, setReportDescription] = useState("");
   const [reportProof, setReportProof] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"tournaments" | "about">("tournaments");
 
+  const applyProfileData = useCallback((nextProfile: CreatorProfileData) => {
+    setProfile(nextProfile);
+    setIsFollowing(Boolean(nextProfile.viewer?.isFollowing));
+    setMyRating(normalizeRatingValue(nextProfile.viewer?.myRating));
+    setDraftRating(getRatingDraftValue(nextProfile));
+  }, []);
+
   const loadProfile = useCallback(async () => {
     if (!id) return;
     const cachedProfile = readCache<CreatorProfileData>(CACHE_KEYS.creatorProfile(id));
     if (cachedProfile) {
-      setProfile(cachedProfile.data);
+      applyProfileData(stripViewerState(cachedProfile.data));
       setLoading(false);
     }
 
     try {
       setLoading(!cachedProfile);
+      setRefreshing(Boolean(cachedProfile));
       setError(null);
       const nextProfile = await getCreatorProfile(id);
-      setProfile(nextProfile);
-      writeCache(CACHE_KEYS.creatorProfile(id), nextProfile);
+      applyProfileData(nextProfile);
+      writeCache(CACHE_KEYS.creatorProfile(id), stripViewerState(nextProfile));
     } catch (loadError) {
       if (!cachedProfile) setError(getErrorMessage(loadError, "Failed to load creator profile."));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [id]);
+  }, [applyProfileData, id]);
 
   useEffect(() => {
     loadProfile();
@@ -115,14 +223,32 @@ const CreatorProfileScreen = () => {
       return;
     }
 
+    const nextFollowing = !isFollowing;
+    const previousFollowing = isFollowing;
+    const previousProfile = profile;
+
+    setIsFollowing(nextFollowing);
+    setProfile((current) => {
+      if (!current?.channel) return current;
+      return {
+        ...current,
+        viewer: { ...(current.viewer ?? {}), isFollowing: nextFollowing },
+        channel: {
+          ...current.channel,
+          memberCount: Math.max(0, Number(current.channel.memberCount || 0) + (nextFollowing ? 1 : -1)),
+        },
+      };
+    });
+
     try {
       setFollowLoading(true);
-      const res = isFollowing ? await unfollowCreator(channel._id) : await followCreator(channel._id);
-      setIsFollowing(!isFollowing);
+      const res = nextFollowing ? await followCreator(channel._id) : await unfollowCreator(channel._id);
       toast.success(res.message);
     } catch (followError) {
+      setIsFollowing(previousFollowing);
+      setProfile(previousProfile);
       const errorToast = getErrorToast(followError, {
-        action: isFollowing ? "Unfollow creator" : "Follow creator",
+        action: nextFollowing ? "Follow creator" : "Unfollow creator",
         fallback: "Could not update follow status.",
       });
       toast.error(errorToast.title, { description: errorToast.description });
@@ -134,17 +260,22 @@ const CreatorProfileScreen = () => {
   const handleRate = async (value: number) => {
     const targetId = channel?._id || creator?._id;
     if (!targetId) return;
+    const normalizedRating = normalizeRatingValue(value);
+    if (!normalizedRating) return;
 
     try {
       setRatingLoading(true);
-      const res = await rateCreator(targetId, value, channel?._id ? "channel" : "user");
+      const res = await rateCreator(targetId, normalizedRating, channel?._id ? "channel" : "user");
       const updatedCreator = res.data.creator;
       setProfile((current) => current ? {
         ...current,
+        viewer: { ...(current.viewer ?? {}), myRating: normalizedRating },
         creator: current.creator?._id === updatedCreator._id ? updatedCreator : current.creator,
         channel: current.channel ? { ...current.channel, owner: updatedCreator } : current.channel,
       } : current);
-      toast.success("Rating saved", { description: `You rated ${displayName} ${value}/5.` });
+      setMyRating(normalizedRating);
+      setDraftRating(normalizedRating);
+      toast.success("Rating saved", { description: `You rated ${displayName} ${normalizedRating.toFixed(1)}/5.` });
     } catch (rateError) {
       const errorToast = getErrorToast(rateError, { action: "Rate creator", fallback: "Could not save rating." });
       toast.error(errorToast.title, { description: errorToast.description });
@@ -182,6 +313,94 @@ const CreatorProfileScreen = () => {
     }
   };
 
+  const canSubmitRating = Boolean(currentUserId && !isOwnCreatorProfile && creator?._id);
+  const ratingStatusText = myRating
+    ? `Your rating: ${myRating.toFixed(1)}/5`
+    : currentUserId
+      ? "You have not rated this creator yet"
+      : "Login to rate this creator";
+
+  const renderRatingCard = (compact = false) => (
+    <div className={`rounded-lg border border-glass-border bg-card/60 ${compact ? "p-3" : "p-4"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-heading font-bold">Rate this creator</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <RatingStars value={rating} className="h-3.5 w-3.5" />
+            <span className="text-[10px] text-muted-foreground">
+              Average {rating.toFixed(1)} from {ratingCount} rating{ratingCount === 1 ? "" : "s"}
+            </span>
+          </div>
+        </div>
+        {myRating ? (
+          <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-[10px] font-heading font-semibold text-accent">
+            {myRating.toFixed(1)}/5
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-4 rounded-lg border border-glass-border bg-background/60 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[10px] font-heading text-muted-foreground">{ratingStatusText}</span>
+          <span className="text-sm font-heading font-bold text-accent">{draftRating.toFixed(1)}</span>
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={5}
+          step={0.5}
+          value={draftRating}
+          onChange={(event) => setDraftRating(Number(event.target.value))}
+          disabled={!canSubmitRating || ratingLoading}
+          className="mt-3 w-full accent-[hsl(var(--accent))] disabled:opacity-50"
+          aria-label="Select creator rating"
+        />
+        <div className="mt-3 grid grid-cols-5 gap-1.5 sm:grid-cols-9">
+          {ratingSteps.map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setDraftRating(value)}
+              disabled={!canSubmitRating || ratingLoading}
+              className={`rounded-md border px-1.5 py-1.5 text-[10px] font-heading transition-colors disabled:opacity-50 ${
+                draftRating === value
+                  ? "border-accent bg-accent/15 text-accent"
+                  : "border-glass-border text-muted-foreground hover:border-accent/50 hover:text-accent"
+              }`}
+            >
+              {value.toFixed(1)}
+            </button>
+          ))}
+        </div>
+        {!currentUserId && (
+          <button
+            type="button"
+            onClick={() => navigate("/login")}
+            className="mt-3 w-full rounded-lg border border-primary/30 px-3 py-2 text-xs font-heading font-semibold text-primary transition-colors hover:bg-primary/10"
+          >
+            Login to rate
+          </button>
+        )}
+        {currentUserId && isOwnCreatorProfile && (
+          <p className="mt-3 rounded-lg border border-secondary/20 bg-secondary/10 px-3 py-2 text-[10px] text-secondary">
+            You cannot rate your own creator profile.
+          </p>
+        )}
+        {canSubmitRating && (
+          <button
+            type="button"
+            onClick={() => handleRate(draftRating)}
+            disabled={ratingLoading || myRating === draftRating}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-xs font-heading font-bold text-accent-foreground shadow-[0_0_18px_hsl(var(--accent)/0.25)] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {ratingLoading && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+            {ratingLoading ? "Saving rating..." : myRating === draftRating ? "Rating saved" : "Save rating"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background pb-20">
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
@@ -192,19 +411,13 @@ const CreatorProfileScreen = () => {
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 space-y-4">
-        {loading && (
-          <GlassCard neon>
-            <div className="animate-pulse space-y-4">
-              <div className="h-28 rounded-lg bg-muted" />
-              <div className="h-5 w-40 rounded bg-muted" />
-              <div className="h-3 w-64 max-w-full rounded bg-muted" />
-              <div className="grid grid-cols-4 gap-2">
-                {[0, 1, 2, 3].map((item) => (
-                  <div key={item} className="h-14 rounded-lg bg-muted" />
-                ))}
-              </div>
-            </div>
-          </GlassCard>
+        {loading && <CreatorProfileSkeleton />}
+
+        {!loading && refreshing && profile && (
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] font-heading text-primary">
+            <LoaderCircle className="h-3 w-3 animate-spin" />
+            Refreshing creator
+          </div>
         )}
 
         {!loading && error && (
@@ -299,7 +512,10 @@ const CreatorProfileScreen = () => {
                     onClick={handleFollow}
                     disabled={followLoading}
                   >
-                    {followLoading ? "UPDATING..." : isFollowing ? "FOLLOWING" : "FOLLOW CREATOR"}
+                    <span className="inline-flex items-center justify-center gap-2">
+                      {followLoading && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+                      {followLoading ? "UPDATING..." : isFollowing ? "FOLLOWING" : "FOLLOW CREATOR"}
+                    </span>
                   </NeonButton>
                 ) : (
                   <div className="rounded-lg border border-secondary/20 bg-secondary/10 px-3 py-2 text-center">
@@ -316,30 +532,7 @@ const CreatorProfileScreen = () => {
                     )}
                   </div>
                 )}
-                <div className="rounded-lg border border-glass-border bg-card/60 p-3">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="text-xs font-heading font-bold">Rate this creator</p>
-                    <span className="text-[10px] text-muted-foreground">{ratingCount} rating{ratingCount === 1 ? "" : "s"}</span>
-                  </div>
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {[1, 2, 3, 4, 5].map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => handleRate(value)}
-                        disabled={ratingLoading}
-                        className={`flex h-9 items-center justify-center rounded-lg border text-xs font-heading transition-colors disabled:opacity-50 ${
-                          value <= Math.round(rating)
-                            ? "border-accent/40 bg-accent/15 text-accent"
-                            : "border-glass-border text-muted-foreground"
-                        }`}
-                        aria-label={`Rate ${value} out of 5`}
-                      >
-                        <Star className={`h-3.5 w-3.5 ${value <= Math.round(rating) ? "fill-accent" : ""}`} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {renderRatingCard()}
               </div>
             </div>
 
@@ -393,23 +586,10 @@ const CreatorProfileScreen = () => {
               <GlassCard>
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <Star className="w-4 h-4 text-accent fill-accent" />
+                    <RatingStars value={rating} />
                     <p className="text-sm font-heading font-bold">{rating.toFixed(1)} creator rating</p>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[1, 2, 3, 4, 5].map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => handleRate(value)}
-                        disabled={ratingLoading}
-                        className="rounded-lg border border-glass-border px-2 py-1 text-xs font-heading text-accent disabled:opacity-50"
-                      >
-                        {value}
-                      </button>
-                    ))}
-                    <span className="self-center text-[10px] text-muted-foreground">{ratingCount} rating{ratingCount === 1 ? "" : "s"}</span>
-                  </div>
+                  {renderRatingCard(true)}
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-secondary" />
                     <p className="text-sm font-heading">{(channel?.memberCount ?? 0).toLocaleString("en-IN")} followers</p>
@@ -463,6 +643,7 @@ const CreatorProfileScreen = () => {
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <NeonButton variant="blue" onClick={() => setReportOpen(false)} disabled={reportLoading}>Cancel</NeonButton>
                 <NeonButton variant="purple" onClick={handleReportCreator} disabled={reportLoading}>
+                  {reportLoading && <LoaderCircle className="mr-2 inline h-3.5 w-3.5 animate-spin" />}
                   {reportLoading ? "Submitting..." : "Submit"}
                 </NeonButton>
               </div>

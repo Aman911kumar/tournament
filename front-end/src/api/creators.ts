@@ -43,6 +43,10 @@ export interface CreatorProfileData {
   tournaments: Tournament[];
   tournamentCount: number;
   totalPrize?: number;
+  viewer?: {
+    isFollowing?: boolean;
+    myRating?: number | null;
+  };
 }
 
 export interface ChannelSetupPayload {

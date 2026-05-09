@@ -14,7 +14,7 @@ import {
     rateCreatorByUserId,
     rateCreatorByChannelId,
 } from "../controllers/channel.controller.js";
-import { protect } from "../middlewares/auth.middleware.js";
+import { optionalProtect, protect } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
@@ -24,10 +24,10 @@ router.post("/", protect, createChannel);
 router.get("/me", protect, getMyChannel);
 router.get("/joined", protect, getJoinedChannels);
 router.get("/feed/tournaments", protect, getJoinedChannelTournaments);
-router.get("/creator/:userId", getCreatorByUserId);
+router.get("/creator/:userId", optionalProtect, getCreatorByUserId);
 router.post("/creator/:userId/rating", protect, rateCreatorByUserId);
 
-router.get("/:identifier", getChannelByIdentifier);
+router.get("/:identifier", optionalProtect, getChannelByIdentifier);
 router.patch("/:channelId", protect, updateChannel);
 router.post("/:channelId/rating", protect, rateCreatorByChannelId);
 router.post("/:channelId/join", protect, joinChannel);

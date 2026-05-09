@@ -82,6 +82,27 @@ const buildChannelTournamentQuery = (channel, extra = {}) => {
     };
 };
 
+const getCreatorViewerState = async ({ creatorId, channelId, viewerId }) => {
+    if (!viewerId || !creatorId) {
+        return {
+            isFollowing: false,
+            myRating: null
+        };
+    }
+
+    const [subscription, rating] = await Promise.all([
+        channelId
+            ? ChannelSubscription.findOne({ channel: channelId, user: viewerId }).select("_id").lean()
+            : Promise.resolve(null),
+        CreatorRating.findOne({ creator: creatorId, user: viewerId }).select("rating").lean()
+    ]);
+
+    return {
+        isFollowing: Boolean(subscription),
+        myRating: typeof rating?.rating === "number" ? rating.rating : null
+    };
+};
+
 const createChannel = asyncHandler(async (req, res) => {
     const userId = req.user._id;
     const { name, handle, description = "", avatar, banner, socialLinks } = req.body;
@@ -264,16 +285,24 @@ const getChannelByIdentifier = asyncHandler(async (req, res) => {
         .limit(Number(tournamentLimit))
         .lean();
 
-    const tournamentCount = await Tournament.countDocuments(tournamentQuery);
-    const prizeTotals = await Tournament.aggregate([
-        { $match: tournamentQuery },
-        { $group: { _id: null, totalPrize: { $sum: "$prizePool" } } }
+    const ownerId = channel.owner?._id || channel.owner;
+    const [tournamentCount, prizeTotals, viewer] = await Promise.all([
+        Tournament.countDocuments(tournamentQuery),
+        Tournament.aggregate([
+            { $match: tournamentQuery },
+            { $group: { _id: null, totalPrize: { $sum: "$prizePool" } } }
+        ]),
+        getCreatorViewerState({
+            creatorId: ownerId,
+            channelId: channel._id,
+            viewerId: req.user?._id
+        })
     ]);
 
     return res.status(200).json(
         new ApiResponse(
             200,
-            { channel, creator: channel.owner, tournaments, tournamentCount, totalPrize: Number(prizeTotals[0]?.totalPrize || 0) },
+            { channel, creator: channel.owner, tournaments, tournamentCount, totalPrize: Number(prizeTotals[0]?.totalPrize || 0), viewer },
             "Channel fetched successfully"
         )
     );
@@ -308,12 +337,17 @@ const getCreatorByUserId = asyncHandler(async (req, res) => {
         .limit(Number(tournamentLimit))
         .lean();
 
-    const [tournamentCount, prizeTotals] = await Promise.all([
+    const [tournamentCount, prizeTotals, viewer] = await Promise.all([
         Tournament.countDocuments(tournamentQuery),
         Tournament.aggregate([
             { $match: tournamentQuery },
             { $group: { _id: null, totalPrize: { $sum: "$prizePool" } } }
-        ])
+        ]),
+        getCreatorViewerState({
+            creatorId: user._id,
+            channelId: channel?._id,
+            viewerId: req.user?._id
+        })
     ]);
 
     return res.status(200).json(
@@ -324,7 +358,8 @@ const getCreatorByUserId = asyncHandler(async (req, res) => {
                 creator: user,
                 tournaments,
                 tournamentCount,
-                totalPrize: Number(prizeTotals[0]?.totalPrize || 0)
+                totalPrize: Number(prizeTotals[0]?.totalPrize || 0),
+                viewer
             },
             "Creator fetched successfully"
         )
@@ -341,6 +376,10 @@ const rateCreatorByUserId = asyncHandler(async (req, res) => {
 
     if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
         throw new ApiError(400, "Rating must be between 1 and 5");
+    }
+
+    if (Math.round(rating * 2) !== rating * 2) {
+        throw new ApiError(400, "Rating must use 0.5 steps");
     }
 
     if (userId === req.user._id.toString()) {
