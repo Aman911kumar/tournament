@@ -1,13 +1,16 @@
 import webpush from "web-push";
-import { Resend } from "resend";
+// import { Resend } from "resend";
 import { Notification } from "../models/notification.model.js";
 import { PushSubscription } from "../models/pushSubscription.model.js";
 import { User } from "../models/user.model.js";
 import { emitToUser } from "./socket.service.js";
-import { APP_PUBLIC_URL, EMAIL_FROM, RESEND_API_KEY, VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY, VAPID_SUBJECT } from "../../env.js";
+import { sendEmail } from "./auth.service.js";
+import { APP_PUBLIC_URL, VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY, VAPID_SUBJECT } from "../../env.js";
 
 const pushConfigured = Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
-const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+// Resend sender kept for quick rollback if needed.
+// import { EMAIL_FROM, RESEND_API_KEY } from "../../env.js";
+// const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 const NOTIFICATION_DELIVERY_CONCURRENCY = Math.max(1, Number(process.env.NOTIFICATION_DELIVERY_CONCURRENCY || 10));
 
 if (pushConfigured) {
@@ -129,23 +132,31 @@ const sendPushToUser = async (userId, notification) => {
 export const getPushPublicKey = () => VAPID_PUBLIC_KEY || "";
 
 export const sendNotificationEmail = async (userId, notification) => {
-    if (!resend || !userId) return { skipped: true, reason: "resend_not_configured" };
+    if (!userId) return { skipped: true, reason: "missing_user" };
 
     const user = await User.findById(userId).select("email username preferences").lean();
     if (!user?.email || user.preferences?.notifications === false) {
         return { skipped: true, reason: "email_unavailable_or_disabled" };
     }
 
-    const result = await resend.emails.send({
-        from: EMAIL_FROM,
+    return sendEmail({
         to: user.email,
         subject: notification.title,
         html: buildNotificationEmailHtml(notification),
         text: `${notification.title}\n\n${notification.body}\n\n${toAbsoluteUrl(notification.actionUrl)}`,
     });
 
-    if (result?.error) throw result.error;
-    return result?.data || result;
+    // Resend version kept commented as requested.
+    // const result = await resend.emails.send({
+    //     from: EMAIL_FROM,
+    //     to: user.email,
+    //     subject: notification.title,
+    //     html: buildNotificationEmailHtml(notification),
+    //     text: `${notification.title}\n\n${notification.body}\n\n${toAbsoluteUrl(notification.actionUrl)}`,
+    // });
+    //
+    // if (result?.error) throw result.error;
+    // return result?.data || result;
 };
 
 const deliverNotification = async (notification, { sendEmail = false } = {}) => {

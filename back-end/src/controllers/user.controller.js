@@ -636,7 +636,13 @@ const logoutUser = asyncHandler(async (req, res) => {
     );
 });
 const renewTokens = asyncHandler(async (req, res) => {
-    const receivedRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken || req.body?.refresh_token;
+    const receivedRefreshToken = String(
+        req.body?.refreshToken ||
+        req.body?.refresh_token ||
+        req.cookies?.refreshToken ||
+        ""
+    ).trim();
+
     if (!receivedRefreshToken) {
         throw new ApiError(401, "Unauthorized request");
     }
@@ -656,8 +662,9 @@ const renewTokens = asyncHandler(async (req, res) => {
             throw new ApiError(401, "Refresh token expired or already used");
         }
 
-        // Generate new tokens
-        const { accessToken, refreshToken } = await generateAccessTokenAndRefreshToken(user._id);
+        // Generate a fresh access token without rotating the refresh token.
+        // This keeps concurrent browser tabs from invalidating each other.
+        const accessToken = user.generateAccessToken();
 
         // Optional: update last token renewal time
         user.lastTokenRenewed = new Date();
@@ -665,13 +672,20 @@ const renewTokens = asyncHandler(async (req, res) => {
 
         return res.status(200)
             .cookie("accessToken", accessToken, options)
-            .cookie("refreshToken", refreshToken, options)
+            .cookie("refreshToken", receivedRefreshToken, options)
             .json(
-                new ApiResponse(200, { accessToken, refreshToken }, "New tokens generated successfully")
+                new ApiResponse(200, { accessToken, refreshToken: receivedRefreshToken }, "New access token generated successfully")
             );
 
     } catch (error) {
-        throw new ApiError(401, error?.message || "Invalid refresh token");
+        res.clearCookie("accessToken", options);
+        res.clearCookie("refreshToken", options);
+
+        const message = error?.name === "TokenExpiredError"
+            ? "Refresh token expired. Please login again."
+            : error?.message || "Invalid refresh token";
+
+        throw new ApiError(401, message);
     }
 });
 

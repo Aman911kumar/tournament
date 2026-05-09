@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 // import { Resend } from "resend";
+import ApiError from "../utils/ApiError.js";
 import {
     APP_PUBLIC_URL,
     EMAIL_FROM,
@@ -10,27 +11,132 @@ import {
     SMTP_USER,
     // RESEND_API_KEY,
 } from "../../env.js";
-import ApiError from "../utils/ApiError.js";
 
 // Resend sender kept for quick rollback if needed.
 // const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
-const smtpPort = Number(SMTP_PORT || 587);
-const smtpSecure = String(SMTP_SECURE || "").toLowerCase() === "true" || smtpPort === 465;
+const cleanEnv = (value = "") =>
+    String(value || "")
+        .trim()
+        .replace(/^['"]|['"]$/g, "");
 
-const mailTransporter = SMTP_HOST
-    ? nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: smtpPort,
-        secure: smtpSecure,
-        auth: SMTP_USER || SMTP_PASS
-            ? {
-                user: SMTP_USER,
-                pass: SMTP_PASS,
-            }
-            : undefined,
-    })
-    : null;
+const parseBoolean = (value, fallback = false) => {
+    const normalized = cleanEnv(value).toLowerCase();
+    if (["true", "1", "yes", "y", "on"].includes(normalized)) return true;
+    if (["false", "0", "no", "n", "off"].includes(normalized)) return false;
+    return fallback;
+};
+
+const positiveNumber = (value, fallback) => {
+    const parsed = Number(cleanEnv(value));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const smtpService = cleanEnv(process.env.SMTP_SERVICE || process.env.EMAIL_SERVICE);
+const smtpHost = cleanEnv(SMTP_HOST);
+const smtpPort = positiveNumber(SMTP_PORT, 587);
+const smtpUser = cleanEnv(SMTP_USER);
+const rawSmtpPass = cleanEnv(SMTP_PASS);
+const isGmailSmtp = /gmail/i.test(`${smtpService} ${smtpHost}`);
+const smtpPass = isGmailSmtp ? rawSmtpPass.replace(/\s+/g, "") : rawSmtpPass;
+const hasPartialAuth = Boolean((smtpUser && !smtpPass) || (!smtpUser && smtpPass));
+const smtpSecure = smtpPort === 465 || (smtpPort !== 587 && parseBoolean(SMTP_SECURE, false));
+const smtpRequireTls = parseBoolean(process.env.SMTP_REQUIRE_TLS, smtpPort === 587);
+const smtpRejectUnauthorized = parseBoolean(process.env.SMTP_REJECT_UNAUTHORIZED, true);
+const smtpVerifyOnSend = parseBoolean(process.env.SMTP_VERIFY_ON_SEND, true);
+const smtpConnectionTimeout = positiveNumber(process.env.SMTP_CONNECTION_TIMEOUT_MS, 15000);
+const smtpGreetingTimeout = positiveNumber(process.env.SMTP_GREETING_TIMEOUT_MS, 15000);
+const smtpSocketTimeout = positiveNumber(process.env.SMTP_SOCKET_TIMEOUT_MS, 30000);
+const defaultFrom = cleanEnv(EMAIL_FROM) || (smtpUser ? `Battle4Arena <${smtpUser}>` : "");
+
+const getEmailConfigError = () => {
+    if (!smtpService && !smtpHost) return "SMTP_HOST is missing";
+    if (hasPartialAuth) return "SMTP_USER and SMTP_PASS must both be set";
+    return "";
+};
+
+const buildTransportOptions = () => ({
+    ...(smtpService ? { service: smtpService } : { host: smtpHost }),
+    port: smtpPort,
+    secure: smtpSecure,
+    requireTLS: !smtpSecure && smtpRequireTls,
+    pool: true,
+    maxConnections: positiveNumber(process.env.SMTP_MAX_CONNECTIONS, 2),
+    maxMessages: positiveNumber(process.env.SMTP_MAX_MESSAGES, 50),
+    connectionTimeout: smtpConnectionTimeout,
+    greetingTimeout: smtpGreetingTimeout,
+    socketTimeout: smtpSocketTimeout,
+    ...(smtpUser && smtpPass
+        ? {
+            auth: {
+                user: smtpUser,
+                pass: smtpPass,
+            },
+        }
+        : {}),
+    tls: {
+        minVersion: "TLSv1.2",
+        rejectUnauthorized: smtpRejectUnauthorized,
+        ...(smtpHost ? { servername: smtpHost } : {}),
+    },
+});
+
+const mailTransporter = getEmailConfigError()
+    ? null
+    : nodemailer.createTransport(buildTransportOptions());
+
+let transporterVerified = false;
+let transporterVerifyPromise = null;
+
+const getEmailFailureMessage = (error) => {
+    const code = error?.code || error?.command || "";
+    const response = error?.response || error?.message || "";
+
+    if (code === "EAUTH" || /auth|credential|username|password|login/i.test(response)) {
+        return "SMTP authentication failed. Check SMTP_USER, SMTP_PASS, and use an app password for Gmail in production.";
+    }
+    if (["ECONNECTION", "ETIMEDOUT", "ESOCKET", "ECONNREFUSED", "ENOTFOUND"].includes(code)) {
+        return "SMTP connection failed. Check SMTP_HOST, SMTP_PORT, SMTP_SECURE, and production firewall/network settings.";
+    }
+    if (/self signed|certificate|tls/i.test(response)) {
+        return "SMTP TLS verification failed. Check SMTP host/port or set SMTP_REJECT_UNAUTHORIZED=false only for a trusted private SMTP server.";
+    }
+    if (code === "EENVELOPE") {
+        return "SMTP rejected the sender or recipient address. Check EMAIL_FROM and recipient email.";
+    }
+
+    return response || "Failed to send email";
+};
+
+const ensureEmailTransportReady = async () => {
+    const configError = getEmailConfigError();
+    if (configError) {
+        throw new ApiError(500, `Email service is not configured: ${configError}`);
+    }
+    if (!mailTransporter) {
+        throw new ApiError(500, "Email service is not configured");
+    }
+    if (!smtpVerifyOnSend || transporterVerified) return;
+
+    if (!transporterVerifyPromise) {
+        transporterVerifyPromise = mailTransporter.verify()
+            .then(() => {
+                transporterVerified = true;
+            })
+            .catch((error) => {
+                transporterVerified = false;
+                throw new ApiError(502, getEmailFailureMessage(error));
+            })
+            .finally(() => {
+                transporterVerifyPromise = null;
+            });
+    }
+
+    await transporterVerifyPromise;
+};
+
+export const isEmailServiceConfigured = () => Boolean(mailTransporter);
+export const verifyEmailTransport = ensureEmailTransportReady;
 
 const escapeHtml = (value = "") =>
     String(value)
@@ -40,7 +146,7 @@ const escapeHtml = (value = "") =>
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 
-const appUrl = String(APP_PUBLIC_URL || "http://localhost:8080").replace(/\/$/, "");
+const appUrl = cleanEnv(APP_PUBLIC_URL || "http://localhost:8080").split(",")[0].replace(/\/$/, "");
 
 const buildEmailLayout = ({ title, preview, bodyHtml, ctaLabel, ctaUrl }) => `
 <!doctype html>
@@ -138,27 +244,26 @@ export const buildPasswordResetHtml = ({ username, resetUrl, resetToken, expires
 });
 
 export const sendEmail = async ({ to, subject, html, text, from = EMAIL_FROM, replyTo }) => {
-    if (!mailTransporter) {
-        throw new ApiError(500, "Email service is not configured");
-    }
-
     if (!to || !subject || !html) {
         throw new ApiError(400, "Email recipient, subject, and html are required");
     }
 
     try {
+        await ensureEmailTransportReady();
+
         const result = await mailTransporter.sendMail({
-            from,
-            to,
+            from: cleanEnv(from) || defaultFrom,
+            to: cleanEnv(to),
             subject,
             html,
             ...(text ? { text } : {}),
-            ...(replyTo ? { replyTo } : {}),
+            ...(replyTo ? { replyTo: cleanEnv(replyTo) } : {}),
         });
 
         return result;
     } catch (error) {
-        throw new ApiError(502, error?.message || "Failed to send email");
+        if (error instanceof ApiError) throw error;
+        throw new ApiError(502, getEmailFailureMessage(error));
     }
 };
 
