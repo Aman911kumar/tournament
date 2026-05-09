@@ -1,4 +1,5 @@
 import { monitorEventLoopDelay } from "node:perf_hooks";
+import { getSocketStats } from "./socket.service.js";
 
 const MAX_RECENT_REQUESTS = 80;
 const MAX_RECENT_ERRORS = 80;
@@ -187,6 +188,7 @@ export const getMonitoringSnapshot = () => {
     const startedMs = startedAt.getTime();
     const minutes = Math.max((Date.now() - startedMs) / 60000, 1);
     const frontend = metrics.frontend;
+    const socket = getSocketStats();
 
     return {
         service: {
@@ -195,6 +197,11 @@ export const getMonitoringSnapshot = () => {
             uptimeSeconds,
             nodeEnv: process.env.NODE_ENV || "development",
             pid: process.pid,
+        },
+        realtime: {
+            onlineUsers: socket.onlineUsers,
+            connectedSockets: socket.sockets,
+            redisAdapter: socket.redisAdapter,
         },
         backend: {
             requests: {

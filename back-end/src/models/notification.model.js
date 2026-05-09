@@ -16,7 +16,7 @@ const NotificationSchema = new Schema({
     },
     type: {
         type: String,
-        enum: ["system", "wallet", "tournament", "tournament_update", "reward", "security", "creator", "room", "payment"],
+        enum: ["system", "wallet", "tournament", "tournament_update", "reward", "security", "creator", "room", "payment", "report", "moderation"],
         default: "system",
     },
     priority: {

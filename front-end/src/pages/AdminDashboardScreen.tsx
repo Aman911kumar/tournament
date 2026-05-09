@@ -20,8 +20,10 @@ import {
   CircleDollarSign,
   Clock,
   Cpu,
+  CreditCard,
   Database,
   Crown,
+  Flag,
   Gauge,
   HardDrive,
   LayoutDashboard,
@@ -67,6 +69,7 @@ import {
   updateWithdrawalStatus,
 } from "@/api/admin";
 import { formatCurrency, formatPrizeSummary, getErrorMessage, getErrorToast } from "@/lib/page-utils";
+import { getNotificationSocket } from "@/lib/notification-socket";
 
 const bucketColors = [
   "hsl(var(--primary))",
@@ -161,11 +164,8 @@ const StatCard = ({
   note: string;
   color: string;
   onClick?: () => void;
-}) => (
-  <GlassCard
-    className={`min-h-[112px] ${onClick ? "cursor-pointer transition-all hover:neon-border" : ""}`}
-    onClick={onClick}
-  >
+}) => {
+  const content = (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <p className="text-[11px] uppercase text-muted-foreground font-heading">{label}</p>
@@ -175,9 +175,28 @@ const StatCard = ({
         <Icon className={`w-5 h-5 ${color}`} />
       </div>
     </div>
-    <p className="mt-3 text-xs text-muted-foreground truncate">{note}</p>
-  </GlassCard>
-);
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="glass min-h-[112px] w-full rounded-xl p-4 text-left transition-all hover:neon-border focus:outline-none focus:ring-2 focus:ring-primary/60"
+      >
+        {content}
+        <p className="mt-3 text-xs text-muted-foreground truncate">{note}</p>
+      </button>
+    );
+  }
+
+  return (
+    <GlassCard className="min-h-[112px]">
+      {content}
+      <p className="mt-3 text-xs text-muted-foreground truncate">{note}</p>
+    </GlassCard>
+  );
+};
 
 const EmptyBlock = ({ text }: { text: string }) => (
   <div className="h-56 flex items-center justify-center text-sm text-muted-foreground">{text}</div>
@@ -322,6 +341,8 @@ type RecordColumn = {
   type?: "date" | "money" | "status" | "user" | "count" | "prize";
 };
 
+type AdminTab = "overview" | "finance" | "tournaments" | "users" | "support" | "monitoring" | "database";
+
 const defaultColumns: RecordColumn[] = [
   { label: "Record", path: "_id" },
   { label: "Status", path: "status", type: "status" },
@@ -456,6 +477,7 @@ const formatDetailValue = (value: unknown) => {
 const AdminDashboardScreen = () => {
   const navigate = useNavigate();
   const [days, setDays] = useState(30);
+  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [dashboard, setDashboard] = useState<AdminDashboardData | null>(null);
   const [monitoring, setMonitoring] = useState<AdminMonitoringData | null>(null);
   const [withdrawals, setWithdrawals] = useState<AdminWithdrawalRequest[]>([]);
@@ -560,6 +582,35 @@ const AdminDashboardScreen = () => {
   useEffect(() => {
     fetchMonitoring();
   }, [fetchMonitoring]);
+
+  useEffect(() => {
+    const socket = getNotificationSocket();
+    if (!socket) return;
+
+    const handleMonitoring = (payload: AdminMonitoringData) => {
+      setMonitoring(payload);
+      setMonitoringLoading(false);
+    };
+    const handlePresence = (payload: { onlineUsers: number; sockets: number; redisAdapter: boolean }) => {
+      setMonitoring((current) => current
+        ? {
+            ...current,
+            realtime: {
+              onlineUsers: payload.onlineUsers,
+              connectedSockets: payload.sockets,
+              redisAdapter: payload.redisAdapter,
+            },
+          }
+        : current);
+    };
+
+    socket.on("admin:monitoring", handleMonitoring);
+    socket.on("admin:presence", handlePresence);
+    return () => {
+      socket.off("admin:monitoring", handleMonitoring);
+      socket.off("admin:presence", handlePresence);
+    };
+  }, []);
 
   useEffect(() => {
     fetchCollections();
@@ -670,7 +721,7 @@ const AdminDashboardScreen = () => {
     return dashboard.charts.revenueByDay.map((row) => ({
       date: formatShortDate(row.date),
       amount: row.amount,
-      payments: row.count,
+      fees: row.count,
     }));
   }, [dashboard]);
 
@@ -828,10 +879,18 @@ const AdminDashboardScreen = () => {
     },
     {
       icon: CircleDollarSign,
-      label: "Revenue",
+      label: "Platform Revenue",
       value: formatCurrency(dashboard.totals.totalRevenue),
-      note: `${formatNumber(dashboard.totals.successfulPayments)} successful payments`,
+      note: `${formatNumber(dashboard.totals.platformFeeTransactionCount)} platform fee entries`,
       color: "text-neon-pink",
+      onClick: () => navigate("/admin/details/revenue"),
+    },
+    {
+      icon: CreditCard,
+      label: "Deposit Volume",
+      value: formatCurrency(dashboard.totals.totalDeposits),
+      note: `${formatNumber(dashboard.totals.successfulPayments)} successful deposits`,
+      color: "text-secondary",
       onClick: () => navigate("/admin/details/revenue"),
     },
     {
@@ -859,6 +918,35 @@ const AdminDashboardScreen = () => {
       onClick: () => navigate("/admin/details/support"),
     },
     {
+      icon: Flag,
+      label: "Reports",
+      value: formatNumber(dashboard.totals.openReports),
+      note: `${formatNumber(dashboard.totals.highSeverityReports)} high severity, ${formatNumber(dashboard.totals.totalReports)} total`,
+      color: "text-secondary",
+      onClick: () => navigate("/admin/moderation"),
+    },
+    {
+      icon: AlertCircle,
+      label: "Risk Queue",
+      value: formatNumber(dashboard.totals.suspiciousActivity),
+      note: `${formatNumber(dashboard.risk?.openDisputes)} disputes, ${formatNumber(dashboard.risk?.highValueDebits)} high-value debits`,
+      color: "text-destructive",
+      onClick: () => navigate("/admin/details/support"),
+    },
+    {
+      icon: Activity,
+      label: "Online Users",
+      value: formatNumber(monitoring?.realtime?.onlineUsers ?? dashboard.totals.onlineUsers),
+      note: `${formatNumber(monitoring?.realtime?.connectedSockets ?? dashboard.totals.connectedSockets)} sockets, Redis ${monitoring?.realtime?.redisAdapter ? "on" : "off"}`,
+      color: "text-secondary",
+      onClick: () => {
+        setActiveTab("monitoring");
+        window.requestAnimationFrame(() => {
+          document.getElementById("admin-panel-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      },
+    },
+    {
       icon: Server,
       label: "Monitoring",
       value: monitoringLoading ? "Loading" : cleanLabel(backendHealth),
@@ -866,6 +954,13 @@ const AdminDashboardScreen = () => {
         ? `${formatNumber(monitoring.backend.requests.rpm)} rpm, ${monitoring.backend.requests.errorRate}% errors`
         : "Runtime health and frontend reports",
       color: backendHealth === "healthy" ? "text-accent" : "text-secondary",
+      onClick: () => {
+        setActiveTab("monitoring");
+        fetchMonitoring();
+        window.requestAnimationFrame(() => {
+          document.getElementById("admin-panel-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      },
     },
   ];
   const tournamentFinance = dashboard.tournamentAnalytics?.finance ?? {};
@@ -1126,7 +1221,7 @@ const AdminDashboardScreen = () => {
           </div>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-5">
+        <Tabs id="admin-panel-tabs" value={activeTab} onValueChange={(value) => setActiveTab(value as AdminTab)} className="space-y-5 scroll-mt-4">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-card/60 p-1 sm:grid-cols-4 lg:grid-cols-7">
             <TabsTrigger value="overview" className="gap-2 text-xs">
               <LayoutDashboard className="h-3.5 w-3.5" /> Overview
@@ -1191,12 +1286,12 @@ const AdminDashboardScreen = () => {
               <GlassCard className="min-h-[320px]">
                 <SectionHeader
                   icon={CircleDollarSign}
-                  title="Revenue"
-                  description="Successful deposit payment volume"
+                  title="Platform Revenue"
+                  description="Daily platform fee earnings collected from completed money movement"
                   action={<Button size="sm" variant="outline" onClick={() => navigate("/admin/details/revenue")}>Details</Button>}
                 />
                 {revenueData.length ? (
-                  <ChartContainer className="h-64 w-full" config={{ amount: { label: "Revenue", color: "hsl(var(--accent))" } }}>
+                  <ChartContainer className="h-64 w-full" config={{ amount: { label: "Platform revenue", color: "hsl(var(--accent))" } }}>
                     <BarChart data={revenueData} margin={{ left: -12, right: 8, top: 8, bottom: 0 }}>
                       <CartesianGrid vertical={false} strokeDasharray="3 3" />
                       <XAxis dataKey="date" tickLine={false} axisLine={false} minTickGap={24} />
@@ -1206,7 +1301,7 @@ const AdminDashboardScreen = () => {
                     </BarChart>
                   </ChartContainer>
                 ) : (
-                  <EmptyBlock text="No revenue data yet" />
+                  <EmptyBlock text="No platform fee revenue yet" />
                 )}
               </GlassCard>
             </div>
@@ -1611,6 +1706,41 @@ const AdminDashboardScreen = () => {
           <TabsContent value="support" className="space-y-5">
             <GlassCard>
               <SectionHeader
+                icon={Flag}
+                title="Moderation Reports"
+                description="Player and creator reports awaiting review"
+                action={<Button size="sm" variant="outline" onClick={() => navigate("/admin/moderation")}>Open Center</Button>}
+              />
+              <div className="grid gap-3 lg:grid-cols-2">
+                {(dashboard.tables.recentReports || []).length === 0 ? (
+                  <div className="rounded-lg border border-glass-border py-8 text-center text-sm text-muted-foreground lg:col-span-2">
+                    No moderation reports yet
+                  </div>
+                ) : (
+                  (dashboard.tables.recentReports || []).map((report) => (
+                    <button
+                      key={report._id}
+                      type="button"
+                      onClick={() => navigate("/admin/moderation")}
+                      className="rounded-lg border border-glass-border bg-card/40 p-3 text-left transition-colors hover:border-secondary/50"
+                    >
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <StatusBadge value={report.status} />
+                        <span className="font-heading text-[10px] uppercase text-secondary">{cleanLabel(report.severity)}</span>
+                        <span className="rounded-full bg-muted/60 px-2 py-1 font-heading text-[10px] text-muted-foreground">{cleanLabel(report.category)}</span>
+                      </div>
+                      <p className="truncate font-heading text-sm font-bold">{report.title || "Moderation report"}</p>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        {report.reporter?.username || "User"} {report.tournament?.title ? `- ${report.tournament.title}` : ""}
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </GlassCard>
+
+            <GlassCard>
+              <SectionHeader
                 icon={Ticket}
                 title="Latest Tickets"
                 description="Newest support issues needing team attention"
@@ -1672,7 +1802,7 @@ const AdminDashboardScreen = () => {
                 </div>
               ) : (
                 <div className="space-y-5">
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                     <div className="rounded-lg border border-glass-border bg-card/50 p-4">
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <p className="font-heading text-[10px] uppercase text-muted-foreground">Backend</p>
@@ -1709,6 +1839,16 @@ const AdminDashboardScreen = () => {
                       <p className="font-heading text-2xl font-bold">{formatNumber(monitoring.frontend.eventsTotal)}</p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {formatNumber(monitoring.frontend.errorsTotal)} errors, {formatNumber(monitoring.frontend.performanceSamples)} perf samples
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-glass-border bg-card/50 p-4">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="font-heading text-[10px] uppercase text-muted-foreground">Realtime</p>
+                        <Activity className="h-4 w-4 text-secondary" />
+                      </div>
+                      <p className="font-heading text-2xl font-bold">{formatNumber(monitoring.realtime?.onlineUsers)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatNumber(monitoring.realtime?.connectedSockets)} sockets - Redis {monitoring.realtime?.redisAdapter ? "on" : "off"}
                       </p>
                     </div>
                   </div>

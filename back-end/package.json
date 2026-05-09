@@ -12,6 +12,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
     "compression": "^1.8.1",
@@ -32,6 +33,7 @@
     "passport-google-oauth2": "^0.2.0",
     "prettier": "^3.6.2",
     "razorpay": "^2.9.6",
+    "redis": "^5.12.1",
     "resend": "^6.12.3",
     "socket.io": "^4.8.3",
     "twilio": "^5.10.2",

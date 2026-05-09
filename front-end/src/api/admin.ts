@@ -51,7 +51,11 @@ export interface AdminDashboardData {
     registrations: number;
     verifiedGameAccounts: number;
     openTickets: number;
+    totalReports?: number;
+    openReports?: number;
+    highSeverityReports?: number;
     successfulPayments: number;
+    totalDeposits: number;
     totalRevenue: number;
     walletCredits: number;
     walletDebits: number;
@@ -63,11 +67,16 @@ export interface AdminDashboardData {
     failedRazorpayPayments: number;
     pendingCreatorRequests: number;
     adminAuditCount: number;
+    pendingWithdrawals?: number;
+    suspiciousActivity?: number;
+    onlineUsers?: number;
+    connectedSockets?: number;
   };
   charts: {
     usersByDay: DailyCount[];
     tournamentsByDay: DailyCount[];
     revenueByDay: DailyRevenue[];
+    depositVolumeByDay?: DailyRevenue[];
     tournamentsByStatus: CountBucket[];
     tournamentsByGame: CountBucket[];
     paymentsByStatus: CountBucket[];
@@ -82,11 +91,20 @@ export interface AdminDashboardData {
       pendingPrizes?: number;
     };
   };
+  risk?: {
+    failedPayments?: number;
+    pendingWithdrawals?: number;
+    openDisputes?: number;
+    unpaidCompletedTournaments?: number;
+    highValueDebits?: number;
+    suspiciousActivity?: number;
+  };
   tables: {
     topCreators: TopCreator[];
     recentTournaments: RecentTournament[];
     recentUsers: RecentUser[];
     recentTickets: RecentTicket[];
+    recentReports?: RecentReport[];
     creatorRequests: RecentUser[];
     recentAdminAuditLogs: AdminAuditLog[];
     recentFinanceTransactions: AdminFinanceTransaction[];
@@ -241,6 +259,11 @@ export interface AdminMonitoringData {
     nodeEnv: string;
     pid: number;
   };
+  realtime?: {
+    onlineUsers: number;
+    connectedSockets: number;
+    redisAdapter: boolean;
+  };
   backend: {
     requests: {
       total: number;
@@ -373,6 +396,9 @@ export interface RecentUser {
     reviewedAt?: string;
     note?: string;
   };
+  accountStatus?: "active" | "suspended" | "muted" | "banned";
+  suspendedUntil?: string | null;
+  mutedUntil?: string | null;
   isActive?: boolean;
   createdAt?: string;
 }
@@ -386,6 +412,25 @@ export interface RecentTicket {
   user?: {
     username?: string;
     phone_number?: string;
+  };
+}
+
+export interface RecentReport {
+  _id: string;
+  title?: string;
+  category?: string;
+  targetType?: string;
+  severity?: string;
+  status?: string;
+  createdAt?: string;
+  reporter?: {
+    username?: string;
+    role?: string[];
+  };
+  tournament?: {
+    title?: string;
+    game?: string;
+    status?: string;
   };
 }
 
@@ -427,6 +472,17 @@ export async function markWithdrawalPaid(id: string, payload: { payoutReference?
 
 export async function updateCreatorPermission(id: string, payload: { status: "approved" | "rejected" | "removed"; note?: string }) {
   return apiFetch<ApiResponse<{ user: Record<string, unknown> }>>(`/admin/users/${id}/creator`, {
+    method: "PATCH",
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminUserStatus(
+  id: string,
+  payload: { action: "ban" | "unban" | "suspend" | "mute" | "activate"; note?: string; durationHours?: number },
+) {
+  return apiFetch<ApiResponse<{ user: Record<string, unknown> }>>(`/admin/users/${id}/moderation`, {
     method: "PATCH",
     credentials: "include",
     body: JSON.stringify(payload),

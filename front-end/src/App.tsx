@@ -41,6 +41,7 @@ const CreatorDashboardScreen = lazy(() => import("./pages/CreatorDashboardScreen
 const PrizeDistributionScreen = lazy(() => import("./pages/PrizeDistributionScreen.tsx"));
 const AdminDashboardScreen = lazy(() => import("./pages/AdminDashboardScreen.tsx"));
 const AdminDetailScreen = lazy(() => import("./pages/AdminDetailScreen.tsx"));
+const AdminModerationScreen = lazy(() => import("./pages/AdminModerationScreen.tsx"));
 const NotificationsScreen = lazy(() => import("./pages/NotificationsScreen.tsx"));
 const SubscriptionsScreen = lazy(() => import("./pages/SubscriptionsScreen.tsx"));
 const TournamentCommentsScreen = lazy(() => import("./pages/TournamentCommentsScreen.tsx"));
@@ -132,6 +133,7 @@ const App = () => (
                   <Route path="/edit-tournament/:id" element={<CreateTournamentScreen />} />
                   <Route path="/creator-dashboard" element={<CreatorDashboardScreen />} />
                   <Route path="/admin" element={<AdminDashboardScreen />} />
+                  <Route path="/admin/moderation" element={<AdminModerationScreen />} />
                   <Route path="/admin/details/:section" element={<AdminDetailScreen />} />
                   <Route path="/notifications" element={<NotificationsScreen />} />
                   <Route path="/subscriptions" element={<SubscriptionsScreen />} />

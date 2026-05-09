@@ -47,3 +47,15 @@ export const walletLimiter = makeRateLimit({
     max: toNumber(process.env.RATE_LIMIT_WALLET_MAX, 30),
     message: "Too many wallet requests. Please wait a moment before trying again.",
 });
+
+export const reportLimiter = makeRateLimit({
+    windowMs: toNumber(process.env.RATE_LIMIT_REPORT_WINDOW_MS, 10 * 60 * 1000),
+    max: toNumber(process.env.RATE_LIMIT_REPORT_MAX, 8),
+    message: "Too many reports submitted. Please wait before reporting again.",
+});
+
+export const moderationLimiter = makeRateLimit({
+    windowMs: toNumber(process.env.RATE_LIMIT_MODERATION_WINDOW_MS, 10 * 60 * 1000),
+    max: toNumber(process.env.RATE_LIMIT_MODERATION_MAX, 60),
+    message: "Too many moderation actions. Please slow down and try again shortly.",
+});

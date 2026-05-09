@@ -5,7 +5,7 @@ import { Notification } from "../models/notification.model.js";
 import { PushSubscription } from "../models/pushSubscription.model.js";
 import { createNotification, getPushPublicKey } from "../services/notification.service.js";
 
-const allowedTypes = ["system", "wallet", "tournament", "tournament_update", "reward", "security", "creator", "room", "payment"];
+const allowedTypes = ["system", "wallet", "tournament", "tournament_update", "reward", "security", "creator", "room", "payment", "report", "moderation"];
 
 const buildNotificationQuery = (req) => {
     const query = { user: req.user._id };

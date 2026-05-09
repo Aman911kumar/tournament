@@ -7,7 +7,7 @@ import NeonButton from "@/components/NeonButton";
 import { getMyTournamentRegistrations, getTournamentById, Tournament, TournamentRegistration } from "@/api/tournaments";
 import { formatCurrency, getErrorMessage } from "@/lib/page-utils";
 import { CACHE_KEYS, readCache, writeAuthenticatedCache, writeCache } from "@/lib/offline-cache";
-import { createSupportTicket, SupportReason } from "@/api/support";
+import { createReport, ReportCategory } from "@/api/moderation";
 import { toast } from "@/components/ui/sonner";
 
 const gameLabels: Record<string, string> = {
@@ -34,7 +34,7 @@ const TournamentDetailScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [reportOpen, setReportOpen] = useState(false);
-  const [reportReason, setReportReason] = useState<SupportReason>("cheating");
+  const [reportReason, setReportReason] = useState<ReportCategory>("cheating");
   const [reportDescription, setReportDescription] = useState("");
   const [reportProof, setReportProof] = useState("");
   const [reportTargetUser, setReportTargetUser] = useState("");
@@ -174,16 +174,15 @@ const TournamentDetailScreen = () => {
 
     try {
       setSubmittingReport(true);
-      const isDispute = reportReason === "payout_not_distributed" || reportReason === "wrong_payout";
-      await createSupportTicket({
-        title: isDispute ? `Prize dispute: ${tournament.title}` : `Player report: ${tournament.title}`,
-        description: reportDescription.trim(),
-        type: isDispute ? "dispute" : "report",
-        reason: reportReason,
+      await createReport({
+        title: `Tournament report: ${tournament.title}`,
+        targetType: reportTargetUser ? "player" : "tournament",
+        category: reportReason,
+        message: reportDescription.trim(),
         tournament: tournament._id,
-        targetUser: reportTargetUser || undefined,
+        reportedUser: reportTargetUser || undefined,
         evidence: { matchProof: reportProof.trim() },
-        priority: isDispute || reportReason === "cheating" ? "high" : "normal",
+        severity: ["cheating", "fraud_scam", "payout_not_distributed", "wrong_payout"].includes(reportReason) ? "high" : "medium",
       });
       toast.success("Report submitted", { description: "Admin will review the report and update the status." });
       setReportOpen(false);
@@ -558,15 +557,18 @@ const TournamentDetailScreen = () => {
                   <span className="text-[10px] font-heading text-muted-foreground">Reason</span>
                   <select
                     value={reportReason}
-                    onChange={(event) => setReportReason(event.target.value as SupportReason)}
+                    onChange={(event) => setReportReason(event.target.value as ReportCategory)}
                     className="mt-1 w-full rounded-lg border border-glass-border bg-background px-3 py-2 text-xs font-heading"
                   >
                     <option value="cheating">Player cheating</option>
-                    <option value="fake_result">Fake or wrong result</option>
+                    <option value="fake_results">Fake or wrong result</option>
                     <option value="payout_not_distributed">Creator did not distribute prize</option>
                     <option value="wrong_payout">Wrong payout amount</option>
                     <option value="room_details_issue">Room ID/password issue</option>
                     <option value="abusive_behavior">Abusive behavior</option>
+                    <option value="spam">Spam</option>
+                    <option value="fraud_scam">Fraud / scam</option>
+                    <option value="inappropriate_content">Inappropriate content</option>
                     <option value="other">Other</option>
                   </select>
                 </label>

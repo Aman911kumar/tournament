@@ -12,6 +12,8 @@ import { WalletTransaction } from "../models/walletTransaction.model.js";
 import { SupportTicket } from "../models/SupportTicket.model.js";
 import { GameAccount } from "../models/gameAccount.model.js";
 import { Report } from "../models/report.model.js";
+import { TournamentBan } from "../models/tournamentBan.model.js";
+import { ModerationAction } from "../models/moderationAction.model.js";
 import { Notification } from "../models/notification.model.js";
 import { Leaderboard } from "../models/leaderboad.model.js";
 import { Ledger } from "../models/ledger.model.js";
@@ -22,6 +24,8 @@ import { creditWallet } from "../services/wallet.service.js";
 import { expireStaleRazorpayPayments } from "../services/paymentExpiry.service.js";
 import { getMonitoringSnapshot } from "../services/monitoring.service.js";
 import { createNotification } from "../services/notification.service.js";
+import { getSocketStats } from "../services/socket.service.js";
+import { deleteCacheByPrefix, getCache, setCache } from "../services/cache.service.js";
 
 const adminCollections = {
     users: { model: User, label: "Users", sort: { createdAt: -1 } },
@@ -38,6 +42,8 @@ const adminCollections = {
     leaderboards: { model: Leaderboard, label: "Leaderboards", sort: { createdAt: -1 } },
     tickets: { model: SupportTicket, label: "Support Tickets", sort: { createdAt: -1 } },
     reports: { model: Report, label: "Reports", sort: { createdAt: -1 } },
+    tournamentBans: { model: TournamentBan, label: "Tournament Bans", sort: { createdAt: -1 } },
+    moderationActions: { model: ModerationAction, label: "Moderation Actions", sort: { createdAt: -1 } },
     notifications: { model: Notification, label: "Notifications", sort: { createdAt: -1 } },
     adminAuditLogs: { model: AdminAuditLog, label: "Admin Audit Logs", sort: { createdAt: -1 } },
 };
@@ -125,8 +131,26 @@ const adminCollectionPopulates = {
         { path: "tournament", select: "title game status" },
     ],
     reports: [
-        { path: "user", select: "username phone_number email" },
+        { path: "reporter", select: "username phone_number email avatar role" },
+        { path: "createdBy", select: "username phone_number email avatar role" },
+        { path: "reportedUser", select: "username phone_number email avatar role accountStatus" },
+        { path: "reportedCreator", select: "username phone_number email avatar role accountStatus" },
         { path: "tournament", select: "title game status" },
+        { path: "reviewedBy", select: "username phone_number email avatar role" },
+    ],
+    tournamentBans: [
+        { path: "tournament", select: "title game status" },
+        { path: "creator", select: "username phone_number email avatar" },
+        { path: "player", select: "username phone_number email avatar accountStatus" },
+        { path: "bannedBy", select: "username phone_number email role" },
+        { path: "revokedBy", select: "username phone_number email role" },
+    ],
+    moderationActions: [
+        { path: "actor", select: "username phone_number email role avatar" },
+        { path: "targetUser", select: "username phone_number email role avatar accountStatus" },
+        { path: "tournament", select: "title game status" },
+        { path: "report", select: "title category status severity" },
+        { path: "ban", select: "status reason expiresAt" },
     ],
     notifications: [{ path: "user", select: "username phone_number email" }],
     adminAuditLogs: [
@@ -361,8 +385,12 @@ const getWindowStart = (days) => {
 };
 
 const ADMIN_DASHBOARD_CACHE_MS = 10 * 1000;
-const adminDashboardCache = new Map();
-const clearAdminDashboardCache = () => adminDashboardCache.clear();
+const ADMIN_DASHBOARD_CACHE_PREFIX = "admin:dashboard:";
+const clearAdminDashboardCache = () => {
+    deleteCacheByPrefix(ADMIN_DASHBOARD_CACHE_PREFIX).catch((error) => {
+        console.error("Failed to clear admin dashboard cache:", error.message);
+    });
+};
 
 const fillDailySeries = (rows, days, start, valueKeys = ["count"]) => {
     const rowMap = new Map(rows.map((row) => [row._id, row]));
@@ -459,13 +487,13 @@ const getUserDashboardData = (start) => User.aggregate([
             recent: [
                 { $sort: { createdAt: -1 } },
                 { $limit: 6 },
-                { $project: { username: 1, phone_number: 1, email: 1, role: 1, isActive: 1, creatorRequest: 1, createdAt: 1 } }
+                { $project: { username: 1, phone_number: 1, email: 1, role: 1, accountStatus: 1, suspendedUntil: 1, mutedUntil: 1, isActive: 1, creatorRequest: 1, createdAt: 1 } }
             ],
             creatorRequests: [
                 { $match: { "creatorRequest.status": "pending" } },
                 { $sort: { "creatorRequest.requestedAt": -1, createdAt: -1 } },
                 { $limit: 8 },
-                { $project: { username: 1, phone_number: 1, email: 1, role: 1, creatorRequest: 1, createdAt: 1 } }
+                { $project: { username: 1, phone_number: 1, email: 1, role: 1, accountStatus: 1, creatorRequest: 1, createdAt: 1 } }
             ]
         }
     }
@@ -586,7 +614,7 @@ const getPaymentDashboardData = (start) => Payment.aggregate([
         $facet: {
             revenue: [
                 { $match: { status: "success", "meta.purpose": { $ne: "withdrawal" } } },
-                { $group: { _id: null, successfulPayments: { $sum: 1 }, totalRevenue: { $sum: "$amount" } } }
+                { $group: { _id: null, successfulPayments: { $sum: 1 }, totalDeposits: { $sum: "$amount" } } }
             ],
             byDay: [
                 { $match: { status: "success", "meta.purpose": { $ne: "withdrawal" }, createdAt: { $gte: start } } },
@@ -620,13 +648,18 @@ const getWalletFlowDashboardData = () => WalletTransaction.aggregate([
     }
 ]);
 
-const getLedgerDashboardData = () => Ledger.aggregate([
+const getLedgerDashboardData = (start) => Ledger.aggregate([
     {
         $facet: {
             totalCount: [{ $count: "count" }],
             platformFeeTotals: [
                 { $match: { status: "SUCCESS", creditAccount: "PLATFORM_FEE" } },
                 { $group: { _id: null, amount: { $sum: "$amount" }, count: { $sum: 1 } } }
+            ],
+            platformFeesByDay: [
+                { $match: { status: "SUCCESS", creditAccount: "PLATFORM_FEE", createdAt: { $gte: start } } },
+                { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, amount: { $sum: "$amount" }, count: { $sum: 1 } } },
+                { $sort: { _id: 1 } }
             ],
             platformFeesByCategory: [
                 { $match: { status: "SUCCESS", creditAccount: "PLATFORM_FEE" } },
@@ -683,6 +716,48 @@ const getSupportDashboardData = () => SupportTicket.aggregate([
                 },
                 { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
                 { $project: { title: 1, type: 1, status: 1, user: 1, createdAt: 1 } }
+            ]
+        }
+    }
+]);
+
+const getReportDashboardData = () => Report.aggregate([
+    {
+        $facet: {
+            totals: [
+                {
+                    $group: {
+                        _id: null,
+                        totalReports: { $sum: 1 },
+                        openReports: { $sum: { $cond: [{ $in: ["$status", ["open", "under_review"]] }, 1, 0] } },
+                        highSeverityReports: { $sum: { $cond: [{ $in: ["$severity", ["high", "critical"]] }, 1, 0] } },
+                    }
+                }
+            ],
+            recent: [
+                { $sort: { createdAt: -1 } },
+                { $limit: 6 },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "reporter",
+                        foreignField: "_id",
+                        pipeline: [{ $project: { username: 1, avatar: 1, role: 1 } }],
+                        as: "reporter"
+                    }
+                },
+                {
+                    $lookup: {
+                        from: "tournaments",
+                        localField: "tournament",
+                        foreignField: "_id",
+                        pipeline: [{ $project: { title: 1, game: 1, status: 1 } }],
+                        as: "tournament"
+                    }
+                },
+                { $unwind: { path: "$reporter", preserveNullAndEmptyArrays: true } },
+                { $unwind: { path: "$tournament", preserveNullAndEmptyArrays: true } },
+                { $project: { title: 1, category: 1, targetType: 1, severity: 1, status: 1, reporter: 1, tournament: 1, createdAt: 1 } }
             ]
         }
     }
@@ -766,14 +841,49 @@ const getAuditDashboardData = () => AdminAuditLog.aggregate([
     }
 ]);
 
+const getRiskDashboardData = async (start) => {
+    const [
+        failedPayments,
+        pendingWithdrawals,
+        openDisputes,
+        unpaidCompletedTournaments,
+        highValueDebits,
+    ] = await Promise.all([
+        Payment.countDocuments({ status: "failed", createdAt: { $gte: start } }),
+        Payment.countDocuments({ "meta.purpose": "withdrawal", status: { $in: ["initiated", "pending"] } }),
+        SupportTicket.countDocuments({ type: { $in: ["dispute", "report"] }, status: { $in: ["open", "in_progress"] } }),
+        Tournament.countDocuments({
+            status: "completed",
+            $or: [
+                { results: { $exists: false } },
+                { results: { $size: 0 } }
+            ]
+        }),
+        WalletTransaction.countDocuments({
+            type: "DEBIT",
+            amount: { $gte: Number(process.env.ADMIN_HIGH_VALUE_DEBIT_ALERT || 5000) },
+            createdAt: { $gte: start }
+        }),
+    ]);
+
+    return {
+        failedPayments,
+        pendingWithdrawals,
+        openDisputes,
+        unpaidCompletedTournaments,
+        highValueDebits,
+        suspiciousActivity: failedPayments + pendingWithdrawals + openDisputes + unpaidCompletedTournaments + highValueDebits,
+    };
+};
+
 const getAdminDashboard = asyncHandler(async (req, res) => {
     const { start, days } = getWindowStart(req.query.days);
-    const cacheKey = String(days);
-    const cached = adminDashboardCache.get(cacheKey);
+    const cacheKey = `${ADMIN_DASHBOARD_CACHE_PREFIX}${days}`;
+    const cached = await getCache(cacheKey);
 
-    if (cached && Date.now() - cached.createdAt < ADMIN_DASHBOARD_CACHE_MS) {
+    if (cached) {
         return res.status(200).json(
-            new ApiResponse(200, cached.data, "Admin dashboard fetched successfully")
+            new ApiResponse(200, cached, "Admin dashboard fetched successfully")
         );
     }
 
@@ -786,8 +896,10 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
         walletFlowRows,
         ledgerDashboardRows,
         supportDashboardRows,
+        reportDashboardRows,
         channelDashboardRows,
         auditDashboardRows,
+        riskDashboard,
         totalTeams,
         totalRegistrations,
         verifiedGameAccounts,
@@ -797,10 +909,12 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
         getTournamentDashboardData(start),
         getPaymentDashboardData(start),
         getWalletFlowDashboardData(),
-        getLedgerDashboardData(),
+        getLedgerDashboardData(start),
         getSupportDashboardData(),
+        getReportDashboardData(),
         getChannelDashboardData(),
         getAuditDashboardData(),
+        getRiskDashboardData(start),
         Team.countDocuments(),
         Registration.countDocuments(),
         GameAccount.countDocuments({ verified: true }),
@@ -812,6 +926,7 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
     const paymentDashboard = firstFacetRow(paymentDashboardRows);
     const ledgerDashboard = firstFacetRow(ledgerDashboardRows);
     const supportDashboard = firstFacetRow(supportDashboardRows);
+    const reportDashboard = firstFacetRow(reportDashboardRows);
     const channelDashboard = firstFacetRow(channelDashboardRows);
     const auditDashboard = firstFacetRow(auditDashboardRows);
 
@@ -823,18 +938,21 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
     const ledgerTotals = firstFacetRow(ledgerDashboard.platformFeeTotals, {});
     const channelTotals = firstFacetRow(channelDashboard.totals, {});
     const supportTotals = firstFacetRow(supportDashboard.totals, {});
+    const reportTotals = firstFacetRow(reportDashboard.totals, {});
     const auditTotals = firstFacetRow(auditDashboard.totals, {});
     const walletFlow = walletFlowRows.reduce((totals, row) => ({
         ...totals,
         [row._id]: Number(row.amount || 0)
     }), {});
 
-    const totalRevenue = Number(paymentTotals.totalRevenue || 0);
+    const totalDeposits = Number(paymentTotals.totalDeposits || paymentTotals.totalRevenue || 0);
     const successfulPayments = Number(paymentTotals.successfulPayments || 0);
     const totalCredits = Number(walletFlow.CREDIT || 0);
     const totalDebits = Number(walletFlow.DEBIT || 0);
     const totalPlatformFees = Number(ledgerTotals.amount || 0);
+    const totalRevenue = totalPlatformFees;
     const platformFeeTransactionCount = Number(ledgerTotals.count || 0);
+    const socketStats = getSocketStats();
 
     const dashboardData = {
                 range: { days, start, end: new Date() },
@@ -855,7 +973,11 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
                     registrations: totalRegistrations,
                     verifiedGameAccounts,
                     openTickets: Number(supportTotals.openTickets || 0),
+                    totalReports: Number(reportTotals.totalReports || 0),
+                    openReports: Number(reportTotals.openReports || 0),
+                    highSeverityReports: Number(reportTotals.highSeverityReports || 0),
                     successfulPayments,
+                    totalDeposits,
                     totalRevenue,
                     walletCredits: totalCredits,
                     walletDebits: totalDebits,
@@ -866,12 +988,17 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
                     pendingRazorpayPayments: Number(razorpayTotals.pendingRazorpayPayments || 0),
                     failedRazorpayPayments: Number(razorpayTotals.failedRazorpayPayments || 0),
                     pendingCreatorRequests: Number(userTotals.pendingCreatorRequests || 0),
-                    adminAuditCount: Number(auditTotals.count || 0)
+                    adminAuditCount: Number(auditTotals.count || 0),
+                    pendingWithdrawals: Number(riskDashboard.pendingWithdrawals || 0),
+                    suspiciousActivity: Number(riskDashboard.suspiciousActivity || 0),
+                    onlineUsers: Number(socketStats.onlineUsers || 0),
+                    connectedSockets: Number(socketStats.sockets || 0)
                 },
                 charts: {
                     usersByDay: fillDailySeries(userDashboard.byDay || [], days, start),
                     tournamentsByDay: fillDailySeries(tournamentDashboard.byDay || [], days, start),
-                    revenueByDay: fillDailySeries(paymentDashboard.byDay || [], days, start, ["amount", "count"]),
+                    revenueByDay: fillDailySeries(ledgerDashboard.platformFeesByDay || [], days, start, ["amount", "count"]),
+                    depositVolumeByDay: fillDailySeries(paymentDashboard.byDay || [], days, start, ["amount", "count"]),
                     tournamentsByStatus: tournamentDashboard.byStatus || [],
                     tournamentsByGame: tournamentDashboard.byGame || [],
                     paymentsByStatus: paymentDashboard.byStatus || [],
@@ -886,18 +1013,27 @@ const getAdminDashboard = asyncHandler(async (req, res) => {
                         pendingPrizes: Number(tournamentFinance.pendingPrizes || 0),
                     }
                 },
+                risk: {
+                    failedPayments: Number(riskDashboard.failedPayments || 0),
+                    pendingWithdrawals: Number(riskDashboard.pendingWithdrawals || 0),
+                    openDisputes: Number(riskDashboard.openDisputes || 0),
+                    unpaidCompletedTournaments: Number(riskDashboard.unpaidCompletedTournaments || 0),
+                    highValueDebits: Number(riskDashboard.highValueDebits || 0),
+                    suspiciousActivity: Number(riskDashboard.suspiciousActivity || 0),
+                },
                 tables: {
                     topCreators: channelDashboard.topCreators || [],
                     recentTournaments: tournamentDashboard.recent || [],
                     recentUsers: userDashboard.recent || [],
                     recentTickets: supportDashboard.recent || [],
+                    recentReports: reportDashboard.recent || [],
                     creatorRequests: userDashboard.creatorRequests || [],
                     recentAdminAuditLogs: auditDashboard.recent || [],
                     recentFinanceTransactions: ledgerDashboard.recent || []
                 }
             };
 
-    adminDashboardCache.set(cacheKey, { createdAt: Date.now(), data: dashboardData });
+    await setCache(cacheKey, dashboardData, ADMIN_DASHBOARD_CACHE_MS);
 
     return res.status(200).json(
         new ApiResponse(200, dashboardData, "Admin dashboard fetched successfully")
@@ -1091,6 +1227,131 @@ const updateCreatorPermission = asyncHandler(async (req, res) => {
     );
 });
 
+const updateUserModerationStatus = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { action, note = "", durationHours = 24 } = req.body;
+    const allowedActions = ["ban", "unban", "suspend", "mute", "activate"];
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw new ApiError(400, "Valid user ID is required");
+    }
+
+    if (!allowedActions.includes(action)) {
+        throw new ApiError(400, "Moderation action must be ban, unban, suspend, mute, or activate");
+    }
+
+    if (id === req.user._id.toString() && ["ban", "suspend"].includes(action)) {
+        throw new ApiError(400, "You cannot perform this action on your own admin account");
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+        throw new ApiError(404, "User not found");
+    }
+
+    const previous = {
+        role: Array.isArray(user.role) ? [...user.role] : [],
+        isActive: user.isActive,
+        accountStatus: user.accountStatus || "active",
+        suspendedUntil: user.suspendedUntil,
+        mutedUntil: user.mutedUntil,
+    };
+    const adminNote = String(note || "").trim().slice(0, 500);
+    const safeDurationHours = Math.min(Math.max(Number(durationHours) || 24, 1), 24 * 30);
+    const until = new Date(Date.now() + safeDurationHours * 60 * 60 * 1000);
+    const roles = Array.isArray(user.role) ? user.role : [user.role].filter(Boolean);
+
+    if (action === "ban") {
+        user.role = [...new Set([...roles, "banned"])];
+        user.accountStatus = "banned";
+        user.isActive = false;
+        user.suspendedUntil = null;
+        user.mutedUntil = null;
+    }
+
+    if (action === "unban" || action === "activate") {
+        const nextRoles = roles.filter((role) => role !== "banned");
+        user.role = nextRoles.length ? nextRoles : ["user"];
+        user.accountStatus = "active";
+        user.isActive = true;
+        user.suspendedUntil = null;
+        user.mutedUntil = null;
+    }
+
+    if (action === "suspend") {
+        user.accountStatus = "suspended";
+        user.isActive = true;
+        user.suspendedUntil = until;
+    }
+
+    if (action === "mute") {
+        user.accountStatus = "muted";
+        user.isActive = true;
+        user.mutedUntil = until;
+    }
+
+    user.moderationNote = adminNote;
+    await user.save({ validateBeforeSave: false });
+    const actionTitles = {
+        ban: "Account banned",
+        suspend: "Account suspended",
+        mute: "Account muted",
+        activate: "Account restored",
+        unban: "Account restored",
+    };
+
+    await Promise.all([
+        AdminAuditLog.create({
+            actor: req.user._id,
+            targetUser: user._id,
+            action: `user_${action}`,
+            entity: "user",
+            entityId: user._id,
+            note: adminNote,
+            metadata: {
+                previous,
+                next: {
+                    role: user.role,
+                    isActive: user.isActive,
+                    accountStatus: user.accountStatus,
+                    suspendedUntil: user.suspendedUntil,
+                    mutedUntil: user.mutedUntil,
+                },
+                durationHours: ["suspend", "mute"].includes(action) ? safeDurationHours : undefined,
+            },
+        }),
+        createNotification({
+            user: user._id,
+            title: actionTitles[action],
+            body: adminNote || (
+                action === "suspend"
+                    ? `Your account is suspended until ${until.toLocaleString("en-IN")}.`
+                    : action === "mute"
+                        ? `Your account is muted until ${until.toLocaleString("en-IN")}.`
+                        : action === "ban"
+                            ? "Your account has been banned by admin."
+                            : "Your account restrictions were removed."
+            ),
+            type: "security",
+            priority: ["ban", "suspend"].includes(action) ? "high" : "normal",
+            actionUrl: "/profile",
+            email: ["ban", "suspend", "activate", "unban"].includes(action),
+        }).catch((error) => {
+            console.error("Failed to notify moderated user:", error.message);
+        }),
+    ]);
+
+    clearAdminDashboardCache();
+
+    const updatedUser = await User.findById(user._id)
+        .populate("creatorRequest.reviewedBy", "username phone_number email")
+        .select("-password -refreshToken -accessToken");
+
+    return res.status(200).json(
+        new ApiResponse(200, { user: updatedUser }, "User moderation status updated")
+    );
+});
+
 const getAdminCollections = asyncHandler(async (req, res) => {
     const collections = await Promise.all(
         Object.entries(adminCollections).map(async ([key, config]) => ({
@@ -1128,6 +1389,7 @@ const getAdminCollectionRecords = asyncHandler(async (req, res) => {
                 { email: { $regex: search, $options: "i" } },
                 { phone_number: { $regex: search, $options: "i" } },
                 { status: { $regex: search, $options: "i" } },
+                { accountStatus: { $regex: search, $options: "i" } },
                 { type: { $regex: search, $options: "i" } },
                 { game: { $regex: search, $options: "i" } },
                 { gameId: { $regex: search, $options: "i" } },
@@ -1292,6 +1554,7 @@ export {
     getWithdrawalRequests,
     updateWithdrawalStatus,
     updateCreatorPermission,
+    updateUserModerationStatus,
     getAdminCollections,
     getAdminCollectionRecords,
     getAdminUserTransactionHistory,

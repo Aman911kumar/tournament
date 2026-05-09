@@ -29,6 +29,8 @@ const typeIcon: Record<NotificationType, typeof Bell> = {
   creator: Sparkles,
   reward: Sparkles,
   security: Shield,
+  report: Shield,
+  moderation: Shield,
 };
 
 const typeColor: Record<NotificationType, string> = {
@@ -41,6 +43,8 @@ const typeColor: Record<NotificationType, string> = {
   creator: "text-primary",
   reward: "text-accent",
   security: "text-destructive",
+  report: "text-secondary",
+  moderation: "text-destructive",
 };
 
 const formatTime = (value: string) => {

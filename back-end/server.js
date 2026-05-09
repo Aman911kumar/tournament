@@ -15,7 +15,8 @@ import sanitizeRequest from './src/middlewares/sanitizeRequest.middleware.js';
 import ApiError from './src/utils/ApiError.js';
 import path from "path";
 import { expireStaleRazorpayPayments } from './src/services/paymentExpiry.service.js';
-import { initSocket } from './src/services/socket.service.js';
+import { emitToAdmins, initSocket } from './src/services/socket.service.js';
+import { getMonitoringSnapshot } from './src/services/monitoring.service.js';
 
 const __dirname = path.resolve();
 const distPath = path.join(__dirname, "dist");
@@ -26,6 +27,7 @@ const httpServer = createServer(app);
 const serverPort = PORT || 8000;
 let paymentExpiryRunning = false;
 let paymentExpiryTimer = null;
+let adminMonitoringTimer = null;
 
 const runPaymentExpiry = async () => {
     if (paymentExpiryRunning) return;
@@ -42,6 +44,7 @@ const runPaymentExpiry = async () => {
 const shutdown = (signal) => {
     console.log(`${signal} received. Shutting down gracefully...`);
     if (paymentExpiryTimer) clearInterval(paymentExpiryTimer);
+    if (adminMonitoringTimer) clearInterval(adminMonitoringTimer);
     httpServer.close(async () => {
         await mongoose.connection.close(false).catch((error) => {
             console.error("MongoDB close failed:", error);
@@ -138,6 +141,10 @@ connect_db()
         runPaymentExpiry();
         paymentExpiryTimer = setInterval(runPaymentExpiry, 60 * 1000);
         paymentExpiryTimer.unref?.();
+        adminMonitoringTimer = setInterval(() => {
+            emitToAdmins("admin:monitoring", getMonitoringSnapshot());
+        }, Number(process.env.ADMIN_MONITORING_PUSH_MS || 10_000));
+        adminMonitoringTimer.unref?.();
 
         httpServer.listen(serverPort, () => {
             console.log(`Server is listening on http://localhost:${serverPort}`);

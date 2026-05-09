@@ -12,7 +12,9 @@ import {
   Eye,
   EyeOff,
   Bell,
+  Flag,
   KeyRound,
+  LoaderCircle,
   Lock,
   PieChart,
   PlayCircle,
@@ -22,11 +24,13 @@ import {
   Trash2,
   TrendingUp,
   Trophy,
+  UserX,
   Users,
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
-import { cancelTournament, deleteTournament, getTournaments, notifyTournamentRoom, Tournament, updateTournamentStatus, updateTournamentVisibility } from "@/api/tournaments";
+import { cancelTournament, deleteTournament, getParticipants, getTournaments, notifyTournamentRoom, Tournament, TournamentRegistration, updateTournamentStatus, updateTournamentVisibility } from "@/api/tournaments";
+import { banTournamentPlayer, createReport, getTournamentBans, TournamentBan, unbanTournamentPlayer } from "@/api/moderation";
 import { getMyProfile, User as ProfileUser } from "@/api/profile";
 import {
   Dialog,
@@ -97,12 +101,50 @@ const actionButtonClass = {
 const tournamentActionButtonBase =
   "inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[10px] font-heading font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50";
 
+type ModerationPlayer = {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  gameName?: string;
+  gameId?: string;
+  slotNumber?: number | null;
+  status?: string;
+};
+
 const getStatusActionToast = (status: Tournament["status"]) => {
   if (status === "open") return "Tournament published";
   if (status === "draft") return "Tournament moved to private";
   if (status === "completed") return "Tournament completed";
   if (status === "running") return "Tournament started";
   return "Tournament updated";
+};
+
+const getRegistrationPlayers = (registration: TournamentRegistration): ModerationPlayer[] => {
+  const slotNumber = registration.slotNumber ?? null;
+  const status = registration.status;
+  if (registration.user?._id) {
+    return [{
+      id: registration.user._id,
+      name: registration.user.username || "Player",
+      avatarUrl: registration.user.avatar?.url,
+      gameName: registration.user.gameAccount?.inGameName || registration.gameAccount?.inGameName,
+      gameId: registration.user.gameAccount?.gameId || registration.gameAccount?.gameId,
+      slotNumber,
+      status,
+    }];
+  }
+
+  return (registration.team || [])
+    .filter((member) => Boolean(member._id))
+    .map((member) => ({
+      id: member._id!,
+      name: member.username || "Player",
+      avatarUrl: member.avatar?.url,
+      gameName: member.gameAccount?.inGameName,
+      gameId: member.gameAccount?.gameId,
+      slotNumber,
+      status,
+    }));
 };
 
 const CreatorDashboardScreen = () => {
@@ -120,6 +162,11 @@ const CreatorDashboardScreen = () => {
   const [cancelTarget, setCancelTarget] = useState<Tournament | null>(null);
   const [cancelUsernameInput, setCancelUsernameInput] = useState("");
   const [cancelPhraseInput, setCancelPhraseInput] = useState("");
+  const [moderationTarget, setModerationTarget] = useState<Tournament | null>(null);
+  const [moderationParticipants, setModerationParticipants] = useState<TournamentRegistration[]>([]);
+  const [moderationBans, setModerationBans] = useState<TournamentBan[]>([]);
+  const [moderationLoading, setModerationLoading] = useState(false);
+  const [moderationActionId, setModerationActionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -264,6 +311,24 @@ const CreatorDashboardScreen = () => {
   const cancelConfirmReady = Boolean(cancelTarget && creatorProfile)
     && cancelUsernameInput.trim() === creatorProfile?.username
     && cancelPhraseInput.trim().toLowerCase() === CANCEL_TOURNAMENT_CONFIRM_TEXT;
+  const moderationPlayers = useMemo(() => {
+    const seen = new Set<string>();
+    return moderationParticipants.flatMap(getRegistrationPlayers).filter((player) => {
+      if (!player.id || seen.has(player.id)) return false;
+      seen.add(player.id);
+      return true;
+    });
+  }, [moderationParticipants]);
+  const activeBanByPlayer = useMemo(() => {
+    const rows = new Map<string, TournamentBan>();
+    moderationBans
+      .filter((ban) => ban.status === "active")
+      .forEach((ban) => {
+        const playerId = typeof ban.player === "string" ? ban.player : ban.player?._id;
+        if (playerId) rows.set(playerId, ban);
+      });
+    return rows;
+  }, [moderationBans]);
 
   const skeletonCards = (count: number, className = "h-20") =>
     Array.from({ length: count }).map((_, index) => (
@@ -286,6 +351,26 @@ const CreatorDashboardScreen = () => {
   const openCancelDialog = (tournament: Tournament) => {
     setCancelTarget(tournament);
     resetCancelDialog();
+  };
+
+  const openModerationDialog = async (tournament: Tournament) => {
+    setModerationTarget(tournament);
+    setModerationParticipants([]);
+    setModerationBans([]);
+    setModerationLoading(true);
+    try {
+      const [participants, bans] = await Promise.all([
+        getParticipants(tournament._id),
+        getTournamentBans(tournament._id).catch(() => ({ bans: [] })),
+      ]);
+      setModerationParticipants(participants);
+      setModerationBans(bans.bans || []);
+    } catch (error) {
+      const errorToast = getErrorToast(error, { action: "Load moderation roster", fallback: "Could not load players." });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setModerationLoading(false);
+    }
   };
 
   const updateRoomDraft = (tournamentId: string, field: "roomId" | "roomPass", value: string) => {
@@ -444,6 +529,82 @@ const CreatorDashboardScreen = () => {
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  const handleBanPlayer = async (player: ModerationPlayer) => {
+    if (!moderationTarget) return;
+    const reason = window.prompt(`Why are you banning ${player.name}?`)?.trim();
+    if (!reason) return;
+    const removeRegistration = window.confirm("Also remove this player's free/unpaid registration if backend allows it?");
+
+    try {
+      setModerationActionId(player.id);
+      const res = await banTournamentPlayer(moderationTarget._id, {
+        playerId: player.id,
+        reason,
+        note: reason,
+        removeRegistration,
+      });
+      setModerationBans((current) => [res.data, ...current.filter((ban) => {
+        const banPlayerId = typeof ban.player === "string" ? ban.player : ban.player?._id;
+        return banPlayerId !== player.id || ban.status !== "active";
+      })]);
+      toast.success("Player banned", { description: `${player.name} cannot join this tournament now.` });
+    } catch (error) {
+      const errorToast = getErrorToast(error, { action: "Ban player", fallback: "Could not ban player." });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setModerationActionId(null);
+    }
+  };
+
+  const handleUnbanPlayer = async (player: ModerationPlayer) => {
+    if (!moderationTarget) return;
+    const note = window.prompt(`Why are you unbanning ${player.name}?`)?.trim() || "";
+
+    try {
+      setModerationActionId(player.id);
+      await unbanTournamentPlayer(moderationTarget._id, player.id, note);
+      setModerationBans((current) => current.map((ban) => {
+        const banPlayerId = typeof ban.player === "string" ? ban.player : ban.player?._id;
+        return banPlayerId === player.id && ban.status === "active" ? { ...ban, status: "revoked" } : ban;
+      }));
+      toast.success("Player unbanned", { description: `${player.name} can join again.` });
+    } catch (error) {
+      const errorToast = getErrorToast(error, { action: "Unban player", fallback: "Could not unban player." });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setModerationActionId(null);
+    }
+  };
+
+  const handleReportPlayer = async (player: ModerationPlayer) => {
+    if (!moderationTarget) return;
+    const message = window.prompt(`What should admins review about ${player.name}?`)?.trim();
+    if (!message) return;
+    if (message.length < 12) {
+      toast.error("Add more details", { description: "Reports need at least 12 characters." });
+      return;
+    }
+
+    try {
+      setModerationActionId(player.id);
+      await createReport({
+        title: `Creator report: ${player.name}`,
+        targetType: "player",
+        category: "abusive_behavior",
+        message,
+        tournament: moderationTarget._id,
+        reportedUser: player.id,
+        severity: "medium",
+      });
+      toast.success("Player reported", { description: "Admin moderation can now review it." });
+    } catch (error) {
+      const errorToast = getErrorToast(error, { action: "Report player", fallback: "Could not report player." });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setModerationActionId(null);
     }
   };
 
@@ -856,6 +1017,17 @@ const CreatorDashboardScreen = () => {
                       Cancel
                     </motion.button>
                   )}
+                  {joinedCount > 0 && tournament.status !== "cancelled" && (
+                    <motion.button
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => openModerationDialog(tournament)}
+                      className={`${tournamentActionButtonBase} ${actionButtonClass.secondary}`}
+                      title="Moderate joined players"
+                    >
+                      <UserX className="w-3.5 h-3.5" />
+                      Moderate
+                    </motion.button>
+                  )}
                   <motion.button
                     whileTap={{ scale: 0.96 }}
                     onClick={() => navigate(`/edit-tournament/${tournament._id}`)}
@@ -974,6 +1146,117 @@ const CreatorDashboardScreen = () => {
                   {cancellingId === cancelTarget._id ? "Cancelling..." : "Cancel Tournament"}
                 </button>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(moderationTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setModerationTarget(null);
+            setModerationParticipants([]);
+            setModerationBans([]);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[88vh] w-[calc(100%-2rem)] overflow-y-auto rounded-xl border-glass-border bg-background sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Player Moderation</DialogTitle>
+            <DialogDescription>
+              Ban, unban, or report players from your own tournament roster.
+            </DialogDescription>
+          </DialogHeader>
+
+          {moderationTarget && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-glass-border bg-card/50 p-3">
+                <p className="font-heading text-sm font-bold">{moderationTarget.title}</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {moderationPlayers.length} player{moderationPlayers.length === 1 ? "" : "s"} loaded, {moderationBans.filter((ban) => ban.status === "active").length} active ban{moderationBans.filter((ban) => ban.status === "active").length === 1 ? "" : "s"}.
+                </p>
+              </div>
+
+              {moderationLoading ? (
+                <div className="flex items-center justify-center gap-2 rounded-lg border border-glass-border p-8 text-sm text-muted-foreground">
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  Loading players
+                </div>
+              ) : moderationPlayers.length === 0 ? (
+                <div className="rounded-lg border border-glass-border p-8 text-center">
+                  <Users className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                  <p className="font-heading text-sm">No joined players yet</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Players will appear here after registration.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {moderationPlayers.map((player) => {
+                    const ban = activeBanByPlayer.get(player.id);
+                    const busy = moderationActionId === player.id;
+                    return (
+                      <div key={player.id} className="rounded-lg border border-glass-border bg-card/40 p-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 items-center gap-3">
+                            {player.avatarUrl ? (
+                              <img src={player.avatarUrl} alt={player.name} className="h-10 w-10 rounded-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+                                {player.name.slice(0, 1).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="truncate font-heading text-sm font-bold">{player.name}</p>
+                                {ban && (
+                                  <span className="rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[10px] font-heading text-destructive">
+                                    Banned
+                                  </span>
+                                )}
+                              </div>
+                              <p className="truncate text-[10px] text-muted-foreground">
+                                {player.gameName || "Game name not set"} {player.gameId ? `- ${player.gameId}` : ""} {player.slotNumber ? `- Slot ${player.slotNumber}` : ""}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {ban ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUnbanPlayer(player)}
+                                disabled={busy}
+                                className={`${tournamentActionButtonBase} ${actionButtonClass.accent}`}
+                              >
+                                {busy ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
+                                Unban
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleBanPlayer(player)}
+                                disabled={busy}
+                                className={`${tournamentActionButtonBase} ${actionButtonClass.destructive}`}
+                              >
+                                {busy ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <UserX className="h-3 w-3" />}
+                                Ban
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleReportPlayer(player)}
+                              disabled={busy}
+                              className={`${tournamentActionButtonBase} ${actionButtonClass.secondary}`}
+                            >
+                              <Flag className="h-3 w-3" />
+                              Report
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

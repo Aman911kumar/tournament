@@ -23,7 +23,7 @@ import { Tournament } from "@/api/tournaments";
 import { toast } from "@/components/ui/sonner";
 import { formatCurrency, formatPrizeSummary, getErrorMessage, getErrorToast } from "@/lib/page-utils";
 import { CACHE_KEYS, readCache, writeCache } from "@/lib/offline-cache";
-import { createSupportTicket } from "@/api/support";
+import { createReport } from "@/api/moderation";
 
 const gameLabels: Record<string, string> = {
   freefire: "Free Fire",
@@ -293,14 +293,14 @@ const CreatorProfileScreen = () => {
 
     try {
       setReportLoading(true);
-      await createSupportTicket({
+      await createReport({
         title: `Creator report: ${displayName}`,
-        description: reportDescription.trim(),
-        type: "dispute",
-        reason: "payout_not_distributed",
-        targetUser: creator._id,
+        targetType: "creator",
+        category: "creator",
+        message: reportDescription.trim(),
+        reportedCreator: creator._id,
         evidence: { matchProof: reportProof.trim() },
-        priority: "high",
+        severity: "high",
       });
       toast.success("Creator report submitted", { description: "Admin will review the payout dispute." });
       setReportOpen(false);

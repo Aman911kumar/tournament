@@ -12,6 +12,7 @@ import walletRoutes from "./wallet.routes.js";
 import notificationRoutes from "./notification.routes.js";
 import healthRoutes from "./health.routes.js";
 import monitoringRoutes from "./monitoring.routes.js";
+import moderationRoutes from "./moderation.routes.js";
 
 const router = express.Router();
 
@@ -35,6 +36,9 @@ router.use("/wallet", walletRoutes);
 
 // Notification routes
 router.use("/notifications", notificationRoutes);
+
+// Reports and moderation routes
+router.use("/moderation", moderationRoutes);
 
 // Game Account routes
 router.use("/game-account",gameAccount)

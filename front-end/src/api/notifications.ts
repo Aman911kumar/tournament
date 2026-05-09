@@ -20,7 +20,9 @@ export type NotificationType =
   | "security"
   | "creator"
   | "room"
-  | "payment";
+  | "payment"
+  | "report"
+  | "moderation";
 
 export interface NotificationItem {
   _id: string;

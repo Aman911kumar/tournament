@@ -97,8 +97,31 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: [String],
-        enum: ['user', 'creator', 'admin', 'banned'],
+        enum: ['user', 'creator', 'admin', 'super_admin', 'moderator', 'support', 'finance_manager', 'tournament_manager', 'banned'],
         default: ['user']
+    },
+    adminPermissions: {
+        type: [String],
+        default: [],
+    },
+    accountStatus: {
+        type: String,
+        enum: ["active", "suspended", "muted", "banned"],
+        default: "active",
+        index: true,
+    },
+    suspendedUntil: {
+        type: Date,
+        default: null,
+    },
+    mutedUntil: {
+        type: Date,
+        default: null,
+    },
+    moderationNote: {
+        type: String,
+        trim: true,
+        default: "",
     },
     creatorRequest: {
         status: {

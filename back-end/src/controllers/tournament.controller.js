@@ -15,6 +15,7 @@ import { hasRole } from '../middlewares/auth.middleware.js';
 import { calculateFeeSplit, getPlatformFeePercent, roundCurrency } from '../utils/money.js';
 import { applyPrizeSettings, assignTournamentResults, updatePrizePool } from '../services/tournamentPrize.service.js';
 import { createNotification, createNotifications } from '../services/notification.service.js';
+import { findActiveTournamentBan } from '../services/moderation.service.js';
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from "uuid";
 
@@ -1196,6 +1197,18 @@ const joinTournament = asyncHandler(async (req, res) => {
     }
 
     const memberIds = Array.isArray(players) && players.length > 0 ? players : [req.user._id];
+    const activeBans = await Promise.all(memberIds.map((userId) =>
+        findActiveTournamentBan({
+            tournamentId,
+            playerId: userId,
+            creatorId: tournament.organizer,
+        })
+    ));
+    const blockedBan = activeBans.find(Boolean);
+    if (blockedBan) {
+        throw new ApiError(403, "You are restricted from joining this creator's tournament");
+    }
+
     const accountGame = getGameAccountKey(tournament.game);
     const gameAccounts = await GameAccount.find({
         user: { $in: memberIds },

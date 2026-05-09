@@ -28,6 +28,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   getAdminCollectionRecords,
   getAdminUserTransactionHistory,
+  updateAdminUserStatus,
   updateCreatorPermission,
   type AdminCollectionRecords,
   type AdminUserTransactionHistory,
@@ -224,6 +225,7 @@ const collectionColumns: Record<string, RecordColumn[]> = {
     { label: "Email", path: "email" },
     { label: "Phone", path: "phone_number" },
     { label: "Role", path: "role" },
+    { label: "Account", path: "accountStatus", type: "status" },
     { label: "Creator Request", path: "creatorRequest.status", type: "status" },
     { label: "Active", path: "isActive" },
     { label: "Joined", path: "createdAt", type: "date" },
@@ -419,7 +421,7 @@ const sectionConfig: Record<string, { title: string; description: string; icon: 
   users: { title: "Users", description: "User accounts, role state, contact fields, and account activity", icon: Users, collections: ["users", "wallets"] },
   creators: { title: "Creators", description: "Creator-facing records including users, channels, and subscriptions", icon: Crown, collections: ["users", "channels", "subscriptions"] },
   tournaments: { title: "Tournaments", description: "Tournament records, teams, registrations, and results", icon: Trophy, collections: ["tournaments", "registrations", "teams"] },
-  revenue: { title: "Revenue", description: "Payment, ledger, and wallet movement data", icon: CircleDollarSign, collections: ["payments", "walletTransactions", "ledgers"] },
+  revenue: { title: "Revenue & Deposits", description: "Platform revenue, payments, ledger entries, and wallet movement data", icon: CircleDollarSign, collections: ["payments", "walletTransactions", "ledgers"] },
   wallet: { title: "Wallet Flow", description: "Wallet balances, wallet transactions, ledgers, and payments", icon: Wallet, collections: ["wallets", "walletTransactions", "ledgers", "payments"] },
   verified: { title: "Verified IDs", description: "Game account verification and registration records", icon: ShieldCheck, collections: ["gameAccounts", "registrations"] },
   support: { title: "Support", description: "Tickets, reports, notifications, and related users", icon: Ticket, collections: ["tickets", "reports", "notifications", "users"] },
@@ -547,6 +549,7 @@ const AdminDetailScreen = () => {
   const [loading, setLoading] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState<Record<string, unknown> | null>(null);
   const [updatingPermission, setUpdatingPermission] = useState(false);
+  const [updatingModeration, setUpdatingModeration] = useState(false);
   const [transactionHistory, setTransactionHistory] = useState<AdminUserTransactionHistory | null>(null);
   const [transactionLoading, setTransactionLoading] = useState(false);
   const [transactionPage, setTransactionPage] = useState(1);
@@ -607,6 +610,8 @@ const AdminDetailScreen = () => {
       : [];
   const isSelectedCreator = selectedRoles.includes("creator");
   const creatorRequestStatus = String(selectedCreatorRequest?.status || "none").toLowerCase();
+  const selectedAccountStatus = String(selectedRecord?.accountStatus || (selectedRecord?.isActive === false ? "banned" : "active")).toLowerCase();
+  const isSelectedBanned = selectedRoles.includes("banned") || selectedAccountStatus === "banned" || selectedRecord?.isActive === false;
 
   useEffect(() => {
     setTransactionPage(1);
@@ -673,6 +678,49 @@ const AdminDetailScreen = () => {
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
       setUpdatingPermission(false);
+    }
+  };
+
+  const handleUserModeration = async (action: "ban" | "unban" | "suspend" | "mute" | "activate") => {
+    if (!selectedUserId) {
+      toast.error("User ID missing", { description: "Reload this page and open the user again." });
+      return;
+    }
+
+    const note = window.prompt(
+      action === "ban"
+        ? "Reason for banning this user"
+        : action === "suspend"
+          ? "Reason for temporary suspension"
+          : action === "mute"
+            ? "Reason for muting this user"
+            : "Reason for restoring this user",
+    )?.trim();
+    if (note === undefined) return;
+
+    try {
+      setUpdatingModeration(true);
+      const res = await updateAdminUserStatus(selectedUserId, {
+        action,
+        note,
+        durationHours: ["suspend", "mute"].includes(action) ? 24 : undefined,
+      });
+      const updatedUser = asRecord(res.data.user);
+      if (updatedUser) {
+        setSelectedRecord(updatedUser);
+        setData((current) => current
+          ? {
+              ...current,
+              records: current.records.map((record) => getObjectId(record._id) === selectedUserId ? updatedUser : record),
+            }
+          : current);
+      }
+      toast.success(res.message || "User moderation updated");
+    } catch (error) {
+      const errorToast = getErrorToast(error, { action: "Update user moderation", fallback: "Could not update user moderation." });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setUpdatingModeration(false);
     }
   };
 
@@ -826,52 +874,117 @@ const AdminDetailScreen = () => {
             ) : selectedRecord && (
               <div className="min-h-0 overflow-y-auto px-6 pb-6 pr-4">
                 {activeCollection === "users" && (
-                  <div className="mb-4 rounded-lg border border-glass-border bg-background/50 p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-heading text-sm font-bold">Creator Permission</p>
-                          <StatusBadge value={isSelectedCreator ? "active" : creatorRequestStatus} />
+                  <div className="mb-4 space-y-3">
+                    <div className="rounded-lg border border-glass-border bg-background/50 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-heading text-sm font-bold">Account Moderation</p>
+                            <StatusBadge value={selectedAccountStatus} />
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Ban, suspend, mute, or restore user access. Every action is logged in admin audit.
+                          </p>
                         </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {isSelectedCreator
-                            ? "This user can create tournaments."
-                            : `Current request: ${cleanLabel(creatorRequestStatus)}`}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {!isSelectedCreator && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => handleCreatorPermission("approved")}
-                            disabled={updatingPermission}
-                          >
-                            {updatingPermission ? "Updating..." : "Approve Creator"}
-                          </Button>
-                        )}
-                        {!isSelectedCreator && creatorRequestStatus === "pending" && (
+                        <div className="flex flex-wrap gap-2">
+                          {isSelectedBanned ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => handleUserModeration("unban")}
+                              disabled={updatingModeration}
+                            >
+                              {updatingModeration ? "Updating..." : "Unban"}
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleUserModeration("ban")}
+                              disabled={updatingModeration}
+                            >
+                              Ban
+                            </Button>
+                          )}
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            onClick={() => handleCreatorPermission("rejected")}
-                            disabled={updatingPermission}
+                            onClick={() => handleUserModeration("suspend")}
+                            disabled={updatingModeration || isSelectedBanned}
                           >
-                            Reject
+                            Suspend 24h
                           </Button>
-                        )}
-                        {isSelectedCreator && (
                           <Button
                             type="button"
                             size="sm"
-                            variant="destructive"
-                            onClick={() => handleCreatorPermission("removed")}
-                            disabled={updatingPermission}
+                            variant="outline"
+                            onClick={() => handleUserModeration("mute")}
+                            disabled={updatingModeration || isSelectedBanned}
                           >
-                            {updatingPermission ? "Updating..." : "Remove Creator"}
+                            Mute 24h
                           </Button>
-                        )}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleUserModeration("activate")}
+                            disabled={updatingModeration}
+                          >
+                            Restore
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-glass-border bg-background/50 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-heading text-sm font-bold">Creator Permission</p>
+                            <StatusBadge value={isSelectedCreator ? "active" : creatorRequestStatus} />
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {isSelectedCreator
+                              ? "This user can create tournaments."
+                              : `Current request: ${cleanLabel(creatorRequestStatus)}`}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {!isSelectedCreator && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => handleCreatorPermission("approved")}
+                              disabled={updatingPermission}
+                            >
+                              {updatingPermission ? "Updating..." : "Approve Creator"}
+                            </Button>
+                          )}
+                          {!isSelectedCreator && creatorRequestStatus === "pending" && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCreatorPermission("rejected")}
+                              disabled={updatingPermission}
+                            >
+                              Reject
+                            </Button>
+                          )}
+                          {isSelectedCreator && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleCreatorPermission("removed")}
+                              disabled={updatingPermission}
+                            >
+                              {updatingPermission ? "Updating..." : "Remove Creator"}
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
