@@ -43,10 +43,10 @@ const hasPartialAuth = Boolean((smtpUser && !smtpPass) || (!smtpUser && smtpPass
 const smtpSecure = smtpPort === 465 || (smtpPort !== 587 && parseBoolean(SMTP_SECURE, false));
 const smtpRequireTls = parseBoolean(process.env.SMTP_REQUIRE_TLS, smtpPort === 587);
 const smtpRejectUnauthorized = parseBoolean(process.env.SMTP_REJECT_UNAUTHORIZED, true);
-const smtpVerifyOnSend = parseBoolean(process.env.SMTP_VERIFY_ON_SEND, true);
-const smtpConnectionTimeout = positiveNumber(process.env.SMTP_CONNECTION_TIMEOUT_MS, 15000);
-const smtpGreetingTimeout = positiveNumber(process.env.SMTP_GREETING_TIMEOUT_MS, 15000);
-const smtpSocketTimeout = positiveNumber(process.env.SMTP_SOCKET_TIMEOUT_MS, 30000);
+const smtpVerifyOnSend = parseBoolean(process.env.SMTP_VERIFY_ON_SEND, false);
+const smtpConnectionTimeout = positiveNumber(process.env.SMTP_CONNECTION_TIMEOUT_MS, 8000);
+const smtpGreetingTimeout = positiveNumber(process.env.SMTP_GREETING_TIMEOUT_MS, 8000);
+const smtpSocketTimeout = positiveNumber(process.env.SMTP_SOCKET_TIMEOUT_MS, 12000);
 const defaultFrom = cleanEnv(EMAIL_FROM) || (smtpUser ? `Battle4Arena <${smtpUser}>` : "");
 
 const getEmailConfigError = () => {

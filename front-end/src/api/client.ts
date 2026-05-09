@@ -3,9 +3,42 @@
 
 import { clearAuthTokens, getAccessToken, getRefreshToken, hasAuthSession, setAuthTokens } from "@/lib/auth-storage";
 
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api/v1";
-export const API_BASE_URL = String(configuredApiBaseUrl).replace(/\/$/, "");
-const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 20000);
+const DEFAULT_API_BASE_URL = "/api/v1";
+const PRODUCTION_API_FALLBACK = "https://tournamentbackend-vulj.onrender.com/api/v1";
+
+const isPrivateOrLocalHost = (hostname: string) => {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (["localhost", "127.0.0.1", "::1", "0.0.0.0"].includes(host)) return true;
+  if (/^10\./.test(host)) return true;
+  if (/^192\.168\./.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+  return false;
+};
+
+const resolveApiBaseUrl = () => {
+  const configured = String(import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).trim();
+
+  if (typeof window === "undefined" || !configured.startsWith("http")) {
+    return configured.replace(/\/$/, "");
+  }
+
+  try {
+    const apiUrl = new URL(configured);
+    const appIsPublic = !isPrivateOrLocalHost(window.location.hostname);
+    const apiIsPrivate = isPrivateOrLocalHost(apiUrl.hostname);
+
+    if (appIsPublic && apiIsPrivate) {
+      return String(import.meta.env.VITE_PRODUCTION_API_BASE_URL || PRODUCTION_API_FALLBACK).replace(/\/$/, "");
+    }
+  } catch {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  return configured.replace(/\/$/, "");
+};
+
+export const API_BASE_URL = resolveApiBaseUrl();
+const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || (import.meta.env.PROD ? 45000 : 20000));
 
 export type ApiErrorDetail = Record<string, unknown>;
 
