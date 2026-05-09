@@ -26,6 +26,7 @@ const MONGODB_MIN_POOL_SIZE = process.env.MONGODB_MIN_POOL_SIZE
 const MONGODB_MAX_IDLE_TIME_MS = process.env.MONGODB_MAX_IDLE_TIME_MS
 const MONGODB_WAIT_QUEUE_TIMEOUT_MS = process.env.MONGODB_WAIT_QUEUE_TIMEOUT_MS
 const RESEND_API_KEY = process.env.RESEND_API_KEY
+const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER
 const EMAIL_FROM = process.env.EMAIL_FROM || (process.env.SMTP_USER ? `BattleArena <${process.env.SMTP_USER}>` : "BattleArena <no-reply@localhost>")
 const APP_PUBLIC_URL = process.env.APP_PUBLIC_URL || process.env.CORS_ORIGIN || "http://localhost:8080"
 const SMTP_HOST = process.env.SMTP_HOST
@@ -57,6 +58,7 @@ export {
     MONGODB_MAX_IDLE_TIME_MS,
     MONGODB_WAIT_QUEUE_TIMEOUT_MS,
     RESEND_API_KEY,
+    EMAIL_PROVIDER,
     EMAIL_FROM,
     APP_PUBLIC_URL,
     SMTP_HOST,

@@ -1,19 +1,17 @@
 import nodemailer from "nodemailer";
-// import { Resend } from "resend";
+import { Resend } from "resend";
 import ApiError from "../utils/ApiError.js";
 import {
     APP_PUBLIC_URL,
+    EMAIL_PROVIDER,
     EMAIL_FROM,
+    RESEND_API_KEY,
     SMTP_HOST,
     SMTP_PASS,
     SMTP_PORT,
     SMTP_SECURE,
     SMTP_USER,
-    // RESEND_API_KEY,
 } from "../../env.js";
-
-// Resend sender kept for quick rollback if needed.
-// const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
 const cleanEnv = (value = "") =>
     String(value || "")
@@ -48,6 +46,10 @@ const smtpConnectionTimeout = positiveNumber(process.env.SMTP_CONNECTION_TIMEOUT
 const smtpGreetingTimeout = positiveNumber(process.env.SMTP_GREETING_TIMEOUT_MS, 8000);
 const smtpSocketTimeout = positiveNumber(process.env.SMTP_SOCKET_TIMEOUT_MS, 12000);
 const defaultFrom = cleanEnv(EMAIL_FROM) || (smtpUser ? `Battle4Arena <${smtpUser}>` : "");
+const resendApiKey = cleanEnv(RESEND_API_KEY);
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
+const requestedEmailProvider = cleanEnv(EMAIL_PROVIDER).toLowerCase();
+const emailProvider = requestedEmailProvider || (resend ? "resend" : "smtp");
 
 const getEmailConfigError = () => {
     if (!smtpService && !smtpHost) return "SMTP_HOST is missing";
@@ -137,6 +139,52 @@ const ensureEmailTransportReady = async () => {
 
 export const isEmailServiceConfigured = () => Boolean(mailTransporter);
 export const verifyEmailTransport = ensureEmailTransportReady;
+
+const getResendFailureMessage = (error) => {
+    const message = error?.message || error?.error?.message || error?.response?.message || "";
+    if (/domain|verify|from/i.test(message)) {
+        return "Resend rejected the sender. Verify your domain in Resend and set EMAIL_FROM to an address on that domain.";
+    }
+    if (/api key|unauthorized|forbidden|permission/i.test(message)) {
+        return "Resend authentication failed. Check RESEND_API_KEY in production.";
+    }
+    return message || "Failed to send email with Resend";
+};
+
+const sendEmailWithResend = async ({ to, subject, html, text, from = EMAIL_FROM, replyTo }) => {
+    if (!resend) {
+        throw new ApiError(500, "Resend email service is not configured");
+    }
+
+    try {
+        const result = await resend.emails.send({
+            from: cleanEnv(from) || defaultFrom,
+            to: cleanEnv(to),
+            subject,
+            html,
+            ...(text ? { text } : {}),
+            ...(replyTo ? { reply_to: cleanEnv(replyTo) } : {}),
+        });
+
+        if (result?.error) throw result.error;
+        return result?.data || result;
+    } catch (error) {
+        throw new ApiError(502, getResendFailureMessage(error));
+    }
+};
+
+const sendEmailWithSmtp = async ({ to, subject, html, text, from = EMAIL_FROM, replyTo }) => {
+    await ensureEmailTransportReady();
+
+    return mailTransporter.sendMail({
+        from: cleanEnv(from) || defaultFrom,
+        to: cleanEnv(to),
+        subject,
+        html,
+        ...(text ? { text } : {}),
+        ...(replyTo ? { replyTo: cleanEnv(replyTo) } : {}),
+    });
+};
 
 const escapeHtml = (value = "") =>
     String(value)
@@ -249,53 +297,20 @@ export const sendEmail = async ({ to, subject, html, text, from = EMAIL_FROM, re
     }
 
     try {
-        await ensureEmailTransportReady();
+        if (emailProvider === "resend") {
+            return await sendEmailWithResend({ to, subject, html, text, from, replyTo });
+        }
 
-        const result = await mailTransporter.sendMail({
-            from: cleanEnv(from) || defaultFrom,
-            to: cleanEnv(to),
-            subject,
-            html,
-            ...(text ? { text } : {}),
-            ...(replyTo ? { replyTo: cleanEnv(replyTo) } : {}),
-        });
+        if (emailProvider === "smtp") {
+            return await sendEmailWithSmtp({ to, subject, html, text, from, replyTo });
+        }
 
-        return result;
+        throw new ApiError(500, `Unsupported EMAIL_PROVIDER "${emailProvider}". Use "resend" or "smtp".`);
     } catch (error) {
         if (error instanceof ApiError) throw error;
         throw new ApiError(502, getEmailFailureMessage(error));
     }
 };
-
-// Resend version kept commented as requested.
-// export const sendEmail = async ({ to, subject, html, text, from = EMAIL_FROM, replyTo }) => {
-//     if (!resend) {
-//         throw new ApiError(500, "Email service is not configured");
-//     }
-//
-//     if (!to || !subject || !html) {
-//         throw new ApiError(400, "Email recipient, subject, and html are required");
-//     }
-//
-//     try {
-//         const result = await resend.emails.send({
-//             from,
-//             to,
-//             subject,
-//             html,
-//             ...(text ? { text } : {}),
-//             ...(replyTo ? { reply_to: replyTo } : {}),
-//         });
-//
-//         if (result?.error) {
-//             throw result.error;
-//         }
-//
-//         return result?.data || result;
-//     } catch (error) {
-//         throw new ApiError(502, error?.message || "Failed to send email");
-//     }
-// };
 
 export const sendEmailVerification = async ({ to, username, token, expiresInMinutes = 30 }) => {
     const verificationUrl = `${appUrl}/verify-email?token=${encodeURIComponent(token)}`;
