@@ -230,12 +230,12 @@ const ProfileScreen = () => {
     && leavePhraseInput.trim() === LEAVE_CREATOR_CONFIRM_TEXT;
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4">
+    <div className="arena-shell min-h-screen pb-20">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 pt-6 pb-4">
         <h1 className="font-heading text-xl font-bold">Profile</h1>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-6">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mb-6">
         {profileLoading ? (
           <ProfileSkeleton />
         ) : profileError ? (
@@ -254,7 +254,7 @@ const ProfileScreen = () => {
           </GlassCard>
         ) : profile ? (
           <GlassCard neon className="flex flex-col items-center text-center relative overflow-hidden">
-            <div className="absolute -top-10 -left-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
+            <div className="absolute -top-10 -left-10 w-28 h-28 bg-primary/10 rounded-full blur-xl" />
             {cacheNotice && (
               <span className="relative z-10 mb-4 max-w-full rounded-full bg-secondary/10 px-3 py-1.5 text-center text-[10px] font-heading leading-snug text-secondary sm:max-w-[90%]" title={cacheNotice}>
                 {cacheNotice}
@@ -306,7 +306,7 @@ const ProfileScreen = () => {
         )}
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-2">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mb-2">
         <h2 className="font-heading text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">
           Creator Tools
         </h2>
@@ -354,7 +354,7 @@ const ProfileScreen = () => {
       </div>
 
       {adminMenu.length > 0 && (
-        <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-2 mt-4">
+        <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mb-2 mt-4">
           <h2 className="font-heading text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">
             Admin
           </h2>
@@ -378,7 +378,7 @@ const ProfileScreen = () => {
         </div>
       )}
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mt-4">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mt-4">
         <h2 className="font-heading text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">
           Account
         </h2>
@@ -402,7 +402,7 @@ const ProfileScreen = () => {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mt-4">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mt-4">
         <h2 className="font-heading text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">
           Help & Legal
         </h2>
@@ -425,7 +425,7 @@ const ProfileScreen = () => {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mt-8 pb-4">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mt-8 pb-4">
         <h2 className="font-heading text-xs font-bold text-destructive mb-2 uppercase tracking-wider">
           Critical Section
         </h2>
@@ -480,7 +480,7 @@ const ProfileScreen = () => {
           if (!open) resetLeaveDialog();
         }}
       >
-        <DialogContent className="w-[calc(100%-2rem)] rounded-xl border-destructive/30 bg-background sm:max-w-md">
+        <DialogContent className="w-[calc(100%-2rem)] rounded-lg border-destructive/30 bg-card/95 sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading text-destructive">Leave Creator</DialogTitle>
             <DialogDescription>

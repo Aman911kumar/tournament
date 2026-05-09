@@ -224,15 +224,15 @@ const WalletScreen = () => {
   }, [activeTab, historyView]);
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4">
+    <div className="arena-shell min-h-screen pb-20">
+      <div className="mx-auto w-full max-w-5xl px-4 sm:px-5 lg:px-6 pt-6 pb-4">
         <h1 className="font-heading text-xl font-bold">Wallet</h1>
         <p className="text-xs text-muted-foreground font-heading">Manage your funds</p>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-4">
+      <div className="mx-auto w-full max-w-5xl px-4 sm:px-5 lg:px-6 mb-4">
         <GlassCard neon className="relative overflow-hidden">
-          <div className="absolute -top-10 -right-10 w-40 h-40 bg-primary/10 rounded-full blur-3xl" />
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-xl" />
           <div className="flex items-center gap-2 mb-1">
             <Wallet className="w-5 h-5 text-primary" />
             <span className="text-xs text-muted-foreground font-heading">Available Balance</span>
@@ -278,7 +278,7 @@ const WalletScreen = () => {
         </GlassCard>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-4 grid gap-3 sm:grid-cols-2">
+      <div className="mx-auto w-full max-w-5xl px-4 sm:px-5 lg:px-6 mb-4 grid gap-3 md:grid-cols-2">
         <GlassCard className="neon-border">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -332,7 +332,7 @@ const WalletScreen = () => {
         </GlassCard>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-3 flex gap-2">
+      <div className="mx-auto w-full max-w-5xl px-4 sm:px-5 lg:px-6 mb-3 flex gap-2">
         {(["all", "player", "creator"] as const).map((tab) => (
           <button
             key={tab}
@@ -345,7 +345,7 @@ const WalletScreen = () => {
         ))}
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5">
+      <div className="mx-auto w-full max-w-5xl px-4 sm:px-5 lg:px-6">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="font-heading text-base font-bold flex items-center gap-2">
             {historyView === "wallet" ? (

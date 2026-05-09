@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
+import { ActionNoteDialog } from "@/components/design-system";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -538,6 +539,28 @@ const UserTransactionHistoryPanel = ({
   );
 };
 
+type AdminDetailAction =
+  | {
+      kind: "creator";
+      status: "approved" | "rejected" | "removed";
+      title: string;
+      description: string;
+      label: string;
+      placeholder: string;
+      confirmLabel: string;
+      destructive?: boolean;
+    }
+  | {
+      kind: "moderation";
+      action: "ban" | "unban" | "suspend" | "mute" | "activate";
+      title: string;
+      description: string;
+      label: string;
+      placeholder: string;
+      confirmLabel: string;
+      destructive?: boolean;
+    };
+
 const AdminDetailScreen = () => {
   const navigate = useNavigate();
   const { section = "database" } = useParams<{ section: string }>();
@@ -550,6 +573,8 @@ const AdminDetailScreen = () => {
   const [selectedRecord, setSelectedRecord] = useState<Record<string, unknown> | null>(null);
   const [updatingPermission, setUpdatingPermission] = useState(false);
   const [updatingModeration, setUpdatingModeration] = useState(false);
+  const [actionDialog, setActionDialog] = useState<AdminDetailAction | null>(null);
+  const [actionNote, setActionNote] = useState("");
   const [transactionHistory, setTransactionHistory] = useState<AdminUserTransactionHistory | null>(null);
   const [transactionLoading, setTransactionLoading] = useState(false);
   const [transactionPage, setTransactionPage] = useState(1);
@@ -645,87 +670,102 @@ const AdminDetailScreen = () => {
     };
   }, [transactionPage, transactionUserId]);
 
-  const handleCreatorPermission = async (status: "approved" | "rejected" | "removed") => {
+  const handleCreatorPermission = (status: "approved" | "rejected" | "removed") => {
     if (!selectedUserId) {
       toast.error("User ID missing", { description: "Reload this page and open the user again." });
       return;
     }
-    const note = window.prompt(
-      status === "approved"
-        ? "Approval message for user (optional)"
+    setActionNote("");
+    setActionDialog({
+      kind: "creator",
+      status,
+      title: status === "approved" ? "Approve Creator" : status === "removed" ? "Remove Creator Access" : "Reject Creator Request",
+      description: status === "approved"
+        ? "This user will be able to create tournaments."
         : status === "removed"
-          ? "Why are you removing creator access? This message will be sent."
-          : "Why are you rejecting this creator request? This message will be sent.",
-    )?.trim();
-    if (note === undefined) return;
+          ? "This user will lose creator permissions."
+          : "This creator request will be rejected.",
+      label: status === "approved" ? "Approval message" : "Admin note",
+      placeholder: status === "approved" ? "Optional message for the creator" : "Optional reason sent with this decision",
+      confirmLabel: status === "approved" ? "Approve" : status === "removed" ? "Remove Access" : "Reject",
+      destructive: status !== "approved",
+    });
+  };
+
+  const submitActionDialog = async () => {
+    if (!actionDialog || !selectedUserId) return;
+    const note = actionNote.trim();
 
     try {
-      setUpdatingPermission(true);
-      const res = await updateCreatorPermission(selectedUserId, { status, note });
-      const updatedUser = asRecord(res.data.user);
-      if (updatedUser) {
-        setSelectedRecord(updatedUser);
-        setData((current) => current
-          ? {
-              ...current,
-              records: current.records.map((record) => getObjectId(record._id) === selectedUserId ? updatedUser : record),
-            }
-          : current);
+      if (actionDialog.kind === "creator") {
+        setUpdatingPermission(true);
+        const res = await updateCreatorPermission(selectedUserId, { status: actionDialog.status, note });
+        const updatedUser = asRecord(res.data.user);
+        if (updatedUser) {
+          setSelectedRecord(updatedUser);
+          setData((current) => current
+            ? {
+                ...current,
+                records: current.records.map((record) => getObjectId(record._id) === selectedUserId ? updatedUser : record),
+              }
+            : current);
+        }
+        toast.success(res.message || (actionDialog.status === "approved" ? "Creator access approved" : actionDialog.status === "removed" ? "Creator access removed" : "Creator access rejected"));
+      } else {
+        setUpdatingModeration(true);
+        const res = await updateAdminUserStatus(selectedUserId, {
+          action: actionDialog.action,
+          note,
+          durationHours: ["suspend", "mute"].includes(actionDialog.action) ? 24 : undefined,
+        });
+        const updatedUser = asRecord(res.data.user);
+        if (updatedUser) {
+          setSelectedRecord(updatedUser);
+          setData((current) => current
+            ? {
+                ...current,
+                records: current.records.map((record) => getObjectId(record._id) === selectedUserId ? updatedUser : record),
+              }
+            : current);
+        }
+        toast.success(res.message || "User moderation updated");
       }
-      toast.success(res.message || (status === "approved" ? "Creator access approved" : status === "removed" ? "Creator access removed" : "Creator access rejected"));
+      setActionDialog(null);
+      setActionNote("");
     } catch (error) {
-      const errorToast = getErrorToast(error, { action: "Update creator permission", fallback: "Could not update creator permission." });
+      const errorToast = getErrorToast(error, {
+        action: actionDialog.kind === "creator" ? "Update creator permission" : "Update user moderation",
+        fallback: actionDialog.kind === "creator" ? "Could not update creator permission." : "Could not update user moderation.",
+      });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
       setUpdatingPermission(false);
-    }
-  };
-
-  const handleUserModeration = async (action: "ban" | "unban" | "suspend" | "mute" | "activate") => {
-    if (!selectedUserId) {
-      toast.error("User ID missing", { description: "Reload this page and open the user again." });
-      return;
-    }
-
-    const note = window.prompt(
-      action === "ban"
-        ? "Reason for banning this user"
-        : action === "suspend"
-          ? "Reason for temporary suspension"
-          : action === "mute"
-            ? "Reason for muting this user"
-            : "Reason for restoring this user",
-    )?.trim();
-    if (note === undefined) return;
-
-    try {
-      setUpdatingModeration(true);
-      const res = await updateAdminUserStatus(selectedUserId, {
-        action,
-        note,
-        durationHours: ["suspend", "mute"].includes(action) ? 24 : undefined,
-      });
-      const updatedUser = asRecord(res.data.user);
-      if (updatedUser) {
-        setSelectedRecord(updatedUser);
-        setData((current) => current
-          ? {
-              ...current,
-              records: current.records.map((record) => getObjectId(record._id) === selectedUserId ? updatedUser : record),
-            }
-          : current);
-      }
-      toast.success(res.message || "User moderation updated");
-    } catch (error) {
-      const errorToast = getErrorToast(error, { action: "Update user moderation", fallback: "Could not update user moderation." });
-      toast.error(errorToast.title, { description: errorToast.description });
-    } finally {
       setUpdatingModeration(false);
     }
   };
 
+  const handleUserModeration = (action: "ban" | "unban" | "suspend" | "mute" | "activate") => {
+    if (!selectedUserId) {
+      toast.error("User ID missing", { description: "Reload this page and open the user again." });
+      return;
+    }
+    setActionNote("");
+    setActionDialog({
+      kind: "moderation",
+      action,
+      title: action === "ban" ? "Ban User" : action === "suspend" ? "Suspend User" : action === "mute" ? "Mute User" : action === "unban" ? "Unban User" : "Restore User",
+      description: ["suspend", "mute"].includes(action)
+        ? "This action lasts 24 hours and is logged for audit."
+        : "This action is logged for audit and can be reviewed later.",
+      label: action === "ban" ? "Ban reason" : "Admin note",
+      placeholder: action === "ban" ? "Reason for banning this user" : "Optional moderation note",
+      confirmLabel: action === "ban" ? "Ban" : action === "suspend" ? "Suspend" : action === "mute" ? "Mute" : action === "unban" ? "Unban" : "Restore",
+      destructive: ["ban", "suspend", "mute"].includes(action),
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-background px-4 py-6 pb-10 sm:px-5">
+    <div className="arena-shell min-h-screen px-4 py-6 pb-10 sm:px-5">
       <div className="mx-auto w-full max-w-7xl">
         <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
@@ -855,6 +895,27 @@ const AdminDetailScreen = () => {
             </>
           )}
         </GlassCard>
+
+        <ActionNoteDialog
+          open={Boolean(actionDialog)}
+          onOpenChange={(open) => {
+            if (updatingPermission || updatingModeration) return;
+            if (!open) {
+              setActionDialog(null);
+              setActionNote("");
+            }
+          }}
+          title={actionDialog?.title || ""}
+          description={actionDialog?.description}
+          label={actionDialog?.label || "Note"}
+          value={actionNote}
+          onValueChange={setActionNote}
+          placeholder={actionDialog?.placeholder}
+          confirmLabel={actionDialog?.confirmLabel}
+          destructive={actionDialog?.destructive}
+          loading={updatingPermission || updatingModeration}
+          onSubmit={submitActionDialog}
+        />
 
         <Dialog open={Boolean(selectedRecord)} onOpenChange={(open) => !open && setSelectedRecord(null)}>
           <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-4xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0">

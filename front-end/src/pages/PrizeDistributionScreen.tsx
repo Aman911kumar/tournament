@@ -335,13 +335,13 @@ const PrizeDistributionScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden pb-40 sm:pb-32">
+    <div className="arena-shell min-h-screen relative overflow-hidden pb-40 sm:pb-32">
       {/* Decorative glow */}
-      <div className="pointer-events-none absolute -top-32 -left-20 h-72 w-72 rounded-full bg-primary/20 blur-3xl" />
-      <div className="pointer-events-none absolute top-20 -right-20 h-72 w-72 rounded-full bg-secondary/20 blur-3xl" />
+      <div className="pointer-events-none absolute -top-32 -left-20 h-56 w-56 rounded-full bg-primary/12 blur-xl" />
+      <div className="pointer-events-none absolute top-20 -right-20 h-56 w-56 rounded-full bg-secondary/12 blur-xl" />
 
       {/* Header */}
-      <div className="relative z-10 mx-auto flex w-full max-w-2xl items-center gap-3 px-4 pt-6 pb-4 sm:px-5">
+      <div className="relative z-10 mx-auto flex w-full max-w-5xl items-center gap-3 px-4 pt-6 pb-4 sm:px-5">
         <button
           onClick={() => navigate(-1)}
           className="shrink-0 h-10 w-10 grid place-items-center rounded-full glass hover:bg-primary/10 transition-colors"
@@ -358,7 +358,7 @@ const PrizeDistributionScreen = () => {
         </div>
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-2xl px-4 sm:px-5 space-y-4">
+      <div className="relative z-10 mx-auto w-full max-w-5xl px-4 sm:px-5 space-y-4">
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
           <GlassCard neon className="p-3">
@@ -813,7 +813,7 @@ const PrizeDistributionScreen = () => {
           animate={{ y: 0, opacity: 1 }}
           className="fixed bottom-[72px] left-0 right-0 z-30 px-3 sm:px-4 pb-3 pt-3 bg-gradient-to-t from-background via-background/95 to-transparent"
         >
-          <div className="max-w-md mx-auto glass rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center gap-3 neon-border">
+          <div className="max-w-md mx-auto glass rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-3 neon-border">
             <div className="flex-1 min-w-0">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-heading">
                 {prizesPaid ? "Total Paid" : "Total Transfer"}

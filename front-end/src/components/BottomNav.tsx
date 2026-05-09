@@ -1,6 +1,7 @@
 import { Home, Search, Trophy, Wallet, User } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 const tabs = [
   { path: "/", icon: Home, label: "Home" },
@@ -15,32 +16,31 @@ const BottomNav = () => {
   const navigate = useNavigate();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-glass-border pb-[env(safe-area-inset-bottom)]">
-      <div className="max-w-lg mx-auto flex items-center justify-around px-2 py-2">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-glass-border bg-[linear-gradient(180deg,hsl(var(--card))_0%,hsl(var(--background))_100%)] pb-[env(safe-area-inset-bottom)] shadow-[0_-16px_44px_hsl(var(--background)/0.65)]">
+      <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-2">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;
           return (
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
-              className="relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1 px-1 transition-colors"
+              className={cn(
+                "arena-focus relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 transition-colors",
+                isActive ? "text-primary" : "text-muted-foreground hover:bg-muted/45 hover:text-foreground",
+              )}
             >
               {isActive && (
                 <motion.div
                   layoutId="activeTab"
-                  className="absolute -top-2 left-0 right-0 mx-auto w-8 h-1 rounded-full gradient-primary"
+                  className="absolute -top-2 left-0 right-0 mx-auto h-1 w-8 rounded-full gradient-primary"
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
               )}
               <tab.icon
-                className={`w-5 h-5 transition-colors ${
-                  isActive ? "text-primary" : "text-muted-foreground"
-                }`}
+                className="h-5 w-5 transition-colors"
               />
               <span
-                className={`text-[10px] font-heading font-medium transition-colors ${
-                  isActive ? "text-primary" : "text-muted-foreground"
-                }`}
+                className="text-[10px] font-heading font-semibold transition-colors"
               >
                 {tab.label}
               </span>

@@ -68,8 +68,8 @@ const MyTournamentsScreen = () => {
   }, [query, registrations]);
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
+    <div className="arena-shell min-h-screen pb-20">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
         <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate(-1)} className="shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </motion.button>
@@ -79,7 +79,7 @@ const MyTournamentsScreen = () => {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 space-y-3">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 space-y-3">
         <div className="glass rounded-lg flex items-center gap-2 px-3 py-2">
           <Search className="w-4 h-4 text-muted-foreground shrink-0" />
           <input

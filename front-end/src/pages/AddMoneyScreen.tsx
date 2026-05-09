@@ -235,8 +235,8 @@ const AddMoneyScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 pb-4 pt-6 sm:px-5">
+    <div className="arena-shell min-h-screen pb-24">
+      <div className="mx-auto flex w-full max-w-4xl items-center gap-3 px-4 pb-4 pt-6 sm:px-5">
         <motion.button
           type="button"
           whileTap={{ scale: 0.9 }}
@@ -252,7 +252,7 @@ const AddMoneyScreen = () => {
         </div>
       </div>
 
-      <form onSubmit={handleAdd} className="mx-auto w-full max-w-2xl space-y-4 px-4 sm:px-5">
+      <form onSubmit={handleAdd} className="mx-auto w-full max-w-4xl space-y-4 px-4 sm:px-5">
         <GlassCard neon className="overflow-hidden">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">

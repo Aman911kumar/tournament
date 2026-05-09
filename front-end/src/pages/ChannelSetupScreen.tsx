@@ -186,8 +186,8 @@ const ChannelSetupScreen = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background px-4 pt-8">
-        <div className="mx-auto w-full max-w-2xl space-y-3">
+      <div className="arena-shell min-h-screen px-4 pt-8">
+        <div className="mx-auto w-full max-w-4xl space-y-3">
           <div className="h-8 w-40 animate-pulse rounded bg-muted" />
           <div className="h-44 animate-pulse rounded-xl bg-muted" />
           <div className="h-64 animate-pulse rounded-xl bg-muted" />
@@ -197,8 +197,8 @@ const ChannelSetupScreen = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-10">
-      <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-3 px-4 pb-4 pt-6 sm:px-5">
+    <div className="arena-shell min-h-screen pb-10">
+      <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 pb-4 pt-6 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate(-1)} className="shrink-0">
             <ArrowLeft className="h-5 w-5" />
@@ -215,7 +215,7 @@ const ChannelSetupScreen = () => {
         </NeonButton>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl space-y-4 px-4 sm:px-5">
+      <div className="mx-auto w-full max-w-4xl space-y-4 px-4 sm:px-5">
         <GlassCard neon>
           <div className="flex items-start gap-3">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-secondary/10">

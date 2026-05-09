@@ -104,7 +104,7 @@ const ForgotPasswordScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background px-5 py-8">
+    <div className="arena-shell min-h-screen px-5 py-8">
       <div className="mx-auto flex w-full max-w-md flex-col gap-6">
         <button
           type="button"

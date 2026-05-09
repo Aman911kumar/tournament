@@ -197,16 +197,16 @@ const TournamentDetailScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-10">
+    <div className="arena-shell min-h-screen pb-10">
       {/* Header */}
-      <div className="mx-auto w-full max-w-2xl flex items-center gap-3 px-4 sm:px-5 pt-6 pb-4">
+      <div className="mx-auto w-full max-w-5xl flex items-center gap-3 px-4 sm:px-5 pt-6 pb-4">
         <button onClick={() => navigate(-1)} className="w-9 h-9 glass rounded-full flex items-center justify-center">
           <ArrowLeft className="w-4 h-4 text-foreground" />
         </button>
         <h1 className="font-heading text-lg font-bold">Tournament Details</h1>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 space-y-4">
+      <div className="mx-auto w-full max-w-5xl px-4 sm:px-5 space-y-4">
         {loading && (
           <GlassCard neon>
             <div className="space-y-3 animate-pulse">
@@ -541,13 +541,13 @@ const TournamentDetailScreen = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/88 px-4"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="glass max-h-[88vh] w-full max-w-md overflow-y-auto rounded-2xl border border-glass-border p-5"
+              className="glass max-h-[88vh] w-full max-w-md overflow-y-auto rounded-lg border border-glass-border p-5"
             >
               <h3 className="font-heading text-lg font-bold">Report issue</h3>
               <p className="mt-1 text-xs text-muted-foreground">Reports go to admin review with your evidence.</p>
@@ -626,13 +626,13 @@ const TournamentDetailScreen = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center px-8"
+            className="fixed inset-0 z-50 bg-background/88 flex items-center justify-center px-8"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="glass rounded-2xl p-6 w-full max-w-sm neon-border text-center"
+              className="glass rounded-lg p-6 w-full max-w-sm neon-border text-center"
             >
               <CheckCircle className="w-12 h-12 text-accent mx-auto mb-3" />
               <h3 className="font-heading text-lg font-bold mb-1">Confirm Registration</h3>

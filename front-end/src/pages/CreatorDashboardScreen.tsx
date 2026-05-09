@@ -111,6 +111,11 @@ type ModerationPlayer = {
   status?: string;
 };
 
+type ModerationIntent = {
+  type: "ban" | "unban" | "report";
+  player: ModerationPlayer;
+};
+
 const getStatusActionToast = (status: Tournament["status"]) => {
   if (status === "open") return "Tournament published";
   if (status === "draft") return "Tournament moved to private";
@@ -167,6 +172,9 @@ const CreatorDashboardScreen = () => {
   const [moderationBans, setModerationBans] = useState<TournamentBan[]>([]);
   const [moderationLoading, setModerationLoading] = useState(false);
   const [moderationActionId, setModerationActionId] = useState<string | null>(null);
+  const [moderationIntent, setModerationIntent] = useState<ModerationIntent | null>(null);
+  const [moderationReason, setModerationReason] = useState("");
+  const [moderationRemoveRegistration, setModerationRemoveRegistration] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -532,27 +540,70 @@ const CreatorDashboardScreen = () => {
     }
   };
 
-  const handleBanPlayer = async (player: ModerationPlayer) => {
-    if (!moderationTarget) return;
-    const reason = window.prompt(`Why are you banning ${player.name}?`)?.trim();
-    if (!reason) return;
-    const removeRegistration = window.confirm("Also remove this player's free/unpaid registration if backend allows it?");
+  const openModerationIntent = (type: ModerationIntent["type"], player: ModerationPlayer) => {
+    setModerationIntent({ type, player });
+    setModerationReason("");
+    setModerationRemoveRegistration(false);
+  };
+
+  const closeModerationIntent = () => {
+    setModerationIntent(null);
+    setModerationReason("");
+    setModerationRemoveRegistration(false);
+  };
+
+  const submitModerationIntent = async () => {
+    if (!moderationTarget || !moderationIntent) return;
+    const { player, type } = moderationIntent;
+    const reason = moderationReason.trim();
+
+    if ((type === "ban" || type === "report") && reason.length < 12) {
+      toast.error("Add more details", { description: "Please enter at least 12 characters so admins have enough context." });
+      return;
+    }
 
     try {
       setModerationActionId(player.id);
+      if (type === "ban") {
       const res = await banTournamentPlayer(moderationTarget._id, {
         playerId: player.id,
         reason,
         note: reason,
-        removeRegistration,
+          removeRegistration: moderationRemoveRegistration,
       });
       setModerationBans((current) => [res.data, ...current.filter((ban) => {
         const banPlayerId = typeof ban.player === "string" ? ban.player : ban.player?._id;
         return banPlayerId !== player.id || ban.status !== "active";
       })]);
       toast.success("Player banned", { description: `${player.name} cannot join this tournament now.` });
+      }
+
+      if (type === "unban") {
+        await unbanTournamentPlayer(moderationTarget._id, player.id, reason);
+        setModerationBans((current) => current.map((ban) => {
+          const banPlayerId = typeof ban.player === "string" ? ban.player : ban.player?._id;
+          return banPlayerId === player.id && ban.status === "active" ? { ...ban, status: "revoked" } : ban;
+        }));
+        toast.success("Player unbanned", { description: `${player.name} can join again.` });
+      }
+
+      if (type === "report") {
+        await createReport({
+          title: `Creator report: ${player.name}`,
+          targetType: "player",
+          category: "abusive_behavior",
+          message: reason,
+          tournament: moderationTarget._id,
+          reportedUser: player.id,
+          severity: "medium",
+        });
+        toast.success("Player reported", { description: "Admin moderation can now review it." });
+      }
+
+      closeModerationIntent();
     } catch (error) {
-      const errorToast = getErrorToast(error, { action: "Ban player", fallback: "Could not ban player." });
+      const action = type === "ban" ? "Ban player" : type === "unban" ? "Unban player" : "Report player";
+      const errorToast = getErrorToast(error, { action, fallback: `${action} failed.` });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
       setModerationActionId(null);
@@ -560,57 +611,16 @@ const CreatorDashboardScreen = () => {
   };
 
   const handleUnbanPlayer = async (player: ModerationPlayer) => {
-    if (!moderationTarget) return;
-    const note = window.prompt(`Why are you unbanning ${player.name}?`)?.trim() || "";
-
-    try {
-      setModerationActionId(player.id);
-      await unbanTournamentPlayer(moderationTarget._id, player.id, note);
-      setModerationBans((current) => current.map((ban) => {
-        const banPlayerId = typeof ban.player === "string" ? ban.player : ban.player?._id;
-        return banPlayerId === player.id && ban.status === "active" ? { ...ban, status: "revoked" } : ban;
-      }));
-      toast.success("Player unbanned", { description: `${player.name} can join again.` });
-    } catch (error) {
-      const errorToast = getErrorToast(error, { action: "Unban player", fallback: "Could not unban player." });
-      toast.error(errorToast.title, { description: errorToast.description });
-    } finally {
-      setModerationActionId(null);
-    }
+    openModerationIntent("unban", player);
   };
 
   const handleReportPlayer = async (player: ModerationPlayer) => {
-    if (!moderationTarget) return;
-    const message = window.prompt(`What should admins review about ${player.name}?`)?.trim();
-    if (!message) return;
-    if (message.length < 12) {
-      toast.error("Add more details", { description: "Reports need at least 12 characters." });
-      return;
-    }
-
-    try {
-      setModerationActionId(player.id);
-      await createReport({
-        title: `Creator report: ${player.name}`,
-        targetType: "player",
-        category: "abusive_behavior",
-        message,
-        tournament: moderationTarget._id,
-        reportedUser: player.id,
-        severity: "medium",
-      });
-      toast.success("Player reported", { description: "Admin moderation can now review it." });
-    } catch (error) {
-      const errorToast = getErrorToast(error, { action: "Report player", fallback: "Could not report player." });
-      toast.error(errorToast.title, { description: errorToast.description });
-    } finally {
-      setModerationActionId(null);
-    }
+    openModerationIntent("report", player);
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4 flex items-center justify-between gap-3">
+    <div className="arena-shell min-h-screen pb-20">
+      <div className="mx-auto w-full max-w-6xl px-4 sm:px-5 lg:px-6 pt-6 pb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate(-1)} className="shrink-0">
             <ArrowLeft className="w-5 h-5" />
@@ -625,7 +635,7 @@ const CreatorDashboardScreen = () => {
         </NeonButton>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-5">
+      <div className="mx-auto w-full max-w-6xl px-4 sm:px-5 lg:px-6 mb-5">
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {loading ? skeletonCards(5, "h-[86px]") : stats.map((s, i) => (
             <GlassCard key={s.label} neon delay={i * 0.06}>
@@ -639,7 +649,7 @@ const CreatorDashboardScreen = () => {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-5">
+      <div className="mx-auto w-full max-w-6xl px-4 sm:px-5 lg:px-6 mb-5">
         <h2 className="font-heading text-base font-bold flex items-center gap-2 mb-3">
           <TrendingUp className="w-4 h-4 text-accent" />
           Monthly Earnings
@@ -668,7 +678,7 @@ const CreatorDashboardScreen = () => {
         </GlassCard>}
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-5 grid gap-4 sm:grid-cols-2">
+      <div className="mx-auto w-full max-w-6xl px-4 sm:px-5 lg:px-6 mb-5 grid gap-4 lg:grid-cols-2">
         {loading ? (
           <>
             <div className="h-44 animate-pulse rounded-xl bg-muted" />
@@ -739,7 +749,7 @@ const CreatorDashboardScreen = () => {
         )}
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-5">
+      <div className="mx-auto w-full max-w-6xl px-4 sm:px-5 lg:px-6 mb-5">
         {loading ? (
           <div className="h-36 animate-pulse rounded-xl bg-muted" />
         ) : (
@@ -772,7 +782,7 @@ const CreatorDashboardScreen = () => {
         )}
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-5">
+      <div className="mx-auto w-full max-w-6xl px-4 sm:px-5 lg:px-6 mb-5">
         <h2 className="font-heading text-base font-bold flex items-center gap-2 mb-3">
           <BarChart3 className="w-4 h-4 text-primary" />
           Recent Tournaments
@@ -816,7 +826,7 @@ const CreatorDashboardScreen = () => {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5">
+      <div className="mx-auto w-full max-w-6xl px-4 sm:px-5 lg:px-6">
         <div className="flex items-center justify-between gap-3 mb-3">
           <h2 className="font-heading text-base font-bold flex items-center gap-2">
             <Calendar className="w-4 h-4 text-secondary" />
@@ -1072,7 +1082,7 @@ const CreatorDashboardScreen = () => {
           }
         }}
       >
-        <DialogContent className="w-[calc(100%-2rem)] rounded-xl border-destructive/30 bg-background sm:max-w-md">
+        <DialogContent className="w-[calc(100%-2rem)] rounded-lg border-destructive/30 bg-card/95 sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading text-destructive">Cancel Tournament</DialogTitle>
             <DialogDescription>
@@ -1161,7 +1171,7 @@ const CreatorDashboardScreen = () => {
           }
         }}
       >
-        <DialogContent className="max-h-[88vh] w-[calc(100%-2rem)] overflow-y-auto rounded-xl border-glass-border bg-background sm:max-w-2xl">
+        <DialogContent className="max-h-[88vh] w-[calc(100%-2rem)] overflow-y-auto rounded-lg border-glass-border bg-card/95 sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-heading">Player Moderation</DialogTitle>
             <DialogDescription>
@@ -1233,7 +1243,7 @@ const CreatorDashboardScreen = () => {
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => handleBanPlayer(player)}
+                                onClick={() => openModerationIntent("ban", player)}
                                 disabled={busy}
                                 className={`${tournamentActionButtonBase} ${actionButtonClass.destructive}`}
                               >
@@ -1257,6 +1267,102 @@ const CreatorDashboardScreen = () => {
                   })}
                 </div>
               )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(moderationIntent)}
+        onOpenChange={(open) => {
+          if (!open) closeModerationIntent();
+        }}
+      >
+        <DialogContent className="w-[calc(100%-2rem)] rounded-lg border-glass-border bg-card/95 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">
+              {moderationIntent?.type === "ban"
+                ? "Ban Player"
+                : moderationIntent?.type === "unban"
+                  ? "Unban Player"
+                  : "Report Player"}
+            </DialogTitle>
+            <DialogDescription>
+              {moderationIntent?.player.name || "Player"} in {moderationTarget?.title || "this tournament"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {moderationIntent && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-glass-border bg-background/45 p-3">
+                <p className="font-heading text-sm font-bold">{moderationIntent.player.name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {moderationIntent.player.gameName || "Game name not set"}
+                  {moderationIntent.player.gameId ? ` - ${moderationIntent.player.gameId}` : ""}
+                  {moderationIntent.player.slotNumber ? ` - Slot ${moderationIntent.player.slotNumber}` : ""}
+                </p>
+              </div>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-heading text-muted-foreground">
+                  {moderationIntent.type === "unban" ? "Note (optional)" : "Reason"}
+                </span>
+                <textarea
+                  value={moderationReason}
+                  onChange={(event) => setModerationReason(event.target.value)}
+                  rows={4}
+                  placeholder={
+                    moderationIntent.type === "ban"
+                      ? "Explain why this player should be banned..."
+                      : moderationIntent.type === "report"
+                        ? "Explain what admins should review..."
+                        : "Optional unban note..."
+                  }
+                  className="w-full resize-none rounded-lg border border-glass-border bg-background/55 px-3 py-2.5 text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
+                />
+              </label>
+
+              {moderationIntent.type === "ban" && (
+                <label className="flex items-start gap-3 rounded-lg border border-glass-border bg-background/45 p-3">
+                  <input
+                    type="checkbox"
+                    checked={moderationRemoveRegistration}
+                    onChange={(event) => setModerationRemoveRegistration(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-primary"
+                  />
+                  <span>
+                    <span className="block font-heading text-xs font-bold">Remove unpaid registration when allowed</span>
+                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                      Paid players stay protected by the backend refund flow.
+                    </span>
+                  </span>
+                </label>
+              )}
+
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={closeModerationIntent}
+                  disabled={moderationActionId === moderationIntent.player.id}
+                  className="rounded-lg border border-glass-border px-4 py-2 text-sm font-heading text-foreground disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={submitModerationIntent}
+                  disabled={moderationActionId === moderationIntent.player.id}
+                  className={`rounded-lg px-4 py-2 text-sm font-heading font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
+                    moderationIntent.type === "ban"
+                      ? "bg-destructive text-destructive-foreground"
+                      : moderationIntent.type === "unban"
+                        ? "bg-accent text-accent-foreground"
+                        : "bg-secondary text-secondary-foreground"
+                  }`}
+                >
+                  {moderationActionId === moderationIntent.player.id ? "Saving..." : "Confirm"}
+                </button>
+              </div>
             </div>
           )}
         </DialogContent>

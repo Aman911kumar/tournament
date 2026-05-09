@@ -173,7 +173,7 @@ const SlotSelectionScreen = () => {
   const linkedAccountLabel = game === "freefire" ? "Free Fire" : game ? game : "Game";
 
   return (
-    <div className="min-h-screen bg-background pb-32">
+    <div className="arena-shell min-h-screen pb-32">
       <div className="flex items-center gap-3 px-5 pt-6 pb-4">
         <button onClick={() => navigate(-1)} className="w-9 h-9 glass rounded-full flex items-center justify-center">
           <ArrowLeft className="w-4 h-4 text-foreground" />

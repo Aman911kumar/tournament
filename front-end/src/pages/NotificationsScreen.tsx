@@ -25,6 +25,8 @@ const iconColorMap: Record<string, string> = {
   tournament: "text-secondary",
   reward: "text-accent",
   security: "text-destructive",
+  report: "text-secondary",
+  moderation: "text-destructive",
   system: "text-neon-pink",
 };
 
@@ -37,6 +39,8 @@ const iconMap = {
   tournament: Trophy,
   reward: Sparkles,
   security: Shield,
+  report: Shield,
+  moderation: Shield,
   system: Megaphone,
 };
 
@@ -161,21 +165,26 @@ const NotificationsScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
-        <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate(-1)}>
+    <div className="arena-shell min-h-screen pb-20">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          onClick={() => navigate(-1)}
+          className="arena-focus grid h-10 w-10 place-items-center rounded-full border border-glass-border bg-card/85"
+          aria-label="Go back"
+        >
           <ArrowLeft className="w-5 h-5" />
         </motion.button>
         <div className="flex items-center gap-2">
           <Bell className="w-5 h-5 text-primary" />
           <h1 className="font-heading text-xl font-bold">Notifications</h1>
         </div>
-        <button onClick={handleMarkAllRead} className="ml-auto text-xs text-primary font-heading hover:underline">
+        <button onClick={handleMarkAllRead} className="arena-focus ml-auto rounded-md px-2 py-1 text-xs text-primary font-heading hover:bg-primary/10">
           Mark all read
         </button>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 space-y-3">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 space-y-3">
         <GlassCard className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="font-heading text-sm font-bold">Device notifications</p>

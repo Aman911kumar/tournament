@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Search, ChevronRight, Crosshair, Flame, Zap, Star, Users, Crown } from "lucide-react";
-import GlassCard from "@/components/GlassCard";
+import { Search, ChevronRight, Flame, Zap, Crown, Trophy } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
 import NotificationBell from "@/components/NotificationBell";
+import { CreatorCard, EmptyState, PageHeader, PageShell, StatusPill, Surface, TournamentCard } from "@/components/design-system";
 import { getMyTournamentRegistrations, getTournamentPage, Tournament } from "@/api/tournaments";
 import { getCreators, CreatorChannel } from "@/api/creators";
 import { formatPrizeSummary } from "@/lib/page-utils";
@@ -111,53 +111,51 @@ const Index = () => {
   }, [trendingTournaments]);
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      {/* Header */}
-      <div className="mx-auto w-full max-w-2xl flex items-center justify-between px-4 sm:px-5 pt-6 pb-4">
-        <div>
-          <h1 className="font-display text-xl font-bold tracking-wider neon-text-purple">
-            BATTLEARENA
-          </h1>
-          <p className="text-xs text-muted-foreground font-heading">Welcome back, Warrior</p>
-        </div>
+    <PageShell contentClassName="space-y-6">
+      <PageHeader
+        title={<span className="font-display text-xl tracking-wide neon-text-purple">BATTLE4ARENA</span>}
+        subtitle="Welcome back, warrior"
+        action={
         <div className="flex items-center gap-3">
           <NotificationBell />
-          <button className="w-9 h-9 glass rounded-full flex items-center justify-center">
-            <Search className="w-4 h-4 text-muted-foreground" />
+          <button
+            type="button"
+            onClick={() => navigate("/tournaments")}
+            className="arena-focus flex h-10 w-10 items-center justify-center rounded-full border border-glass-border bg-card/90 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+            aria-label="Search tournaments"
+          >
+            <Search className="h-4 w-4" />
           </button>
         </div>
-      </div>
+        }
+      />
 
       {liveTournament && (
-        <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-6">
-          <GlassCard neon className="relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
-            <div className="flex items-center gap-2 mb-2">
-              <Flame className="w-4 h-4 text-accent animate-glow-pulse" />
+          <Surface neon className="relative overflow-hidden">
+            <div className="absolute inset-x-0 top-0 h-1 gradient-neon" />
+            <div className="mb-2 flex items-center gap-2">
+              <Flame className="h-4 w-4 text-accent" />
               <span className="text-xs font-heading font-semibold text-accent uppercase tracking-wider">
                 Live Now
               </span>
             </div>
             <h2 className="font-heading text-lg font-bold">{liveTournament.title}</h2>
-            <p className="text-xs text-muted-foreground font-body mb-1">
+            <p className="mb-1 text-xs text-muted-foreground">
               by <span className="text-primary">{liveTournament.channel?.name ?? liveTournament.organizer?.username ?? "Creator"}</span>{" "}
-              <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[10px] font-heading font-semibold text-accent">
-                Verified Creator
-              </span>
+              <StatusPill tone="accent">Verified</StatusPill>
             </p>
-            <p className="text-xs text-muted-foreground font-body mb-3">
+            <p className="mb-3 text-xs text-muted-foreground">
               Prize: {getPrizeSummary(liveTournament)} - {Number(liveTournament.participantCount || liveTournament.registrationCount || 0)}/{liveTournament.maxPlayers} playing
             </p>
             <NeonButton variant="green" className="text-xs py-2 px-4" onClick={() => navigate(`/tournament/${liveTournament._id}`)}>
               Watch Live
             </NeonButton>
-          </GlassCard>
-        </div>
+          </Surface>
       )}
 
       {/* Recommended Creators */}
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-6">
-        <div className="flex items-center justify-between mb-3">
+      <section>
+        <div className="mb-3 flex items-center justify-between">
           <h2 className="font-heading text-base font-bold flex items-center gap-2">
             <Crown className="w-4 h-4 text-neon-pink" />
             Top Creators
@@ -170,52 +168,23 @@ const Index = () => {
           </button>
         </div>
         <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
-          {recommendedCreators.map((creator, i) => (
-            <motion.button
+          {recommendedCreators.map((creator) => (
+            <CreatorCard
               key={creator._id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.08 }}
-              whileTap={{ scale: 0.95 }}
+              name={creator.name}
+              avatarUrl={creator.avatar?.url ?? creator.owner?.avatar?.url}
+              followers={creator.memberCount}
+              rating={creator.owner?.stats?.rating ?? 4.5}
+              active={creator.isActive}
               onClick={() => navigate(`/creator/${creator._id}`)}
-              className="glass rounded-xl p-3 min-w-[120px] flex flex-col items-center gap-2 shrink-0"
-            >
-              <div className="relative">
-                {creator.avatar?.url || creator.owner?.avatar?.url ? (
-                  <img
-                    src={creator.avatar?.url ?? creator.owner?.avatar?.url}
-                    alt={creator.name}
-                    className="h-14 w-14 rounded-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="w-14 h-14 rounded-full gradient-primary flex items-center justify-center">
-                    <span className="font-display text-lg font-bold text-primary-foreground">
-                      {creator.name[0]}
-                    </span>
-                  </div>
-                )}
-                {creator.isActive && (
-                  <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-secondary flex items-center justify-center">
-                    <Star className="w-3 h-3 text-secondary-foreground fill-secondary-foreground" />
-                  </div>
-                )}
-              </div>
-              <p className="font-heading font-bold text-xs text-foreground truncate w-full text-center">
-                {creator.name}
-              </p>
-              <p className="text-[10px] text-muted-foreground">{creator.memberCount.toLocaleString("en-IN")} followers</p>
-              <div className="flex items-center gap-1 text-[10px] text-accent">
-                <Star className="w-2.5 h-2.5 fill-accent" /> {creator.owner?.stats?.rating ?? 4.5}
-              </div>
-            </motion.button>
+            />
           ))}
         </div>
-      </div>
+      </section>
 
       {/* Popular Games */}
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-6">
-        <div className="flex items-center justify-between mb-3">
+      <section>
+        <div className="mb-3 flex items-center justify-between">
           <h2 className="font-heading text-base font-bold flex items-center gap-2">
             <Zap className="w-4 h-4 text-primary" />
             Popular Games
@@ -224,7 +193,7 @@ const Index = () => {
             View All <ChevronRight className="w-3 h-3" />
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {games.map((game, i) => (
             <motion.button
               key={game.name}
@@ -234,7 +203,7 @@ const Index = () => {
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => navigate(`/tournaments?game=${game.query}`)}
-              className="glass rounded-xl overflow-hidden group"
+              className="group overflow-hidden rounded-lg border border-glass-border bg-card/80 transition-colors hover:border-primary/45"
             >
               <div className="relative aspect-square">
                 <img
@@ -243,9 +212,9 @@ const Index = () => {
                   loading="lazy"
                   width={512}
                   height={512}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-3">
                   <p className="font-heading font-bold text-sm text-foreground">{game.name}</p>
                   <p className="text-[10px] text-muted-foreground">
@@ -256,11 +225,11 @@ const Index = () => {
             </motion.button>
           ))}
         </div>
-      </div>
+      </section>
 
       {/* Trending Tournaments */}
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5">
-        <div className="flex items-center justify-between mb-3">
+      <section>
+        <div className="mb-3 flex items-center justify-between">
           <h2 className="font-heading text-base font-bold flex items-center gap-2">
             <Flame className="w-4 h-4 text-destructive" />
             Trending Tournaments
@@ -272,37 +241,28 @@ const Index = () => {
             See All <ChevronRight className="w-3 h-3" />
           </button>
         </div>
-        {trendingTournaments.map((t, i) => (
-          <GlassCard
+        {trendingTournaments.length === 0 ? (
+          <EmptyState icon={Trophy} title="No tournaments live yet" description="Fresh matches will appear here as creators publish them." />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {trendingTournaments.map((t) => (
+          <TournamentCard
             key={t._id}
-            neon
-            className="mb-3"
-            delay={i * 0.12}
+            title={t.title}
+            game={`${gameLabels[t.game] ?? t.game}`}
+            creator={t.channel?.name ?? t.organizer?.username ?? "Creator"}
+            status={joinedTournamentIds.has(t._id) ? "Joined" : t.status === "running" ? "Live" : t.status}
+            prize={getPrizeSummary(t)}
+            slots={Number(t.registrationCount || 0)}
+            maxSlots={t.maxPlayers}
+            entry={Number(t.entryFee || 0) === 0 ? "Free" : `₹${Number(t.entryFee || 0).toLocaleString("en-IN")}`}
+            joined={joinedTournamentIds.has(t._id)}
             onClick={() => navigate(`/tournament/${t._id}`)}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <p className="font-heading font-bold text-sm">{t.title}</p>
-                <p className="text-[10px] text-muted-foreground">
-                  {gameLabels[t.game] ?? t.game} - {t.maxPlayers} slots
-                </p>
-                <div className="flex items-center gap-1 mt-1">
-                  <span className="text-[10px] text-primary font-heading">by {t.channel?.name ?? t.organizer?.username ?? "Creator"}</span>
-                  <Star className="w-2.5 h-2.5 text-secondary fill-secondary" />
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-xs font-heading font-bold text-accent neon-text-green flex items-center justify-end gap-1">
-                  {t.prizeMode === "kill" && <Crosshair className="w-3 h-3" />}
-                  {getPrizeSummary(t)}
-                </p>
-                <NeonButton variant={joinedTournamentIds.has(t._id) ? "green" : "purple"} className="text-[10px] py-1 px-3 mt-1">
-                  {joinedTournamentIds.has(t._id) ? "Joined" : "Join"}
-                </NeonButton>
-              </div>
-            </div>
-          </GlassCard>
-        ))}
+            onCreatorClick={() => navigate(t.channel?._id ? `/creator/${t.channel._id}` : "/subscriptions")}
+          />
+            ))}
+          </div>
+        )}
         {hasMore && (
           <NeonButton
             full
@@ -314,9 +274,8 @@ const Index = () => {
             {loadingMore ? "LOADING..." : "LOAD MORE"}
           </NeonButton>
         )}
-      </div>
-
-    </div>
+      </section>
+    </PageShell>
   );
 };
 

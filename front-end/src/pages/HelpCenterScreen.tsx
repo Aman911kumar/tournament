@@ -36,8 +36,8 @@ const HelpCenterScreen = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
+    <div className="arena-shell min-h-screen pb-20">
+      <div className="mx-auto w-full max-w-3xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="h-9 w-9 rounded-full glass flex items-center justify-center">
           <ArrowLeft className="h-4 w-4" />
         </button>
@@ -47,7 +47,7 @@ const HelpCenterScreen = () => {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 space-y-4">
+      <div className="mx-auto w-full max-w-3xl px-4 sm:px-5 space-y-4">
         <GlassCard neon>
           <div className="flex items-start gap-3">
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">

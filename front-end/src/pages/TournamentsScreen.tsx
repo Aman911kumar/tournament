@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { AlertCircle, Calendar, Crosshair, DollarSign, RefreshCcw, Search, Shield, SlidersHorizontal, Trophy, Users } from "lucide-react";
-import GlassCard from "@/components/GlassCard";
+import { RefreshCcw, SlidersHorizontal, Trophy } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
+import { EmptyState, PageHeader, PageShell, SearchBox, SegmentedControl, SkeletonBlock, Surface, TournamentCard } from "@/components/design-system";
 import { formatCurrency, formatPrizeSummary, getErrorMessage, getPrizeSortValue } from "@/lib/page-utils";
 import { getMyTournamentRegistrations, getTournamentPage, Tournament } from "@/api/tournaments";
 import { CACHE_KEYS, readCache, stableCacheKey, writeAuthenticatedCache, writeCache } from "@/lib/offline-cache";
@@ -33,14 +33,6 @@ const sortMap: Record<string, "trending" | "latest" | "prize_asc" | "prize_desc"
   Latest: "latest",
   "Prize Up": "prize_asc",
   "Prize Down": "prize_desc",
-};
-
-const statusStyle = (status: Tournament["status"]) => {
-  if (status === "running") return "bg-destructive/20 text-destructive";
-  if (status === "completed") return "bg-muted text-muted-foreground";
-  if (status === "open") return "bg-secondary/20 text-secondary";
-  if (status === "cancelled") return "bg-destructive/10 text-destructive";
-  return "bg-primary/10 text-primary";
 };
 
 const getRegistrationTournamentId = (registration: Awaited<ReturnType<typeof getMyTournamentRegistrations>>[number]) =>
@@ -192,172 +184,112 @@ const TournamentsScreen = () => {
   }, [activeFee, activeGame, activeSort, searchQuery, tournaments]);
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4">
-        <h1 className="font-heading text-xl font-bold">Tournaments</h1>
-        <p className="text-xs text-muted-foreground font-heading">Find your next battle</p>
-      </div>
+    <PageShell contentClassName="space-y-4">
+      <PageHeader title="Tournaments" subtitle="Find your next battle" />
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-3 flex gap-2">
-        <div className="flex-1 glass rounded-lg flex items-center gap-2 px-3 py-2">
-          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search tournaments or creators..."
-            className="min-w-0 bg-transparent text-xs font-heading flex-1 focus:outline-none placeholder:text-muted-foreground/50"
-          />
-        </div>
+      <div className="flex gap-2">
+        <SearchBox
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search tournaments or creators..."
+          className="flex-1"
+        />
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => setShowFilters(!showFilters)}
-          className={`w-10 h-10 glass rounded-lg flex items-center justify-center shrink-0 ${showFilters ? "neon-border" : ""}`}
+          className={`arena-focus flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-glass-border bg-card/80 transition-colors hover:border-primary/45 ${showFilters ? "neon-border text-primary" : "text-muted-foreground"}`}
+          aria-label="Toggle tournament filters"
         >
-          <SlidersHorizontal className="w-4 h-4 text-muted-foreground" />
+          <SlidersHorizontal className="h-4 w-4" />
         </motion.button>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-3 flex gap-2 overflow-x-auto scrollbar-hide">
-        {gameFilters.map((f) => (
-          <motion.button
-            key={f}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setActiveGame(f)}
-            className={`px-4 py-1.5 rounded-full text-xs font-heading font-medium whitespace-nowrap transition-colors ${
-              activeGame === f ? "bg-primary text-primary-foreground neon-glow-purple" : "glass text-muted-foreground"
-            }`}
-          >
-            {f}
-          </motion.button>
-        ))}
-      </div>
+      <SegmentedControl
+        value={activeGame}
+        onChange={setActiveGame}
+        options={gameFilters.map((filter) => ({ label: filter, value: filter }))}
+      />
 
       {showFilters && (
         <motion.div
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: "auto", opacity: 1 }}
-          className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-3 space-y-2"
+          className="space-y-2 overflow-hidden"
         >
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-            {feeFilters.map((f) => (
-              <button
-                key={f}
-                onClick={() => setActiveFee(f)}
-                className={`px-3 py-1 rounded-full text-[10px] font-heading font-medium whitespace-nowrap transition-colors ${
-                  activeFee === f ? "bg-secondary text-secondary-foreground" : "glass text-muted-foreground"
-                }`}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-            {sortOptions.map((s) => (
-              <button
-                key={s}
-                onClick={() => setActiveSort(s)}
-                className={`px-3 py-1 rounded-full text-[10px] font-heading font-medium whitespace-nowrap transition-colors ${
-                  activeSort === s ? "bg-accent text-accent-foreground" : "glass text-muted-foreground"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            value={activeFee}
+            onChange={setActiveFee}
+            options={feeFilters.map((filter) => ({ label: filter, value: filter }))}
+          />
+          <SegmentedControl
+            value={activeSort}
+            onChange={setActiveSort}
+            options={sortOptions.map((filter) => ({ label: filter, value: filter }))}
+          />
         </motion.div>
       )}
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {loading && [0, 1, 2].map((item) => (
-          <GlassCard key={item}>
-            <div className="space-y-3 animate-pulse">
-              <div className="h-4 w-2/3 rounded bg-muted" />
-              <div className="h-3 w-1/3 rounded bg-muted" />
+          <Surface key={item}>
+            <div className="space-y-3">
+              <SkeletonBlock className="h-4 w-2/3" />
+              <SkeletonBlock className="h-3 w-1/3" />
               <div className="grid grid-cols-2 gap-2">
-                <div className="h-3 rounded bg-muted" />
-                <div className="h-3 rounded bg-muted" />
+                <SkeletonBlock className="h-3" />
+                <SkeletonBlock className="h-3" />
               </div>
-              <div className="h-9 rounded bg-muted" />
+              <SkeletonBlock className="h-9" />
             </div>
-          </GlassCard>
+          </Surface>
         ))}
 
         {!loading && error && (
-          <GlassCard className="text-center py-10">
-            <AlertCircle className="w-10 h-10 mx-auto text-destructive mb-2" />
-            <p className="text-sm font-heading">Could not load tournaments</p>
-            <p className="text-xs text-muted-foreground mt-1">{error}</p>
-            <button onClick={() => loadTournaments(1)} className="mt-4 inline-flex items-center gap-1.5 text-xs text-primary font-heading">
-              <RefreshCcw className="w-3.5 h-3.5" /> Retry
-            </button>
-          </GlassCard>
+          <div className="sm:col-span-2">
+            <EmptyState
+              icon={RefreshCcw}
+              title="Could not load tournaments"
+              description={error}
+              action={<NeonButton variant="ghost" className="text-xs" onClick={() => loadTournaments(1)}>Retry</NeonButton>}
+            />
+          </div>
         )}
 
         {!loading && !error && (filtered.length === 0 ? (
-          <GlassCard className="text-center py-10">
-            <Trophy className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
-            <p className="text-sm font-heading">No tournaments found</p>
-            <p className="text-xs text-muted-foreground mt-1">Try changing search or filters.</p>
-          </GlassCard>
+          <div className="sm:col-span-2">
+            <EmptyState icon={Trophy} title="No tournaments found" description="Try changing search or filters." />
+          </div>
         ) : (
-          filtered.map((t, i) => {
+          filtered.map((t) => {
             const gameName = gameLabels[t.game] ?? t.game;
             const creatorName = t.channel?.name ?? t.organizer?.username ?? "Creator";
             const joined = joinedTournamentIds.has(t._id);
             return (
-            <GlassCard key={t._id} neon delay={i * 0.06}>
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div className="min-w-0">
-                  <p className="font-heading font-bold text-sm truncate">{t.title}</p>
-                  <p className="text-[10px] text-muted-foreground">{gameName}</p>
-                </div>
-                <span
-                  className={`text-[10px] font-heading font-semibold px-2 py-0.5 rounded-full shrink-0 ${statusStyle(t.status)}`}
-                >
-                  {t.status === "running" ? "Live" : t.status}
-                </span>
-              </div>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(t.channel?._id ? `/creator/${t.channel._id}` : "/subscriptions");
-                }}
-                className="flex items-center gap-1.5 mb-3"
-              >
-                <span className="text-[10px] text-primary font-heading">by {creatorName}</span>
-                <Shield className="w-2.5 h-2.5 text-secondary fill-secondary" />
-              </button>
-
-              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2 mb-3">
-                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <Calendar className="w-3 h-3 shrink-0" /> <span className="truncate">{new Date(t.startAt).toLocaleString()}</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <Users className="w-3 h-3 shrink-0" /> {Number(t.registrationCount || 0)}/{t.maxPlayers} slots
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <DollarSign className="w-3 h-3 shrink-0" /> Entry: {Number(t.entryFee || 0) === 0 ? "FREE" : formatCurrency(t.entryFee)}
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-accent neon-text-green">
-                  {t.prizeMode === "kill" ? <Crosshair className="w-3 h-3 shrink-0" /> : <Trophy className="w-3 h-3 shrink-0" />} {getPrizeSummary(t)}
-                </div>
-              </div>
-              <NeonButton full variant={joined ? "green" : "purple"} className="text-xs py-2" onClick={() => navigate(`/tournament/${t._id}`)}>
-                {joined ? "JOINED" : "VIEW & REGISTER"}
-              </NeonButton>
-            </GlassCard>
+            <TournamentCard
+              key={t._id}
+              title={t.title}
+              game={`${gameName} - ${new Date(t.startAt).toLocaleString()}`}
+              creator={creatorName}
+              status={joined ? "Joined" : t.status === "running" ? "Live" : t.status}
+              prize={getPrizeSummary(t)}
+              slots={Number(t.registrationCount || 0)}
+              maxSlots={t.maxPlayers}
+              entry={Number(t.entryFee || 0) === 0 ? "Free" : formatCurrency(t.entryFee)}
+              joined={joined}
+              onClick={() => navigate(`/tournament/${t._id}`)}
+              onCreatorClick={() => navigate(t.channel?._id ? `/creator/${t.channel._id}` : "/subscriptions")}
+            />
           )})
         ))}
+
+      </div>
 
         {!loading && !error && hasMore && (
           <NeonButton full variant="blue" className="text-xs py-2" onClick={() => loadTournaments(page + 1)} disabled={loadingMore}>
             {loadingMore ? "LOADING..." : "LOAD MORE"}
           </NeonButton>
         )}
-      </div>
-
-    </div>
+    </PageShell>
   );
 };
 

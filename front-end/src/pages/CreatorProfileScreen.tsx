@@ -402,15 +402,15 @@ const CreatorProfileScreen = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
+    <div className="arena-shell min-h-screen pb-20">
+      <div className="mx-auto w-full max-w-5xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
         <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate(-1)}>
           <ArrowLeft className="w-5 h-5" />
         </motion.button>
         <h1 className="font-heading text-xl font-bold">Creator Profile</h1>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 space-y-4">
+      <div className="mx-auto w-full max-w-5xl px-4 sm:px-5 space-y-4">
         {loading && <CreatorProfileSkeleton />}
 
         {!loading && refreshing && profile && (
@@ -608,13 +608,13 @@ const CreatorProfileScreen = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/88 px-4"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="glass w-full max-w-md rounded-2xl border border-glass-border p-5"
+              className="glass w-full max-w-md rounded-lg border border-glass-border p-5"
             >
               <h3 className="font-heading text-lg font-bold">Report creator</h3>
               <p className="mt-1 text-xs text-muted-foreground">Use this for missing prize distribution, wrong payout, or creator misconduct.</p>

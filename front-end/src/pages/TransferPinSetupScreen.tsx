@@ -55,7 +55,7 @@ const TransferPinSetupScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="arena-shell min-h-screen pb-20">
       <div className="mx-auto flex w-full max-w-xl items-center gap-3 px-4 pb-4 pt-6 sm:px-5">
         <motion.button
           whileTap={{ scale: 0.9 }}

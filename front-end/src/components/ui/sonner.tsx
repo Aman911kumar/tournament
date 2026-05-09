@@ -31,7 +31,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         classNames: {
           // SAFE BASE STYLE
           toast:
-            "group toast w-[min(440px,calc(100vw-24px))] rounded-xl border px-4 py-3 text-left shadow-lg backdrop-blur group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border",
+            "group toast w-[min(440px,calc(100vw-24px))] rounded-lg border px-4 py-3 text-left shadow-[0_16px_48px_hsl(0_0%_0%/0.28)] group-[.toaster]:bg-card group-[.toaster]:text-foreground group-[.toaster]:border-glass-border",
 
           title: "font-semibold text-sm leading-5 text-foreground",
 

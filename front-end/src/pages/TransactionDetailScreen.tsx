@@ -144,8 +144,8 @@ const TransactionDetailScreen = () => {
   }, [tx]);
 
   return (
-    <div className="min-h-screen bg-background pb-10">
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
+    <div className="arena-shell min-h-screen pb-10">
+      <div className="mx-auto w-full max-w-3xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
         <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate(-1)}>
           <ArrowLeft className="w-5 h-5" />
         </motion.button>
@@ -155,7 +155,7 @@ const TransactionDetailScreen = () => {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 space-y-4">
+      <div className="mx-auto w-full max-w-3xl px-4 sm:px-5 space-y-4">
         {loading && (
           <GlassCard neon>
             <div className="animate-pulse space-y-4">
@@ -183,7 +183,7 @@ const TransactionDetailScreen = () => {
         {!loading && !error && tx && details && (
           <>
             <GlassCard neon className="text-center relative overflow-hidden">
-              <div className="absolute -top-10 -right-10 w-40 h-40 bg-primary/10 rounded-full blur-3xl" />
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-xl" />
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}

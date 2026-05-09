@@ -204,7 +204,7 @@ const AccountFormModal = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center sm:items-center justify-center p-3 sm:p-4"
+        className="fixed inset-0 z-50 bg-background/88 flex items-center sm:items-center justify-center p-3 sm:p-4"
         onClick={() => !loading && onClose()}
       >
         <motion.div
@@ -213,7 +213,7 @@ const AccountFormModal = ({
           exit={{ y: 40, opacity: 0 }}
           transition={{ type: "spring", damping: 22 }}
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-md max-h-[92svh] overflow-y-auto glass neon-border rounded-2xl p-4 sm:p-5 relative"
+          className="w-full max-w-md max-h-[92svh] overflow-y-auto glass neon-border rounded-lg p-4 sm:p-5 relative"
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-heading text-lg font-bold">
@@ -459,13 +459,13 @@ const GameAccountsScreen = () => {
   const isBusy = loading || verifyingId !== null;
 
   return (
-    <div className="min-h-screen bg-background pb-28 relative overflow-hidden">
+    <div className="arena-shell min-h-screen pb-28 relative overflow-hidden">
       {/* ambient glow */}
-      <div className="absolute -top-24 -right-24 w-72 h-72 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/2 -left-24 w-72 h-72 bg-secondary/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-24 -right-24 h-56 w-56 rounded-full bg-primary/8 blur-xl pointer-events-none" />
+      <div className="absolute top-1/2 -left-24 h-56 w-56 rounded-full bg-secondary/8 blur-xl pointer-events-none" />
 
       {/* Header */}
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-5 sm:pt-6 pb-4 flex items-center justify-between relative z-10">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 pt-5 sm:pt-6 pb-4 flex items-center justify-between relative z-10">
         <div className="flex items-center gap-3">
           <motion.button
             whileTap={{ scale: 0.92 }}
@@ -492,14 +492,14 @@ const GameAccountsScreen = () => {
       </div>
 
       {/* Hero summary */}
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-5 relative z-10">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mb-5 relative z-10">
         <GlassCard neon className="relative overflow-hidden">
           <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/15 rounded-full blur-2xl" />
           <div className="flex items-center gap-4">
             <motion.div
               initial={{ scale: 0, rotate: -45 }}
               animate={{ scale: 1, rotate: 0 }}
-              className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center neon-glow-purple"
+              className="w-14 h-14 rounded-lg gradient-primary flex items-center justify-center neon-border"
             >
               <Gamepad2 className="w-7 h-7 text-primary-foreground" />
             </motion.div>
@@ -516,7 +516,7 @@ const GameAccountsScreen = () => {
       </div>
 
       {/* Accounts list */}
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 space-y-3 relative z-10">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 space-y-3 relative z-10">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="font-heading text-xs font-bold text-muted-foreground uppercase tracking-wider">

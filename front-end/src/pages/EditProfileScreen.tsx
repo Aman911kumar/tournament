@@ -246,8 +246,8 @@ const EditProfileScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-3 px-4 pb-4 pt-6 sm:px-5">
+    <div className="arena-shell min-h-screen pb-20">
+      <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 pb-4 pt-6 sm:px-5">
         <div className="flex items-center gap-3">
           <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate("/profile")}>
             <ArrowLeft className="h-5 w-5" />
@@ -267,7 +267,7 @@ const EditProfileScreen = () => {
         </button>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl space-y-4 px-4 sm:px-5">
+      <div className="mx-auto w-full max-w-4xl space-y-4 px-4 sm:px-5">
         <GlassCard neon className="flex items-center gap-4">
           <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full gradient-primary">
             {avatarUrl ? (

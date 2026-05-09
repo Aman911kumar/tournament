@@ -131,10 +131,10 @@ const ChangePasswordScreen = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background pb-20 relative overflow-hidden">
+    <div className="arena-shell min-h-screen pb-20 relative overflow-hidden">
       {/* Ambient glow */}
-      <div className="pointer-events-none absolute -top-32 -left-24 w-80 h-80 bg-primary/15 rounded-full blur-3xl" />
-      <div className="pointer-events-none absolute top-40 -right-24 w-72 h-72 bg-accent/15 rounded-full blur-3xl" />
+      <div className="pointer-events-none absolute -top-32 -left-24 h-64 w-64 rounded-full bg-primary/10 blur-xl" />
+      <div className="pointer-events-none absolute top-40 -right-24 h-56 w-56 rounded-full bg-accent/10 blur-xl" />
 
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3 relative z-10">
         <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate("/profile")}>
@@ -151,12 +151,12 @@ const ChangePasswordScreen = () => {
           transition={{ type: "spring", stiffness: 180, damping: 14 }}
           className="flex justify-center mb-4"
         >
-          <div className="relative w-24 h-24 rounded-2xl gradient-primary flex items-center justify-center neon-glow-purple">
+          <div className="relative w-24 h-24 rounded-lg gradient-primary flex items-center justify-center neon-border">
             <KeyRound className="w-10 h-10 text-primary-foreground" />
             <motion.div
               animate={{ scale: [1, 1.15, 1], opacity: [0.6, 0.2, 0.6] }}
               transition={{ duration: 2.4, repeat: Infinity }}
-              className="absolute inset-0 rounded-2xl border border-primary/40"
+              className="absolute inset-0 rounded-lg border border-primary/40"
             />
           </div>
         </motion.div>

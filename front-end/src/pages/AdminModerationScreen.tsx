@@ -179,7 +179,7 @@ const AdminModerationScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background px-4 py-6 pb-10 sm:px-5">
+    <div className="arena-shell min-h-screen px-4 py-6 pb-10 sm:px-5">
       <div className="mx-auto w-full max-w-6xl">
         <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -237,7 +237,7 @@ const AdminModerationScreen = () => {
 
         {loading ? (
           <div className="grid gap-3">
-            {Array.from({ length: 5 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-xl bg-muted" />)}
+            {Array.from({ length: 5 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-lg bg-muted/70" />)}
           </div>
         ) : reports.length === 0 ? (
           <GlassCard className="py-12 text-center">
@@ -284,7 +284,7 @@ const AdminModerationScreen = () => {
       </div>
 
       <Dialog open={Boolean(selectedReport)} onOpenChange={(open) => !open && setSelectedReport(null)}>
-        <DialogContent className="max-h-[88vh] w-[calc(100%-2rem)] overflow-y-auto rounded-xl bg-background sm:max-w-2xl">
+        <DialogContent className="max-h-[88vh] w-[calc(100%-2rem)] overflow-y-auto rounded-lg bg-card/95 sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="font-heading">Review Report</DialogTitle>
             <DialogDescription>Review evidence and apply a proportionate moderation action.</DialogDescription>

@@ -14,6 +14,7 @@ import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { ApiError } from "@/api/client";
 
 const Index = lazy(() => import("./pages/Index.tsx"));
+const LandingPage = lazy(() => import("./pages/LandingPage.tsx"));
 const LoginScreen = lazy(() => import("./pages/LoginScreen.tsx"));
 const ForgotPasswordScreen = lazy(() => import("./pages/ForgotPasswordScreen.tsx"));
 const VerifyEmailScreen = lazy(() => import("./pages/VerifyEmailScreen.tsx"));
@@ -67,7 +68,7 @@ const queryClient = new QueryClient({
 
 const ProtectedShell = () => (
   <ProtectedRoute>
-    <div className="min-h-screen pb-24">
+    <div className="arena-shell min-h-screen pb-24">
       <Outlet />
     </div>
     <NotificationRealtimeBridge />
@@ -76,11 +77,11 @@ const ProtectedShell = () => (
 );
 
 const RouteLoader = () => (
-  <div className="min-h-screen bg-background px-4 pt-8">
+  <div className="arena-shell min-h-screen px-4 pt-8">
     <div className="mx-auto w-full max-w-2xl space-y-3">
-      <div className="h-6 w-36 animate-pulse rounded bg-muted" />
-      <div className="h-24 animate-pulse rounded-xl bg-muted" />
-      <div className="h-20 animate-pulse rounded-xl bg-muted" />
+      <div className="h-6 w-36 animate-pulse rounded-lg bg-muted" />
+      <div className="h-24 animate-pulse rounded-lg bg-muted" />
+      <div className="h-20 animate-pulse rounded-lg bg-muted" />
     </div>
   </div>
 );
@@ -103,6 +104,7 @@ const App = () => (
           >
             <Suspense fallback={<RouteLoader />}>
               <Routes>
+                <Route path="/landing" element={<LandingPage />} />
                 <Route path="/login" element={<LoginScreen />} />
                 <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
                 <Route path="/verify-email" element={<VerifyEmailScreen />} />

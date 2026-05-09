@@ -411,8 +411,8 @@ const CreateTournamentScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-10">
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
+    <div className="arena-shell min-h-screen pb-10">
+      <div className="mx-auto w-full max-w-5xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
         <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate(-1)}>
           <ArrowLeft className="w-5 h-5" />
         </motion.button>
@@ -422,7 +422,7 @@ const CreateTournamentScreen = () => {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 space-y-3">
+      <div className="mx-auto w-full max-w-5xl px-4 sm:px-5 space-y-3">
         <GlassCard neon>
           <label className="text-xs text-muted-foreground font-heading mb-2 flex items-center gap-1.5">
             <Gamepad2 className="w-3.5 h-3.5" /> Game
@@ -433,7 +433,7 @@ const CreateTournamentScreen = () => {
                 key={game}
                 type="button"
                 onClick={() => selectGame(game)}
-                className={`rounded-lg px-3 py-3 text-left transition-all ${form.game === game ? "bg-primary text-primary-foreground neon-glow-purple" : "glass text-muted-foreground hover:text-foreground"
+                className={`rounded-lg px-3 py-3 text-left transition-colors ${form.game === game ? "bg-primary text-primary-foreground neon-border" : "glass text-muted-foreground hover:text-foreground"
                   }`}
               >
                 <span className="block text-sm font-heading font-bold">{GAME_PRESETS[game].label}</span>
@@ -478,7 +478,7 @@ const CreateTournamentScreen = () => {
                 key={type.value}
                 type="button"
                 onClick={() => selectType(type.value)}
-                className={`px-3 py-2.5 rounded-lg text-xs font-heading font-medium transition-all ${form.type === type.value ? "bg-primary text-primary-foreground neon-glow-purple" : "glass text-muted-foreground hover:text-foreground"
+                className={`px-3 py-2.5 rounded-lg text-xs font-heading font-medium transition-colors ${form.type === type.value ? "bg-primary text-primary-foreground neon-border" : "glass text-muted-foreground hover:text-foreground"
                   }`}
               >
                 {type.label}
@@ -525,7 +525,7 @@ const CreateTournamentScreen = () => {
                 key={option.value}
                 type="button"
                 onClick={() => update("prizeMode", option.value)}
-                className={`rounded-lg px-3 py-2.5 text-left transition-all ${form.prizeMode === option.value ? "bg-primary text-primary-foreground neon-glow-purple" : "glass text-muted-foreground hover:text-foreground"}`}
+                className={`rounded-lg px-3 py-2.5 text-left transition-colors ${form.prizeMode === option.value ? "bg-primary text-primary-foreground neon-border" : "glass text-muted-foreground hover:text-foreground"}`}
               >
                 <span className="flex items-center gap-2 text-xs font-heading font-bold">
                   <option.icon className="h-3.5 w-3.5" /> {option.label}
@@ -710,9 +710,9 @@ const CreateTournamentScreen = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-6"
+            className="fixed inset-0 z-50 bg-background/88 flex items-center justify-center p-6"
           >
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass rounded-2xl p-6 w-full max-w-sm text-center neon-border">
+            <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass rounded-lg p-6 w-full max-w-sm text-center neon-border">
               <CheckCircle2 className="w-16 h-16 text-accent mx-auto mb-3" />
               <h3 className="font-heading text-lg font-bold mb-1">{isEditing ? "Tournament Updated!" : "Tournament Published!"}</h3>
               <p className="text-xs text-muted-foreground font-body mb-4">

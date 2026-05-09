@@ -136,8 +136,8 @@ const PaymentDetailScreen = () => {
   }, [payment]);
 
   return (
-    <div className="min-h-screen bg-background pb-10">
-      <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 pb-4 pt-6 sm:px-5">
+    <div className="arena-shell min-h-screen pb-10">
+      <div className="mx-auto flex w-full max-w-3xl items-center gap-3 px-4 pb-4 pt-6 sm:px-5">
         <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate(-1)} className="grid h-10 w-10 place-items-center rounded-lg glass">
           <ArrowLeft className="h-5 w-5" />
         </motion.button>
@@ -147,7 +147,7 @@ const PaymentDetailScreen = () => {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl space-y-4 px-4 sm:px-5">
+      <div className="mx-auto w-full max-w-3xl space-y-4 px-4 sm:px-5">
         {loading && (
           <GlassCard neon>
             <div className="animate-pulse space-y-4">
@@ -172,7 +172,7 @@ const PaymentDetailScreen = () => {
         {!loading && !error && payment && details && (
           <>
             <GlassCard neon className="relative overflow-hidden text-center">
-              <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-secondary/10 blur-3xl" />
+              <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-secondary/10 blur-xl" />
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}

@@ -28,7 +28,7 @@ const TournamentCommentsScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="arena-shell min-h-screen flex flex-col">
       {/* Header */}
       <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
         <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate(-1)}>

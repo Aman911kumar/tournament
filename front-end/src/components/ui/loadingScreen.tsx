@@ -1,78 +1,12 @@
-import React from 'react';
-import styled from 'styled-components';
-
-const Loader = () => {
-    return (
-        <StyledWrapper>
-            <div className="loader" />
-        </StyledWrapper>
-    );
-}
-
-const StyledWrapper = styled.div`
-  .loader {
-    position: relative;
-    width: 120px;
-    height: 90px;
-    margin: 0 auto;
-  }
-
-  .loader:before {
-    content: "";
-    position: absolute;
-    bottom: 30px;
-    left: 50px;
-    height: 30px;
-    width: 30px;
-    border-radius: 50%;
-    background: #2a9d8f;
-    animation: loading-bounce 0.5s ease-in-out infinite alternate;
-  }
-
-  .loader:after {
-    content: "";
-    position: absolute;
-    right: 0;
-    top: 0;
-    height: 7px;
-    width: 45px;
-    border-radius: 4px;
-    box-shadow: 0 5px 0 #f2f2f2, -35px 50px 0 #f2f2f2, -70px 95px 0 #f2f2f2;
-    animation: loading-step 1s ease-in-out infinite;
-  }
-
-  @keyframes loading-bounce {
-    0% {
-      transform: scale(1, 0.7);
-    }
-
-    40% {
-      transform: scale(0.8, 1.2);
-    }
-
-    60% {
-      transform: scale(1, 1);
-    }
-
-    100% {
-      bottom: 140px;
-    }
-  }
-
-  @keyframes loading-step {
-    0% {
-      box-shadow: 0 10px 0 rgba(0, 0, 0, 0),
-              0 10px 0 #f2f2f2,
-              -35px 50px 0 #f2f2f2,
-              -70px 90px 0 #f2f2f2;
-    }
-
-    100% {
-      box-shadow: 0 10px 0 #f2f2f2,
-              -35px 50px 0 #f2f2f2,
-              -70px 90px 0 #f2f2f2,
-              -70px 90px 0 rgba(0, 0, 0, 0);
-    }
-  }`;
+const Loader = () => (
+  <div className="grid place-items-center py-8" role="status" aria-live="polite">
+    <div className="relative h-14 w-14">
+      <div className="absolute inset-0 rounded-lg border border-primary/25 bg-primary/10" />
+      <div className="absolute inset-2 rounded-lg border border-secondary/25 bg-secondary/10" />
+      <div className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full bg-accent shadow-[0_0_18px_hsl(var(--accent)/0.36)] motion-reduce:animate-none" />
+    </div>
+    <span className="sr-only">Loading</span>
+  </div>
+);
 
 export default Loader;

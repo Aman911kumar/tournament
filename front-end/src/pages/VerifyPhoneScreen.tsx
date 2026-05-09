@@ -40,7 +40,7 @@ const VerifyPhoneScreen = () => {
   }, [searchParams]);
 
   return (
-    <div className="min-h-screen bg-background px-4 py-10">
+    <div className="arena-shell min-h-screen px-4 py-10">
       <div className="mx-auto flex min-h-[70vh] w-full max-w-md items-center">
         <GlassCard neon className="w-full text-center">
           <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-primary/10">

@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
+import { ActionNoteDialog } from "@/components/design-system";
 import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { toast } from "@/components/ui/sonner";
@@ -182,7 +183,7 @@ const StatCard = ({
       <button
         type="button"
         onClick={onClick}
-        className="glass min-h-[112px] w-full rounded-xl p-4 text-left transition-all hover:neon-border focus:outline-none focus:ring-2 focus:ring-primary/60"
+        className="glass min-h-[112px] w-full rounded-lg p-4 text-left transition-colors hover:neon-border focus:outline-none focus:ring-2 focus:ring-primary/60"
       >
         {content}
         <p className="mt-3 text-xs text-muted-foreground truncate">{note}</p>
@@ -343,6 +344,30 @@ type RecordColumn = {
 
 type AdminTab = "overview" | "finance" | "tournaments" | "users" | "support" | "monitoring" | "database";
 
+type AdminDashboardAction =
+  | {
+      kind: "withdrawal";
+      withdrawal: AdminWithdrawalRequest;
+      status: "success" | "failed" | "cancelled";
+      title: string;
+      description: string;
+      label: string;
+      placeholder: string;
+      confirmLabel: string;
+      destructive?: boolean;
+    }
+  | {
+      kind: "creator";
+      user: { _id: string; username?: string; email?: string; phone_number?: string };
+      status: "approved" | "rejected" | "removed";
+      title: string;
+      description: string;
+      label: string;
+      placeholder: string;
+      confirmLabel: string;
+      destructive?: boolean;
+    };
+
 const defaultColumns: RecordColumn[] = [
   { label: "Record", path: "_id" },
   { label: "Status", path: "status", type: "status" },
@@ -494,6 +519,8 @@ const AdminDashboardScreen = () => {
   const [collectionsLoading, setCollectionsLoading] = useState(true);
   const [updatingWithdrawalId, setUpdatingWithdrawalId] = useState<string | null>(null);
   const [updatingCreatorId, setUpdatingCreatorId] = useState<string | null>(null);
+  const [actionDialog, setActionDialog] = useState<AdminDashboardAction | null>(null);
+  const [actionNote, setActionNote] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const fetchDashboard = useCallback(async () => {
@@ -620,87 +647,116 @@ const AdminDashboardScreen = () => {
     fetchCollectionRecords();
   }, [fetchCollectionRecords]);
 
-  const handleMarkWithdrawalPaid = async (withdrawal: AdminWithdrawalRequest) => {
-    const payoutReference = window.prompt("Enter payout reference / UTR (optional)")?.trim() ?? "";
-    try {
-      setUpdatingWithdrawalId(withdrawal._id);
-      await updateWithdrawalStatus(withdrawal._id, { status: "success", payoutReference });
-      toast.success("Withdrawal marked as paid", {
-        description: `${formatCurrency(withdrawal.amount)} payout status updated successfully.`,
-      });
-      fetchWithdrawals();
-      fetchDashboard();
-    } catch (err) {
-      const errorToast = getErrorToast(err, { action: "Mark withdrawal paid", fallback: "Failed to update withdrawal." });
-      toast.error(errorToast.title, { description: errorToast.description });
-    } finally {
-      setUpdatingWithdrawalId(null);
-    }
+  const handleMarkWithdrawalPaid = (withdrawal: AdminWithdrawalRequest) => {
+    setActionNote("");
+    setActionDialog({
+      kind: "withdrawal",
+      withdrawal,
+      status: "success",
+      title: "Mark Withdrawal Paid",
+      description: `${formatCurrency(withdrawal.amount)} will be marked as paid.`,
+      label: "Payout reference / UTR",
+      placeholder: "Optional reference visible in admin records",
+      confirmLabel: "Mark Paid",
+    });
   };
 
-  const handleMarkWithdrawalFailed = async (withdrawal: AdminWithdrawalRequest) => {
-    const reason = window.prompt("Why did this payout fail? The wallet amount will be refunded.")?.trim();
-    if (reason === undefined) return;
-
-    try {
-      setUpdatingWithdrawalId(withdrawal._id);
-      await updateWithdrawalStatus(withdrawal._id, { status: "failed", reason });
-      toast.success("Withdrawal marked as failed", {
-        description: `${formatCurrency(withdrawal.amount)} refunded to the user's wallet.`,
-      });
-      fetchWithdrawals();
-      fetchDashboard();
-    } catch (err) {
-      const errorToast = getErrorToast(err, { action: "Mark withdrawal failed", fallback: "Failed to update withdrawal." });
-      toast.error(errorToast.title, { description: errorToast.description });
-    } finally {
-      setUpdatingWithdrawalId(null);
-    }
+  const handleMarkWithdrawalFailed = (withdrawal: AdminWithdrawalRequest) => {
+    setActionNote("");
+    setActionDialog({
+      kind: "withdrawal",
+      withdrawal,
+      status: "failed",
+      title: "Mark Withdrawal Failed",
+      description: `${formatCurrency(withdrawal.amount)} will be refunded to the user's wallet.`,
+      label: "Failure reason",
+      placeholder: "Optional note for this failed payout",
+      confirmLabel: "Mark Failed",
+      destructive: true,
+    });
   };
 
-  const handleCancelWithdrawal = async (withdrawal: AdminWithdrawalRequest) => {
-    const reason = window.prompt("Cancel reason (optional). The wallet amount will be refunded.")?.trim();
-    if (reason === undefined) return;
-
-    try {
-      setUpdatingWithdrawalId(withdrawal._id);
-      await updateWithdrawalStatus(withdrawal._id, { status: "cancelled", reason });
-      toast.success("Withdrawal cancelled", {
-        description: `${formatCurrency(withdrawal.amount)} refunded to the user's wallet.`,
-      });
-      fetchWithdrawals();
-      fetchDashboard();
-    } catch (err) {
-      const errorToast = getErrorToast(err, { action: "Cancel withdrawal", fallback: "Failed to cancel withdrawal." });
-      toast.error(errorToast.title, { description: errorToast.description });
-    } finally {
-      setUpdatingWithdrawalId(null);
-    }
+  const handleCancelWithdrawal = (withdrawal: AdminWithdrawalRequest) => {
+    setActionNote("");
+    setActionDialog({
+      kind: "withdrawal",
+      withdrawal,
+      status: "cancelled",
+      title: "Cancel Withdrawal",
+      description: `${formatCurrency(withdrawal.amount)} will be refunded to the user's wallet.`,
+      label: "Cancel reason",
+      placeholder: "Optional reason for this cancellation",
+      confirmLabel: "Cancel Withdrawal",
+      destructive: true,
+    });
   };
 
-  const handleCreatorPermission = async (
+  const handleCreatorPermission = (
     user: { _id: string; username?: string; email?: string; phone_number?: string },
     status: "approved" | "rejected" | "removed",
   ) => {
     const label = user.username || user.email || user.phone_number || "this user";
-    const promptText = status === "approved"
-      ? `Approval message for ${label} (optional)`
-      : status === "removed"
-        ? `Why are you removing creator access for ${label}? This message will be sent.`
-        : `Why are you rejecting ${label}? This message will be sent.`;
-    const note = window.prompt(promptText)?.trim();
-    if (note === undefined) return;
+    setActionNote("");
+    setActionDialog({
+      kind: "creator",
+      user,
+      status,
+      title: status === "approved" ? "Approve Creator" : status === "removed" ? "Remove Creator Access" : "Reject Creator Request",
+      description: status === "approved"
+        ? `${label} will be able to create tournaments.`
+        : status === "removed"
+          ? `${label} will lose creator permissions.`
+          : `${label}'s creator request will be rejected.`,
+      label: status === "approved" ? "Approval message" : "Admin note",
+      placeholder: status === "approved"
+        ? "Optional message for the creator"
+        : "Optional reason sent with the decision",
+      confirmLabel: status === "approved" ? "Approve" : status === "removed" ? "Remove Access" : "Reject",
+      destructive: status !== "approved",
+    });
+  };
+
+  const submitActionDialog = async () => {
+    if (!actionDialog) return;
+    const note = actionNote.trim();
 
     try {
-      setUpdatingCreatorId(user._id);
-      await updateCreatorPermission(user._id, { status, note });
-      toast.success(status === "approved" ? "Creator approved" : status === "removed" ? "Creator access removed" : "Creator rejected");
-      fetchDashboard();
-      if (selectedCollection === "users") fetchCollectionRecords();
+      if (actionDialog.kind === "withdrawal") {
+        const { withdrawal, status } = actionDialog;
+        setUpdatingWithdrawalId(withdrawal._id);
+        await updateWithdrawalStatus(withdrawal._id, status === "success"
+          ? { status, payoutReference: note }
+          : { status, reason: note });
+        toast.success(status === "success" ? "Withdrawal marked as paid" : status === "failed" ? "Withdrawal marked as failed" : "Withdrawal cancelled", {
+          description: status === "success"
+            ? `${formatCurrency(withdrawal.amount)} payout status updated successfully.`
+            : `${formatCurrency(withdrawal.amount)} refunded to the user's wallet.`,
+        });
+        fetchWithdrawals();
+        fetchDashboard();
+      } else {
+        const { user, status } = actionDialog;
+        setUpdatingCreatorId(user._id);
+        await updateCreatorPermission(user._id, { status, note });
+        toast.success(status === "approved" ? "Creator approved" : status === "removed" ? "Creator access removed" : "Creator rejected");
+        fetchDashboard();
+        if (selectedCollection === "users") fetchCollectionRecords();
+      }
+      setActionDialog(null);
+      setActionNote("");
     } catch (err) {
-      const errorToast = getErrorToast(err, { action: "Update creator permission", fallback: "Could not update creator permission." });
+      const action = actionDialog.kind === "withdrawal"
+        ? actionDialog.status === "success"
+          ? "Mark withdrawal paid"
+          : actionDialog.status === "failed"
+            ? "Mark withdrawal failed"
+            : "Cancel withdrawal"
+        : "Update creator permission";
+      const fallback = actionDialog.kind === "withdrawal" ? "Failed to update withdrawal." : "Could not update creator permission.";
+      const errorToast = getErrorToast(err, { action, fallback });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
+      setUpdatingWithdrawalId(null);
       setUpdatingCreatorId(null);
     }
   };
@@ -802,17 +858,17 @@ const AdminDashboardScreen = () => {
 
   if (loading && !dashboard) {
     return (
-      <div className="min-h-screen bg-background px-4 py-6">
+      <div className="arena-shell min-h-screen px-4 py-6">
         <div className="mx-auto w-full max-w-6xl space-y-4">
           <div className="h-12 w-64 bg-muted rounded-lg animate-pulse" />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[0, 1, 2, 3, 4, 5, 6, 7].map((item) => (
-              <div key={item} className="h-28 glass rounded-xl animate-pulse" />
+              <div key={item} className="h-28 glass rounded-lg animate-pulse" />
             ))}
           </div>
           <div className="grid lg:grid-cols-2 gap-4">
-            <div className="h-80 glass rounded-xl animate-pulse" />
-            <div className="h-80 glass rounded-xl animate-pulse" />
+            <div className="h-80 glass rounded-lg animate-pulse" />
+            <div className="h-80 glass rounded-lg animate-pulse" />
           </div>
         </div>
       </div>
@@ -821,7 +877,7 @@ const AdminDashboardScreen = () => {
 
   if (error && !dashboard) {
     return (
-      <div className="min-h-screen bg-background px-4 py-6">
+      <div className="arena-shell min-h-screen px-4 py-6">
         <div className="mx-auto w-full max-w-xl">
           <button type="button" onClick={() => navigate(-1)} className="mb-4 flex items-center gap-2 text-sm">
             <ArrowLeft className="w-4 h-4" />
@@ -973,7 +1029,7 @@ const AdminDashboardScreen = () => {
     : 0;
 
   return (
-    <div className="min-h-screen bg-background px-3 py-5 pb-10 sm:px-5 sm:py-6">
+    <div className="arena-shell min-h-screen px-3 py-5 pb-10 sm:px-5 sm:py-6">
       <div className="mx-auto w-full max-w-7xl">
         <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
@@ -2146,6 +2202,27 @@ const AdminDashboardScreen = () => {
             </GlassCard>
           </TabsContent>
         </Tabs>
+
+        <ActionNoteDialog
+          open={Boolean(actionDialog)}
+          onOpenChange={(open) => {
+            if (updatingWithdrawalId || updatingCreatorId) return;
+            if (!open) {
+              setActionDialog(null);
+              setActionNote("");
+            }
+          }}
+          title={actionDialog?.title || ""}
+          description={actionDialog?.description}
+          label={actionDialog?.label || "Note"}
+          value={actionNote}
+          onValueChange={setActionNote}
+          placeholder={actionDialog?.placeholder}
+          confirmLabel={actionDialog?.confirmLabel}
+          destructive={actionDialog?.destructive}
+          loading={Boolean(updatingWithdrawalId || updatingCreatorId)}
+          onSubmit={submitActionDialog}
+        />
 
         <Dialog open={Boolean(selectedRecord)} onOpenChange={(open) => !open && setSelectedRecord(null)}>
           <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-4xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0">

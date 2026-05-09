@@ -218,12 +218,12 @@ const TransferMoneyScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="arena-shell min-h-screen pb-20">
       <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 pb-4 pt-6 sm:px-5">
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => navigate(-1)}
-          className="grid h-10 w-10 place-items-center rounded-full border border-glass-border bg-background/60"
+          className="arena-focus grid h-10 w-10 place-items-center rounded-full border border-glass-border bg-card/85 transition-colors hover:border-primary/45"
         >
           <ArrowLeft className="h-5 w-5" />
         </motion.button>
@@ -424,9 +424,9 @@ const TransferMoneyScreen = () => {
             <QrCode className="h-5 w-5 text-accent" />
           </div>
 
-          <div className="mx-auto mt-5 w-full max-w-[300px] rounded-3xl bg-gradient-to-br from-primary via-secondary to-accent p-[2px] shadow-[0_0_32px_hsl(var(--accent)/0.22)]">
-            <div className="grid aspect-square place-items-center rounded-3xl bg-background p-4">
-              <div className="grid h-full w-full place-items-center rounded-2xl bg-gradient-to-br from-accent/20 via-primary/10 to-secondary/20 p-3">
+          <div className="mx-auto mt-5 w-full max-w-[300px] rounded-lg bg-gradient-to-br from-primary via-secondary to-accent p-[2px] shadow-[0_0_24px_hsl(var(--accent)/0.18)]">
+            <div className="grid aspect-square place-items-center rounded-lg bg-background p-4">
+              <div className="grid h-full w-full place-items-center rounded-lg bg-gradient-to-br from-accent/20 via-primary/10 to-secondary/20 p-3">
                 {qrDataUrl ? (
                   <img src={qrDataUrl} alt="Receive money QR code" className="h-full w-full rounded-xl bg-white p-1" />
                 ) : (

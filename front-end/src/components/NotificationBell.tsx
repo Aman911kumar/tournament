@@ -122,7 +122,7 @@ const NotificationBell = () => {
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button
-          className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-glass-border bg-background/90 text-foreground shadow-lg backdrop-blur transition-colors hover:border-primary/60 hover:text-primary"
+          className="arena-focus relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-glass-border bg-card/90 text-foreground transition-colors hover:border-primary/60 hover:text-primary"
           aria-label="Notifications"
         >
           <Bell className="h-4 w-4" />
@@ -133,7 +133,7 @@ const NotificationBell = () => {
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={10} className="w-[min(360px,calc(100vw-24px))] border-glass-border bg-background/95 p-0 backdrop-blur">
+      <DropdownMenuContent align="end" sideOffset={10} className="w-[min(380px,calc(100vw-24px))] overflow-hidden rounded-lg border-glass-border bg-card/96 p-0 shadow-[0_24px_80px_hsl(0_0%_0%/0.34)]">
         <div className="flex items-center justify-between gap-2 border-b border-glass-border px-4 py-3">
           <div>
             <p className="font-heading text-sm font-bold">Notifications</p>
@@ -142,14 +142,14 @@ const NotificationBell = () => {
           <div className="flex items-center gap-1">
             <button
               onClick={markAllRead}
-              className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="arena-focus rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               aria-label="Mark all read"
             >
               <CheckCheck className="h-4 w-4" />
             </button>
             <button
               onClick={() => setOpen(false)}
-              className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="arena-focus rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               aria-label="Close notifications"
             >
               <X className="h-4 w-4" />
@@ -157,7 +157,7 @@ const NotificationBell = () => {
           </div>
         </div>
 
-        <div className="max-h-[420px] overflow-y-auto p-2">
+        <div className="arena-scrollbar max-h-[420px] overflow-y-auto p-2">
           {visibleItems.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <Bell className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
@@ -177,7 +177,7 @@ const NotificationBell = () => {
                     if (event.key === "Enter" || event.key === " ") openNotification(item);
                   }}
                   className={cn(
-                    "mb-1 flex w-full gap-3 rounded-md p-3 text-left transition-colors hover:bg-muted/70",
+                    "arena-focus mb-1 flex w-full gap-3 rounded-lg p-3 text-left transition-colors hover:bg-muted/70",
                     !item.read && "bg-primary/10",
                   )}
                 >
@@ -232,7 +232,7 @@ const NotificationBell = () => {
             setOpen(false);
             navigate("/notifications");
           }}
-          className="w-full px-4 py-3 text-center text-xs font-heading text-primary transition-colors hover:bg-muted/60"
+          className="arena-focus w-full px-4 py-3 text-center text-xs font-heading text-primary transition-colors hover:bg-muted/60"
         >
           View all notifications
         </button>

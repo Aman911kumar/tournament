@@ -35,7 +35,7 @@ class AppErrorBoundary extends Component<Props, State> {
     if (!this.state.hasError) return this.props.children;
 
     return (
-      <div className="min-h-screen bg-background px-4 py-8">
+      <div className="arena-shell min-h-screen px-4 py-8">
         <GlassCard className="mx-auto max-w-md py-8 text-center">
           <h1 className="font-heading text-xl font-bold">Something went wrong</h1>
           <p className="mt-2 text-sm text-muted-foreground">

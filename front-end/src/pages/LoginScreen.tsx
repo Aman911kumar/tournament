@@ -1,7 +1,23 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Mail, Lock, Eye, EyeOff, User, Phone } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import {
+  ArrowRight,
+  BellRing,
+  CheckCircle2,
+  Crown,
+  Eye,
+  EyeOff,
+  Gamepad2,
+  Lock,
+  Mail,
+  Phone,
+  ShieldCheck,
+  Sparkles,
+  Trophy,
+  User,
+  WalletCards,
+} from "lucide-react";
 import NeonButton from "@/components/NeonButton";
 import heroBg from "@/assets/hero-bg.jpg";
 import { facebook, google, login, signup, AuthResponse, FacebookLoginPayload, GoogleLoginPayload } from "@/api/auth";
@@ -27,6 +43,54 @@ const normalizePhoneNumber = (value: string) => {
 const isValidPhoneNumber = (value: string) => /^[6-9]\d{9}$/.test(normalizePhoneNumber(value));
 
 const isValidUsername = (value: string) => /^[a-zA-Z0-9_]{4,30}$/.test(value.trim());
+
+const arenaStats = [
+  { label: "Daily matches", value: "Live", icon: Trophy },
+  { label: "Wallet", value: "Secure", icon: WalletCards },
+  { label: "Room alerts", value: "Instant", icon: BellRing },
+];
+
+const signupRules = ["Email required", "Phone required", "6+ char password"];
+
+const modeTransition = { duration: 0.22, ease: "easeOut" as const };
+
+const modeVariants = {
+  enter: (direction: number) => ({
+    opacity: 0,
+    x: direction * 18,
+    filter: "blur(4px)",
+  }),
+  center: {
+    opacity: 1,
+    x: 0,
+    filter: "blur(0px)",
+  },
+  exit: (direction: number) => ({
+    opacity: 0,
+    x: direction * -18,
+    filter: "blur(4px)",
+  }),
+};
+
+const AuthInput = ({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: typeof Mail;
+  label: string;
+  children: React.ReactNode;
+}) => (
+  <label className="group block space-y-1.5">
+    <span className="flex items-center gap-1.5 font-heading text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </span>
+    <div className="flex min-h-12 items-center gap-3 rounded-lg border border-glass-border bg-background/58 px-3.5 py-2.5 transition-colors group-focus-within:border-primary/55 group-focus-within:bg-card/90">
+      {children}
+    </div>
+  </label>
+);
 
 type FacebookLoginResponse = {
   authResponse?: FacebookLoginPayload;
@@ -63,15 +127,15 @@ const loadFacebookSdk = () => {
     }
 
     let settled = false;
-    let timeoutId: number | undefined;
+    const timeoutRef: { current?: number } = {};
 
     const finish = () => {
       if (settled) {
         return;
       }
       settled = true;
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
+      if (timeoutRef.current) {
+        window.clearTimeout(timeoutRef.current);
       }
 
       try {
@@ -88,8 +152,8 @@ const loadFacebookSdk = () => {
         return;
       }
       settled = true;
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
+      if (timeoutRef.current) {
+        window.clearTimeout(timeoutRef.current);
       }
       facebookSdkPromise = null;
       reject(error);
@@ -101,7 +165,7 @@ const loadFacebookSdk = () => {
     }
 
     window.fbAsyncInit = finish;
-    timeoutId = window.setTimeout(
+    timeoutRef.current = window.setTimeout(
       () => fail(new Error("Facebook login took too long to load. Please refresh and try again.")),
       15000,
     );
@@ -148,6 +212,7 @@ const LoginScreen = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<"google" | "facebook" | null>(null);
+  const shouldReduceMotion = useReducedMotion();
   const navigate = useNavigate();
 
   const completeLogin = (res: AuthResponse) => {
@@ -278,164 +343,301 @@ const LoginScreen = () => {
   };
 
   return (
-    <div className="min-h-screen relative flex flex-col justify-end">
+    <div className="relative min-h-screen overflow-hidden bg-background">
       <img
         src={heroBg}
-        alt="eSports arena"
-        className="absolute inset-0 w-full h-full object-cover"
-        width={768}
+        alt="Battle4Arena esports arena"
+        className="absolute inset-0 h-full w-full object-cover"
+        width={1280}
         height={1024}
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.28),transparent_32rem),linear-gradient(90deg,hsl(var(--background)/0.98),hsl(var(--background)/0.86)_45%,hsl(var(--background)/0.54))]" />
+      <div className="absolute inset-0 bg-[linear-gradient(hsl(var(--foreground)/0.05)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--foreground)/0.035)_1px,transparent_1px)] bg-[size:44px_44px] opacity-35" />
 
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative z-10 mx-auto w-full max-w-md px-5 sm:px-6 pb-10 pt-8"
-      >
-        <h1 className="font-display text-3xl font-bold tracking-wider neon-text-purple mb-1">
-          BATTLEARENA
-        </h1>
-        <p className="text-muted-foreground font-heading text-sm mb-8">
-          {isSignup ? "Create your warrior account" : "Enter the arena"}
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {isSignup && (
-            <>
-              <div className="glass rounded-lg flex items-center gap-3 px-4 py-3">
-                <User className="w-4 h-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  disabled={loading}
-                  className="bg-transparent flex-1 text-sm font-body text-foreground placeholder:text-muted-foreground focus:outline-none"
-                />
-              </div>
-              <div className="glass rounded-lg flex items-center gap-3 px-4 py-3">
-                <Mail className="w-4 h-4 text-muted-foreground" />
-                <input
-                  type="email"
-                  placeholder="example@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={loading}
-                  className="bg-transparent flex-1 text-sm font-body text-foreground placeholder:text-muted-foreground focus:outline-none"
-                />
-              </div>
-            </>
-          )}
-          <div className="glass rounded-lg flex items-center gap-3 px-4 py-3">
-            {!isSignup && isValidEmail(identifier) ? (
-              <Mail className="w-4 h-4 text-muted-foreground" />
-            ) : (
-              <Phone className="w-4 h-4 text-muted-foreground" />
-            )}
-            <input
-              type={isSignup ? "tel" : "text"}
-              inputMode={isSignup ? "tel" : "text"}
-              placeholder={isSignup ? "Phone no." : "Username, phone, or email"}
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              disabled={loading}
-              className="bg-transparent flex-1 text-sm font-body text-foreground placeholder:text-muted-foreground focus:outline-none"
-            />
-          </div>
-          <div className="glass rounded-lg flex items-center gap-3 px-4 py-3">
-            <Lock className="w-4 h-4 text-muted-foreground" />
-            <input
-              type={showPass ? "text" : "password"}
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
-              className="bg-transparent flex-1 text-sm font-body text-foreground placeholder:text-muted-foreground focus:outline-none"
-            />
-            <button type="button" onClick={() => setShowPass(!showPass)} disabled={loading}>
-              {showPass ? (
-                <EyeOff className="w-4 h-4 text-muted-foreground" />
-              ) : (
-                <Eye className="w-4 h-4 text-muted-foreground" />
-              )}
-            </button>
+      <main className="relative z-10 mx-auto grid min-h-screen w-full max-w-7xl items-center gap-8 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(420px,440px)] lg:px-8">
+        <section className="hidden h-[min(760px,calc(100dvh-3rem))] min-h-0 flex-col justify-between rounded-lg border border-glass-border bg-card/45 p-6 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.045)] lg:flex">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 font-heading text-xs font-bold text-primary">
+              <Sparkles className="h-3.5 w-3.5" />
+              Premium esports arena
+            </div>
+            <h1 className="mt-6 max-w-2xl font-display text-6xl font-black leading-[0.94] neon-text-purple">
+              BATTLE4ARENA
+            </h1>
+            <p className="mt-4 max-w-xl text-base text-muted-foreground">
+              Join tournaments, follow creators, manage wallet transfers, and get room alerts from one clean competitive hub.
+            </p>
           </div>
 
-          {!isSignup && (
-            <button
-              type="button"
-              onClick={() => navigate("/forgot-password")}
-              className="text-xs text-primary font-heading"
+          <div className="grid gap-3">
+            <div className="grid grid-cols-3 gap-3">
+              {arenaStats.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.label} className="rounded-lg border border-glass-border bg-background/50 p-4">
+                    <Icon className="h-5 w-5 text-primary" />
+                    <p className="mt-4 font-heading text-xl font-bold">{item.value}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.label}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="rounded-lg border border-accent/25 bg-accent/10 p-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-lg border border-accent/30 bg-accent/15 text-accent">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-heading text-sm font-bold text-accent">Secure login flow</p>
+                  <p className="text-xs text-muted-foreground">Phone, email, Google, and Facebook login stay connected to your existing backend.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mx-auto w-full max-w-md"
+        >
+          <div className="mb-5 flex items-center justify-between gap-3 lg:hidden">
+            <div>
+              <p className="font-display text-2xl font-black neon-text-purple">BATTLE4ARENA</p>
+              <p className="text-xs text-muted-foreground">Competitive tournament hub</p>
+            </div>
+            <div className="grid h-11 w-11 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
+              <Gamepad2 className="h-5 w-5" />
+            </div>
+          </div>
+
+          <div className="flex min-h-[704px] flex-col overflow-hidden rounded-lg border border-glass-border bg-card/88 shadow-[0_24px_80px_hsl(0_0%_0%/0.34)] lg:h-[min(760px,calc(100dvh-3rem))] lg:min-h-0">
+            <div className="border-b border-glass-border bg-background/35 p-2">
+              <div className="grid grid-cols-2 gap-1 rounded-lg border border-glass-border bg-background/45 p-1">
+                {[
+                  { label: "Login", value: false, icon: ShieldCheck },
+                  { label: "Sign Up", value: true, icon: Crown },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const active = isSignup === item.value;
+                  return (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={() => setIsSignup(item.value)}
+                      disabled={loading}
+                      className={`arena-focus relative inline-flex min-h-10 items-center justify-center gap-2 overflow-hidden rounded-md font-heading text-xs font-bold transition-colors ${
+                        active ? "text-primary-foreground" : "text-muted-foreground hover:bg-muted/65 hover:text-foreground"
+                      }`}
+                    >
+                      {active && (
+                        <motion.span
+                          layoutId="auth-mode-pill"
+                          className="absolute inset-0 rounded-md bg-primary"
+                          transition={shouldReduceMotion ? { duration: 0 } : modeTransition}
+                        />
+                      )}
+                      <span className="relative z-10 inline-flex items-center gap-2">
+                        <Icon className="h-3.5 w-3.5" />
+                        {item.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <motion.div
+              className="flex min-h-0 flex-1 flex-col overflow-hidden p-5 sm:p-6"
+              layout={!shouldReduceMotion}
+              transition={shouldReduceMotion ? { duration: 0 } : modeTransition}
             >
-              Forgot Password?
-            </button>
-          )}
+              <AnimatePresence mode="wait" initial={false} custom={isSignup ? 1 : -1}>
+                <motion.div
+                  key={isSignup ? "signup" : "login"}
+                  custom={isSignup ? 1 : -1}
+                  variants={shouldReduceMotion ? undefined : modeVariants}
+                  initial={shouldReduceMotion ? { opacity: 0 } : "enter"}
+                  animate={shouldReduceMotion ? { opacity: 1 } : "center"}
+                  exit={shouldReduceMotion ? { opacity: 0 } : "exit"}
+                  transition={shouldReduceMotion ? { duration: 0.01 } : modeTransition}
+                  className="arena-scrollbar flex h-full flex-col overflow-y-auto pr-1"
+                >
+              <div className="mb-6">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-secondary/30 bg-secondary/10 px-3 py-1 font-heading text-[10px] font-bold uppercase tracking-wide text-secondary">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {isSignup ? "New player setup" : "Welcome back"}
+                </div>
+                <h2 className="font-heading text-2xl font-bold">
+                  {isSignup ? "Create your arena profile" : "Enter your battle room"}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {isSignup
+                    ? "Email and phone are required so wallet, OTP, and tournament alerts work correctly."
+                    : "Use your username, phone number, or email to continue."}
+                </p>
+              </div>
 
-          <NeonButton type="submit" full disabled={loading}>
-            {loading ? <ButtonLoadingScreen /> : isSignup ? "SIGN UP" : "LOGIN"}
-          </NeonButton>
-        </form>
+              {isSignup && (
+                <div className="mb-5 flex flex-wrap gap-2">
+                  {signupRules.map((rule) => (
+                    <span key={rule} className="inline-flex items-center gap-1 rounded-full border border-accent/25 bg-accent/10 px-2.5 py-1 font-heading text-[10px] font-bold text-accent">
+                      <CheckCircle2 className="h-3 w-3" />
+                      {rule}
+                    </span>
+                  ))}
+                </div>
+              )}
 
-        <div className="flex items-center gap-4 my-6">
-          <div className="flex-1 h-px bg-border" />
-          <span className="text-xs text-muted-foreground font-heading">OR</span>
-          <div className="flex-1 h-px bg-border" />
-        </div>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {isSignup && (
+                  <>
+                    <AuthInput icon={User} label="Username">
+                      <input
+                        type="text"
+                        placeholder="ak_player"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        disabled={loading}
+                        className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                      />
+                    </AuthInput>
+                    <AuthInput icon={Mail} label="Email address">
+                      <input
+                        type="email"
+                        placeholder="example@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        disabled={loading}
+                        className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                      />
+                    </AuthInput>
+                  </>
+                )}
 
-        <div className="flex gap-3">
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={()=>handleGoogleLogin()}
-            disabled={loading || Boolean(socialLoading)}
-            type="button"
-            className="flex-1 glass rounded-lg py-3 flex items-center justify-center gap-2 text-sm font-heading text-foreground"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24">
-              <path
-                fill="currentColor"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="currentColor"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="currentColor"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
-            {socialLoading === "google" ? <ButtonLoadingScreen /> : "Google"}
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={handleFacebookLogin}
-            disabled={loading || Boolean(socialLoading)}
-            type="button"
-            className="flex-1 glass rounded-lg py-3 flex items-center justify-center gap-2 text-sm font-heading text-foreground"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-            </svg>
-            {socialLoading === "facebook" ? <ButtonLoadingScreen /> : "Facebook"}
-          </motion.button>
-        </div>
+                <AuthInput icon={!isSignup && isValidEmail(identifier) ? Mail : Phone} label={isSignup ? "Phone number" : "Login ID"}>
+                  <input
+                    type={isSignup ? "tel" : "text"}
+                    inputMode={isSignup ? "tel" : "text"}
+                    placeholder={isSignup ? "10 digit phone number" : "Username, phone, or email"}
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    disabled={loading}
+                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  />
+                </AuthInput>
 
-        <p className="text-center text-xs text-muted-foreground font-heading mt-6">
-          {isSignup ? "Already have an account? " : "Don't have an account? "}
-          <button
-            onClick={() => setIsSignup(!isSignup)}
-            disabled={loading}
-            className="text-primary font-semibold"
-          >
-            {isSignup ? "Login" : "Sign Up"}
-          </button>
-        </p>
-      </motion.div>
+                <AuthInput icon={Lock} label="Password">
+                  <input
+                    type={showPass ? "text" : "password"}
+                    placeholder="Enter password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={loading}
+                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    disabled={loading}
+                    className="arena-focus grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+                    aria-label={showPass ? "Hide password" : "Show password"}
+                  >
+                    {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </AuthInput>
+
+                {!isSignup && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => navigate("/forgot-password")}
+                      className="arena-focus rounded-md font-heading text-xs font-semibold text-primary"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+
+                <NeonButton type="submit" full disabled={loading} className="min-h-12">
+                  {loading ? (
+                    <ButtonLoadingScreen />
+                  ) : (
+                    <>
+                      {isSignup ? "Create Account" : "Login"}
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </NeonButton>
+              </form>
+
+              <div className={isSignup ? "" : "mt-auto pt-6"}>
+                <div className="my-6 flex items-center gap-4">
+                  <div className="h-px flex-1 bg-glass-border" />
+                  <span className="font-heading text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Or continue with</span>
+                  <div className="h-px flex-1 bg-glass-border" />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleGoogleLogin()}
+                    disabled={loading || Boolean(socialLoading)}
+                    type="button"
+                    className="arena-focus flex min-h-11 items-center justify-center gap-2 rounded-lg border border-glass-border bg-background/55 px-3 text-sm font-heading font-semibold text-foreground transition-colors hover:border-primary/45 hover:bg-primary/10 disabled:opacity-50"
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24">
+                      <path
+                        fill="currentColor"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      />
+                    </svg>
+                    {socialLoading === "google" ? <ButtonLoadingScreen /> : "Google"}
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleFacebookLogin}
+                    disabled={loading || Boolean(socialLoading)}
+                    type="button"
+                    className="arena-focus flex min-h-11 items-center justify-center gap-2 rounded-lg border border-glass-border bg-background/55 px-3 text-sm font-heading font-semibold text-foreground transition-colors hover:border-secondary/45 hover:bg-secondary/10 disabled:opacity-50"
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                    </svg>
+                    {socialLoading === "facebook" ? <ButtonLoadingScreen /> : "Facebook"}
+                  </motion.button>
+                </div>
+
+                <p className="mt-6 text-center font-heading text-xs text-muted-foreground">
+                  {isSignup ? "Already have an account? " : "New to Battle4Arena? "}
+                  <button
+                    type="button"
+                    onClick={() => setIsSignup(!isSignup)}
+                    disabled={loading}
+                    className="arena-focus rounded-md font-bold text-primary"
+                  >
+                    {isSignup ? "Login" : "Create account"}
+                  </button>
+                </p>
+              </div>
+                </motion.div>
+              </AnimatePresence>
+            </motion.div>
+          </div>
+        </motion.section>
+      </main>
     </div>
   );
 };

@@ -97,15 +97,15 @@ const SubscriptionsScreen = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
+    <div className="arena-shell min-h-screen pb-20">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
         <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate(-1)}>
           <ArrowLeft className="w-5 h-5" />
         </motion.button>
         <h1 className="font-heading text-xl font-bold">Creators</h1>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 mb-4">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mb-4">
         <div className="glass rounded-lg flex items-center gap-2 px-3 py-2.5">
           <Search className="w-4 h-4 text-muted-foreground" />
           <input
@@ -117,7 +117,7 @@ const SubscriptionsScreen = () => {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5">
+      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5">
         <h2 className="font-heading text-sm font-bold text-muted-foreground mb-3">
           CREATORS ({filteredCreators.length})
         </h2>
