@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, User, Phone } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
 import heroBg from "@/assets/hero-bg.jpg";
-import { facebook, google, login, signup, AuthResponse } from "@/api/auth";
+import { facebook, google, login, signup, AuthResponse, FacebookLoginPayload, GoogleLoginPayload } from "@/api/auth";
 import { toast } from "@/components/ui/sonner";
 import { setAuthTokens } from "@/lib/auth-storage";
 import ButtonLoadingScreen from "@/components/ui/buttonLoadingScreen";
@@ -14,6 +14,8 @@ import { useGoogleLogin } from "@react-oauth/google";
 const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID;
 const FACEBOOK_GRAPH_VERSION = import.meta.env.VITE_FACEBOOK_GRAPH_VERSION || "v25.0";
 const PASSWORD_MIN_LENGTH = 6;
+let facebookSdkPromise: Promise<void> | null = null;
+let facebookSdkInitialized = false;
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
@@ -26,36 +28,88 @@ const isValidPhoneNumber = (value: string) => /^[6-9]\d{9}$/.test(normalizePhone
 
 const isValidUsername = (value: string) => /^[a-zA-Z0-9_]{4,30}$/.test(value.trim());
 
-const loadFacebookSdk = async() =>
-  new Promise<void>((resolve, reject) => {
+type FacebookLoginResponse = {
+  authResponse?: FacebookLoginPayload;
+  status?: string;
+};
+
+const initFacebookSdk = () => {
+  if (!window.FB) {
+    throw new Error("Facebook login is not ready yet. Try again in a moment.");
+  }
+
+  if (facebookSdkInitialized) {
+    return;
+  }
+
+  window.FB.init({
+    appId: FACEBOOK_APP_ID,
+    cookie: true,
+    xfbml: false,
+    version: FACEBOOK_GRAPH_VERSION,
+  });
+  facebookSdkInitialized = true;
+};
+
+const loadFacebookSdk = () => {
+  if (facebookSdkPromise) {
+    return facebookSdkPromise;
+  }
+
+  facebookSdkPromise = new Promise<void>((resolve, reject) => {
     if (!FACEBOOK_APP_ID) {
       reject(new Error("Facebook app id is missing. Add VITE_FACEBOOK_APP_ID to front-end/.env."));
       return;
     }
 
+    let settled = false;
+    let timeoutId: number | undefined;
+
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+
+      try {
+        initFacebookSdk();
+        resolve();
+      } catch (error) {
+        facebookSdkPromise = null;
+        reject(error);
+      }
+    };
+
+    const fail = (error: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      facebookSdkPromise = null;
+      reject(error);
+    };
+
     if (window.FB) {
-      window.FB.init({
-        appId: FACEBOOK_APP_ID,
-        cookie: true,
-        xfbml: false,
-        version: FACEBOOK_GRAPH_VERSION,
-      });
-      resolve();
+      finish();
       return;
     }
 
-    window.fbAsyncInit = () => {
-      window.FB.init({
-        appId: FACEBOOK_APP_ID,
-        cookie: true,
-        xfbml: false,
-        version: FACEBOOK_GRAPH_VERSION,
-      });
-      resolve();
-    };
+    window.fbAsyncInit = finish;
+    timeoutId = window.setTimeout(
+      () => fail(new Error("Facebook login took too long to load. Please refresh and try again.")),
+      15000,
+    );
 
     const existingScript = document.getElementById("facebook-jssdk");
     if (existingScript) {
+      existingScript.addEventListener("load", finish, { once: true });
+      existingScript.addEventListener("error", () => fail(new Error("Could not load Facebook login.")), { once: true });
       return;
     }
 
@@ -65,8 +119,24 @@ const loadFacebookSdk = async() =>
     script.async = true;
     script.defer = true;
     script.crossOrigin = "anonymous";
-    script.onerror = () => reject(new Error("Could not load Facebook login."));
+    script.onerror = () => fail(new Error("Could not load Facebook login."));
     document.body.appendChild(script);
+  });
+
+  return facebookSdkPromise;
+};
+
+const requestFacebookLogin = () =>
+  new Promise<FacebookLoginResponse>((resolve, reject) => {
+    if (!window.FB?.login) {
+      reject(new Error("Facebook login is not ready yet. Try again in a moment."));
+      return;
+    }
+
+    window.FB.login(
+      (response) => resolve(response),
+      { scope: "public_profile,email", return_scopes: true },
+    );
   });
 
 const LoginScreen = () => {
@@ -94,18 +164,22 @@ const LoginScreen = () => {
     navigate(needsPhoneNumber ? "/edit-profile" : needsPasswordSetup ? "/change-password" : "/");
   };
 
+  const submitGoogleLogin = async (tokenResponse: GoogleLoginPayload) => {
+    try {
+      setSocialLoading("google");
+      const res = await google(tokenResponse);
+      completeLogin(res);
+    } catch (err) {
+      const errorToast = getErrorToast(err, { action: "Google login", fallback: "Google login failed." });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setSocialLoading(null);
+    }
+  };
+
   const handleGoogleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      try {
-        setSocialLoading("google");
-        const res = await google(tokenResponse);
-        completeLogin(res);
-      } catch (err) {
-        const errorToast = getErrorToast(err, { action: "Google login", fallback: "Google login failed." });
-        toast.error(errorToast.title, { description: errorToast.description });
-      } finally {
-        setSocialLoading(null);
-      }
+    onSuccess: (tokenResponse) => {
+      void submitGoogleLogin(tokenResponse);
     },
     onError: () => {
       toast.error("Google login failed.");
@@ -115,7 +189,8 @@ const LoginScreen = () => {
 
   const handleFacebookLogin = async () => {
     try {
-      if (window.location.protocol !== "https:") {
+      const isLocalDev = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+      if (window.location.protocol !== "https:" && !isLocalDev) {
         toast.error("Facebook login needs HTTPS", {
           description: "Facebook blocks FB.login on plain HTTP. Use the deployed HTTPS site or an HTTPS dev tunnel.",
         });
@@ -123,31 +198,20 @@ const LoginScreen = () => {
       }
       setSocialLoading("facebook");
       await loadFacebookSdk();
+      const response = await requestFacebookLogin();
 
-      window.FB.login(
-        async (response) => {
-          if (!response.authResponse?.accessToken) {
-            setSocialLoading(null);
-            toast.error("Facebook login was cancelled.");
-            return;
-          }
+      if (!response.authResponse?.accessToken) {
+        toast.error("Facebook login was cancelled.");
+        return;
+      }
 
-          try {
-            const res = await facebook(response.authResponse);
-            completeLogin(res);
-          } catch (err) {
-            const errorToast = getErrorToast(err, { action: "Facebook login", fallback: "Facebook login failed." });
-            toast.error(errorToast.title, { description: errorToast.description });
-          } finally {
-            setSocialLoading(null);
-          }
-        },
-        { scope: "public_profile,email", return_scopes: true },
-      );
+      const res = await facebook(response.authResponse);
+      completeLogin(res);
     } catch (err) {
-      setSocialLoading(null);
       const errorToast = getErrorToast(err, { action: "Facebook login", fallback: "Facebook login failed." });
       toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setSocialLoading(null);
     }
   };
 

@@ -100,7 +100,6 @@ const walletTransactionSchema = new mongoose.Schema(
 
     idempotencyKey: {
       type: String,
-      index: true,
     },
   },
   { timestamps: true }
