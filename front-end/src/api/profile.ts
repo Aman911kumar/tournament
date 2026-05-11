@@ -15,6 +15,8 @@ export const ENDPOINTS = {
 
 export interface ProfileUpdatePayload {
   username?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   phone_number?: string;
   dateOfBirth?: string;
@@ -27,6 +29,8 @@ export interface ProfileUpdatePayload {
 export interface User {
   _id: string;
   username: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   phone_number?: string;
   emailVerified?: boolean;
@@ -34,7 +38,7 @@ export interface User {
   email_verified?: boolean;
   phone_verified?: boolean;
   linkedProviders?: Array<{
-    provider: "password" | "google" | "facebook" | "phone" | "email";
+    provider: "password" | "google" | "facebook" | "phone" | "email" | "clerk";
     providerId?: string;
     verified?: boolean;
   }>;

@@ -9,6 +9,13 @@ import {
 } from "../../env.js";
 
 const userSchema = new mongoose.Schema({
+    clerkId: {
+        type: String,
+        trim: true,
+        unique: true,
+        sparse: true,
+        default: undefined,
+    },
     username: {
         type: String,
         required: true,
@@ -16,6 +23,18 @@ const userSchema = new mongoose.Schema({
         unique: true,
         index: true,
         match: [/^[a-zA-Z0-9_]{4,30}$/, "Invalid username format"],
+    },
+    firstName: {
+        type: String,
+        trim: true,
+        maxlength: 50,
+        default: "",
+    },
+    lastName: {
+        type: String,
+        trim: true,
+        maxlength: 50,
+        default: "",
     },
     email: {
         index: true,
@@ -44,7 +63,7 @@ const userSchema = new mongoose.Schema({
     linkedProviders: [{
         provider: {
             type: String,
-            enum: ["password", "google", "facebook", "phone", "email"],
+            enum: ["password", "google", "facebook", "phone", "email", "clerk"],
             required: true,
         },
         providerId: { type: String, trim: true },

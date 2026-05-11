@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
 import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -8,6 +9,7 @@ import { Analytics } from "@vercel/analytics/react";
 import ProtectedRoute from "./components/ProtectedRoute";
 import BottomNav from "./components/BottomNav";
 import NotificationRealtimeBridge from "./components/NotificationRealtimeBridge";
+import ClerkSessionBridge from "./components/ClerkSessionBridge";
 import NetworkStatusBanner from "./components/NetworkStatusBanner";
 import { toast } from "@/components/ui/sonner";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
@@ -92,6 +94,7 @@ const App = () => (
       <TooltipProvider>
         <Sonner />
         <NetworkStatusBanner />
+        <ClerkSessionBridge />
         <Analytics />
         <BrowserRouter>
           <GoogleOAuthProvider
@@ -106,6 +109,7 @@ const App = () => (
               <Routes>
                 <Route path="/landing" element={<LandingPage />} />
                 <Route path="/login" element={<LoginScreen />} />
+                <Route path="/sso-callback" element={<AuthenticateWithRedirectCallback />} />
                 <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
                 <Route path="/verify-email" element={<VerifyEmailScreen />} />
                 <Route path="/verify-phone" element={<VerifyPhoneScreen />} />

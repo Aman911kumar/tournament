@@ -2,6 +2,7 @@
 // All page-specific files import `apiFetch` from here.
 
 import { clearAuthTokens, getAccessToken, getRefreshToken, hasAuthSession, setAuthTokens } from "@/lib/auth-storage";
+import { getClerkAccessToken } from "@/lib/clerk-session";
 
 const DEFAULT_API_BASE_URL = "/api/v1";
 const PRODUCTION_API_FALLBACK = "https://tournamentbackend-vulj.onrender.com/api/v1";
@@ -113,6 +114,11 @@ const buildHeaders = (options: RequestInit, token: string | null, isFormData: bo
   ...(options.headers ?? {}),
 });
 
+const resolveAccessToken = async () => {
+  const clerkToken = await getClerkAccessToken();
+  return clerkToken || getAccessToken();
+};
+
 const withTimeoutSignal = (signal?: AbortSignal | null) => {
   if (!API_TIMEOUT_MS || API_TIMEOUT_MS <= 0 || typeof AbortController === "undefined") {
     return { signal, cleanup: () => undefined };
@@ -210,12 +216,13 @@ export async function apiFetch<T>(
 
   const sendRequest = async () => {
     const timeout = withTimeoutSignal(options.signal);
+    const token = await resolveAccessToken();
     try {
       return await fetch(url, {
       credentials: "include",
       ...options,
       signal: timeout.signal,
-      headers: buildHeaders(options, getAccessToken(), isFormData),
+      headers: buildHeaders(options, token, isFormData),
       });
     } finally {
       timeout.cleanup();
@@ -238,7 +245,8 @@ export async function apiFetch<T>(
   }
 
   if (res.status === 401) {
-    if (shouldRefreshForPath(path)) {
+    const hasClerkToken = Boolean(await getClerkAccessToken());
+    if (shouldRefreshForPath(path) && !hasClerkToken) {
       const refreshed = await refreshAuthSession();
       if (refreshed) {
         try {

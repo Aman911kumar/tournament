@@ -43,6 +43,7 @@ import {
   writeAuthenticatedCache,
 } from "@/lib/offline-cache";
 import { formatCurrency, getErrorMessage, getErrorToast } from "@/lib/page-utils";
+import { signOutClerkSession } from "@/lib/clerk-session";
 
 const menuItems = [
   { icon: Edit, label: "Edit Profile", route: "/edit-profile" },
@@ -70,6 +71,9 @@ const getDisplayPhoneNumber = (phoneNumber?: string) => {
   if (!value || /^(google|facebook):/i.test(value)) return "";
   return value.startsWith("+") ? value : `+91 ${value}`;
 };
+
+const getDisplayName = (profile: ProfileUser) =>
+  [profile.firstName, profile.lastName].filter(Boolean).join(" ").trim() || profile.username;
 
 const ProfileSkeleton = () => (
   <GlassCard neon className="flex flex-col items-center text-center">
@@ -150,6 +154,7 @@ const ProfileScreen = () => {
       const errorToast = getErrorToast(error, { action: "Logout", fallback: "Logout failed." });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
+      await signOutClerkSession();
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
       removeCache(CACHE_KEYS.profile);
@@ -276,7 +281,10 @@ const ProfileScreen = () => {
                 <User className="w-8 h-8 text-primary-foreground" />
               )}
             </motion.div>
-            <h2 className="font-heading text-lg font-bold max-w-full truncate">{profile.username}</h2>
+            <h2 className="font-heading text-lg font-bold max-w-full truncate">{getDisplayName(profile)}</h2>
+            {getDisplayName(profile) !== profile.username && (
+              <p className="mb-1 max-w-full truncate text-[11px] text-muted-foreground">@{profile.username}</p>
+            )}
             <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1 max-w-full">
               <Mail className="w-3 h-3 shrink-0" />
               <span className="truncate">{profile.email}</span>

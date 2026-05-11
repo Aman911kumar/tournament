@@ -4,6 +4,7 @@ import { createClient } from "redis";
 import jwt from "jsonwebtoken";
 import { ACCESS_TOKEN_SECRET } from "../../env.js";
 import { User } from "../models/user.model.js";
+import { syncClerkUser, verifyClerkSessionToken } from "./clerkUser.service.js";
 
 let io;
 let redisAdapterReady = false;
@@ -96,12 +97,30 @@ export const initSocket = (server, allowedOrigins = []) => {
             const token = getTokenFromSocket(socket);
             if (!token) return next(new Error("Authentication required"));
 
-            const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET);
-            const userId = decoded?._id || decoded?.id || decoded?.userId;
+            let user = null;
+            let userId = null;
+
+            try {
+                const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET);
+                userId = decoded?._id || decoded?.id || decoded?.userId;
+                if (userId) {
+                    user = await User.findById(userId).select("role isActive accountStatus").lean();
+                }
+            } catch {
+                const verified = await verifyClerkSessionToken(token);
+                if (verified?.sub) {
+                    const clerkUser = await syncClerkUser({
+                        clerkUserId: verified.sub,
+                        select: "_id role isActive accountStatus",
+                    });
+                    user = clerkUser?.toObject?.() || clerkUser;
+                    userId = user?._id;
+                }
+            }
+
             if (!userId) return next(new Error("Invalid token"));
 
             socket.userId = userId.toString();
-            const user = await User.findById(socket.userId).select("role isActive accountStatus").lean();
             if (!user?.isActive || user.accountStatus === "banned" || user.role?.includes("banned")) {
                 return next(new Error("Account is not active"));
             }

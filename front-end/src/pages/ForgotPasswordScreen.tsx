@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth, useSignIn } from "@clerk/clerk-react";
 import { ArrowLeft, Eye, EyeOff, KeyRound, Lock, Phone } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
 import ButtonLoadingScreen from "@/components/ui/buttonLoadingScreen";
-import { forgotPassword, resetPassword } from "@/api/auth";
+import { forgotPassword, resetPassword, syncClerkUser } from "@/api/auth";
 import { toast } from "@/components/ui/sonner";
 import { getErrorToast } from "@/lib/page-utils";
+import { setClerkTokenGetter } from "@/lib/clerk-session";
 
 const PASSWORD_MIN_LENGTH = 6;
 
@@ -20,6 +22,11 @@ const isValidPhoneNumber = (value: string) => /^[6-9]\d{9}$/.test(normalizePhone
 
 const isValidUsername = (value: string) => /^[a-zA-Z0-9_]{4,30}$/.test(value.trim());
 
+const getClerkErrorMessage = (error: unknown, fallback: string) => {
+  const clerkError = error as { errors?: Array<{ longMessage?: string; message?: string }>; message?: string };
+  return clerkError?.errors?.[0]?.longMessage || clerkError?.errors?.[0]?.message || clerkError?.message || fallback;
+};
+
 const ForgotPasswordScreen = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -31,6 +38,9 @@ const ForgotPasswordScreen = () => {
   const [loadingRequest, setLoadingRequest] = useState(false);
   const [loadingReset, setLoadingReset] = useState(false);
   const [tokenRequested, setTokenRequested] = useState(false);
+  const [clerkResetStrategy, setClerkResetStrategy] = useState<"reset_password_email_code" | "reset_password_phone_code" | null>(null);
+  const { getToken } = useAuth();
+  const { isLoaded: signInLoaded, signIn, setActive } = useSignIn();
 
   useEffect(() => {
     const urlToken = searchParams.get("token");
@@ -56,9 +66,28 @@ const ForgotPasswordScreen = () => {
 
     try {
       setLoadingRequest(true);
+      const isEmailIdentifier = isValidEmail(trimmedIdentifier);
+      const isPhoneIdentifier = isValidPhoneNumber(trimmedIdentifier);
+
+      if (signInLoaded && signIn && (isEmailIdentifier || isPhoneIdentifier)) {
+        const strategy: "reset_password_email_code" | "reset_password_phone_code" = isPhoneIdentifier ? "reset_password_phone_code" : "reset_password_email_code";
+        const clerkIdentifier = isPhoneIdentifier ? `+91${normalizePhoneNumber(trimmedIdentifier)}` : trimmedIdentifier.toLowerCase();
+        await signIn.create({
+          strategy,
+          identifier: clerkIdentifier,
+        });
+        setClerkResetStrategy(strategy);
+        setTokenRequested(true);
+        toast.success("Reset code sent", {
+          description: isPhoneIdentifier ? "Check your phone for the Clerk reset code." : "Check your email for the Clerk reset code.",
+        });
+        return;
+      }
+
       const response = await forgotPassword(trimmedIdentifier);
       const resetToken = response.data?.resetToken;
       if (resetToken) setToken(resetToken);
+      setClerkResetStrategy(null);
       setTokenRequested(true);
       toast.success("Reset email sent", {
         description: resetToken ? "Token filled below for local development." : response.message,
@@ -92,12 +121,42 @@ const ForgotPasswordScreen = () => {
 
     try {
       setLoadingReset(true);
+      if (clerkResetStrategy && signInLoaded && signIn) {
+        const result = await signIn.attemptFirstFactor({
+          strategy: clerkResetStrategy,
+          code: trimmedToken,
+          password: newPassword,
+        });
+
+        if (result.status === "complete") {
+          await setActive?.({ session: result.createdSessionId });
+          setClerkTokenGetter(() => getToken());
+          await syncClerkUser();
+          toast.success("Password reset successfully.");
+          navigate("/");
+          return;
+        }
+
+        if (result.status === "needs_second_factor") {
+          toast.info("More verification required", {
+            description: "Complete your second factor in Clerk to finish the reset.",
+          });
+          return;
+        }
+
+        toast.info("Password reset needs one more step", {
+          description: "Check your Clerk account requirements to continue.",
+        });
+        return;
+      }
+
       const response = await resetPassword({ token: trimmedToken, newPassword });
       toast.success(response.message || "Password reset successfully.");
       navigate("/login");
     } catch (error) {
-      const errorToast = getErrorToast(error, { action: "Reset password", fallback: "Could not reset password." });
-      toast.error(errorToast.title, { description: errorToast.description });
+      const fallback = getClerkErrorMessage(error, "Could not reset password.");
+      const errorToast = getErrorToast(error, { action: "Reset password", fallback });
+      toast.error(errorToast.title, { description: errorToast.description || fallback });
     } finally {
       setLoadingReset(false);
     }

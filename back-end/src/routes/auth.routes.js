@@ -4,6 +4,7 @@ import {
   loginUser,
   loginWithGoogle,
   loginWithFacebook,
+  syncClerkUserAccount,
   logoutUser,
   renewTokens,
   forgotPassword,
@@ -26,6 +27,7 @@ router.post("/forgot-password", passwordResetLimiter, forgotPassword);
 router.put("/reset-password/:token", passwordResetLimiter, resetPassword);
 
 // Protected routes
+router.post("/clerk/sync", protect, syncClerkUserAccount);
 router.get("/logout", protect, logoutUser);
 router.patch("/change-password", protect, changePassword);
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth, useSignIn, useSignUp } from "@clerk/clerk-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
@@ -20,18 +21,14 @@ import {
 } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
 import heroBg from "@/assets/hero-bg.jpg";
-import { facebook, google, login, signup, AuthResponse, FacebookLoginPayload, GoogleLoginPayload } from "@/api/auth";
+import { login, signup, syncClerkUser, AuthResponse } from "@/api/auth";
 import { toast } from "@/components/ui/sonner";
 import { setAuthTokens } from "@/lib/auth-storage";
+import { setClerkTokenGetter } from "@/lib/clerk-session";
 import ButtonLoadingScreen from "@/components/ui/buttonLoadingScreen";
 import { getErrorToast } from "@/lib/page-utils";
-import { useGoogleLogin } from "@react-oauth/google";
 
-const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID;
-const FACEBOOK_GRAPH_VERSION = import.meta.env.VITE_FACEBOOK_GRAPH_VERSION || "v25.0";
 const PASSWORD_MIN_LENGTH = 6;
-let facebookSdkPromise: Promise<void> | null = null;
-let facebookSdkInitialized = false;
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
@@ -92,116 +89,10 @@ const AuthInput = ({
   </label>
 );
 
-type FacebookLoginResponse = {
-  authResponse?: FacebookLoginPayload;
-  status?: string;
+const getClerkErrorMessage = (error: unknown, fallback: string) => {
+  const clerkError = error as { errors?: Array<{ longMessage?: string; message?: string; code?: string }>; message?: string };
+  return clerkError?.errors?.[0]?.longMessage || clerkError?.errors?.[0]?.message || clerkError?.message || fallback;
 };
-
-const initFacebookSdk = () => {
-  if (!window.FB) {
-    throw new Error("Facebook login is not ready yet. Try again in a moment.");
-  }
-
-  if (facebookSdkInitialized) {
-    return;
-  }
-
-  window.FB.init({
-    appId: FACEBOOK_APP_ID,
-    cookie: true,
-    xfbml: false,
-    version: FACEBOOK_GRAPH_VERSION,
-  });
-  facebookSdkInitialized = true;
-};
-
-const loadFacebookSdk = () => {
-  if (facebookSdkPromise) {
-    return facebookSdkPromise;
-  }
-
-  facebookSdkPromise = new Promise<void>((resolve, reject) => {
-    if (!FACEBOOK_APP_ID) {
-      reject(new Error("Facebook app id is missing. Add VITE_FACEBOOK_APP_ID to front-end/.env."));
-      return;
-    }
-
-    let settled = false;
-    const timeoutRef: { current?: number } = {};
-
-    const finish = () => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (timeoutRef.current) {
-        window.clearTimeout(timeoutRef.current);
-      }
-
-      try {
-        initFacebookSdk();
-        resolve();
-      } catch (error) {
-        facebookSdkPromise = null;
-        reject(error);
-      }
-    };
-
-    const fail = (error: Error) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (timeoutRef.current) {
-        window.clearTimeout(timeoutRef.current);
-      }
-      facebookSdkPromise = null;
-      reject(error);
-    };
-
-    if (window.FB) {
-      finish();
-      return;
-    }
-
-    window.fbAsyncInit = finish;
-    timeoutRef.current = window.setTimeout(
-      () => fail(new Error("Facebook login took too long to load. Please refresh and try again.")),
-      15000,
-    );
-
-    const existingScript = document.getElementById("facebook-jssdk");
-    if (existingScript) {
-      existingScript.addEventListener("load", finish, { once: true });
-      existingScript.addEventListener("error", () => fail(new Error("Could not load Facebook login.")), { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.id = "facebook-jssdk";
-    script.src = "https://connect.facebook.net/en_US/sdk.js";
-    script.async = true;
-    script.defer = true;
-    script.crossOrigin = "anonymous";
-    script.onerror = () => fail(new Error("Could not load Facebook login."));
-    document.body.appendChild(script);
-  });
-
-  return facebookSdkPromise;
-};
-
-const requestFacebookLogin = () =>
-  new Promise<FacebookLoginResponse>((resolve, reject) => {
-    if (!window.FB?.login) {
-      reject(new Error("Facebook login is not ready yet. Try again in a moment."));
-      return;
-    }
-
-    window.FB.login(
-      (response) => resolve(response),
-      { scope: "public_profile,email", return_scopes: true },
-    );
-  });
 
 const LoginScreen = () => {
   const [isSignup, setIsSignup] = useState(false);
@@ -210,10 +101,19 @@ const LoginScreen = () => {
   const [identifier, setIdentifier] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [pendingSignupVerification, setPendingSignupVerification] = useState<{
+    email: string;
+    username: string;
+    phone_number: string;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<"google" | "facebook" | null>(null);
   const shouldReduceMotion = useReducedMotion();
   const navigate = useNavigate();
+  const { getToken } = useAuth();
+  const { isLoaded: signInLoaded, signIn, setActive: setSignInActive } = useSignIn();
+  const { isLoaded: signUpLoaded, signUp, setActive: setSignUpActive } = useSignUp();
 
   const completeLogin = (res: AuthResponse) => {
     setAuthTokens({
@@ -229,54 +129,64 @@ const LoginScreen = () => {
     navigate(needsPhoneNumber ? "/edit-profile" : needsPasswordSetup ? "/change-password" : "/");
   };
 
-  const submitGoogleLogin = async (tokenResponse: GoogleLoginPayload) => {
+  const completeClerkLogin = async (profilePayload: { email?: string; username?: string; phone_number?: string } = {}) => {
+    setClerkTokenGetter(() => getToken());
+    const res = await syncClerkUser(profilePayload);
+    const user = res.data.user;
+    const phoneNumber = String(user?.phone_number || "").trim();
+    toast.success(res.message || "Signed in successfully");
+    navigate(!phoneNumber ? "/edit-profile" : "/");
+  };
+
+  const handleOAuthLogin = async (provider: "google" | "facebook") => {
+    if (!signInLoaded || !signIn) {
+      toast.error("Authentication is still loading.");
+      return;
+    }
+
     try {
-      setSocialLoading("google");
-      const res = await google(tokenResponse);
-      completeLogin(res);
+      setSocialLoading(provider);
+      const strategy: "oauth_google" | "oauth_facebook" = provider === "google" ? "oauth_google" : "oauth_facebook";
+      await signIn.authenticateWithRedirect({
+        strategy,
+        redirectUrl: "/sso-callback",
+        redirectUrlComplete: "/",
+      });
     } catch (err) {
-      const errorToast = getErrorToast(err, { action: "Google login", fallback: "Google login failed." });
-      toast.error(errorToast.title, { description: errorToast.description });
-    } finally {
+      toast.error(`${provider === "google" ? "Google" : "Facebook"} login failed`, {
+        description: getClerkErrorMessage(err, "Could not start social login."),
+      });
       setSocialLoading(null);
     }
   };
 
-  const handleGoogleLogin = useGoogleLogin({
-    onSuccess: (tokenResponse) => {
-      void submitGoogleLogin(tokenResponse);
-    },
-    onError: () => {
-      toast.error("Google login failed.");
-    },
-    scope: "openid email profile",
-  });
+  const handleVerifySignup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!pendingSignupVerification || !signUpLoaded || !signUp || !setSignUpActive) return;
 
-  const handleFacebookLogin = async () => {
+    if (!verificationCode.trim()) {
+      toast.error("Verification code is required.");
+      return;
+    }
+
     try {
-      const isLocalDev = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-      if (window.location.protocol !== "https:" && !isLocalDev) {
-        toast.error("Facebook login needs HTTPS", {
-          description: "Facebook blocks FB.login on plain HTTP. Use the deployed HTTPS site or an HTTPS dev tunnel.",
-        });
-        return;
-      }
-      setSocialLoading("facebook");
-      await loadFacebookSdk();
-      const response = await requestFacebookLogin();
-
-      if (!response.authResponse?.accessToken) {
-        toast.error("Facebook login was cancelled.");
+      setLoading(true);
+      const verification = await signUp.attemptEmailAddressVerification({ code: verificationCode.trim() });
+      if (verification.status === "complete") {
+        await setSignUpActive({ session: verification.createdSessionId });
+        await completeClerkLogin(pendingSignupVerification);
         return;
       }
 
-      const res = await facebook(response.authResponse);
-      completeLogin(res);
+      toast.info("Verification needs one more step", {
+        description: "Check Clerk settings if another verification factor is required.",
+      });
     } catch (err) {
-      const errorToast = getErrorToast(err, { action: "Facebook login", fallback: "Facebook login failed." });
-      toast.error(errorToast.title, { description: errorToast.description });
+      toast.error("Email verification failed", {
+        description: getClerkErrorMessage(err, "Invalid or expired verification code."),
+      });
     } finally {
-      setSocialLoading(null);
+      setLoading(false);
     }
   };
 
@@ -324,19 +234,89 @@ const LoginScreen = () => {
 
     try {
       setLoading(true);
-      const res = isSignup
-        ? await signup({
-          email: normalizedEmail,
+      if (!signInLoaded || !signUpLoaded) {
+        toast.error("Authentication is still loading.");
+        return;
+      }
+
+      if (isSignup) {
+        if (!signUp || !setSignUpActive) {
+          throw new Error("Signup is not ready yet.");
+        }
+
+        const createdSignup = await signUp.create({
+          emailAddress: normalizedEmail,
           password,
+          unsafeMetadata: {
+            username: username.trim(),
+            phone_number: normalizedPhone,
+          },
+        });
+
+        const syncPayload = {
+          email: normalizedEmail,
           username: username.trim(),
           phone_number: normalizedPhone,
-        })
-        : await login({ identifier: loginIdentifier, password });
-      completeLogin(res);
+        };
+
+        if (createdSignup.status === "complete") {
+          await setSignUpActive({ session: createdSignup.createdSessionId });
+          await completeClerkLogin(syncPayload);
+          return;
+        }
+
+        if (createdSignup.unverifiedFields?.includes("email_address")) {
+          await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+          setPendingSignupVerification(syncPayload);
+          setVerificationCode("");
+          toast.success("Verification code sent", {
+            description: "Enter the code from your email to finish creating the account.",
+          });
+          return;
+        }
+
+        toast.info("Signup needs one more step", {
+          description: "Check Clerk dashboard requirements for any missing signup fields.",
+        });
+        return;
+      }
+
+      if (!signIn || !setSignInActive) {
+        throw new Error("Login is not ready yet.");
+      }
+
+      const clerkIdentifier = isValidPhoneNumber(identifierValue) ? `+91${normalizedPhone}` : loginIdentifier;
+      try {
+        const createdSignIn = await signIn.create({
+          identifier: clerkIdentifier,
+          password,
+        });
+
+        if (createdSignIn.status === "complete") {
+          await setSignInActive({ session: createdSignIn.createdSessionId });
+          await completeClerkLogin();
+          return;
+        }
+
+        if (createdSignIn.status === "needs_second_factor") {
+          toast.info("More verification required", {
+            description: "Complete your second factor in Clerk to continue.",
+          });
+          return;
+        }
+
+        toast.info("Login needs one more step", {
+          description: "Check your Clerk account requirements to continue.",
+        });
+      } catch (clerkError) {
+        const res = await login({ identifier: loginIdentifier, password });
+        completeLogin(res);
+      }
     }
     catch (err) {
-      const errorToast = getErrorToast(err, { action: isSignup ? "Signup" : "Login", fallback: "Authentication failed." });
-      toast.error(errorToast.title, { description: errorToast.description });
+      const fallback = getClerkErrorMessage(err, "Authentication failed.");
+      const errorToast = getErrorToast(err, { action: isSignup ? "Signup" : "Login", fallback });
+      toast.error(errorToast.title, { description: errorToast.description || fallback });
     } finally {
       setLoading(false);
     }
@@ -424,7 +404,11 @@ const LoginScreen = () => {
                     <button
                       key={item.label}
                       type="button"
-                      onClick={() => setIsSignup(item.value)}
+                      onClick={() => {
+                        setIsSignup(item.value);
+                        setPendingSignupVerification(null);
+                        setVerificationCode("");
+                      }}
                       disabled={loading}
                       className={`arena-focus relative inline-flex min-h-10 items-center justify-center gap-2 overflow-hidden rounded-md font-heading text-xs font-bold transition-colors ${
                         active ? "text-primary-foreground" : "text-muted-foreground hover:bg-muted/65 hover:text-foreground"
@@ -489,7 +473,7 @@ const LoginScreen = () => {
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={pendingSignupVerification ? handleVerifySignup : handleSubmit} className="space-y-4">
                 {isSignup && (
                   <>
                     <AuthInput icon={User} label="Username">
@@ -547,6 +531,33 @@ const LoginScreen = () => {
                   </button>
                 </AuthInput>
 
+                {pendingSignupVerification && (
+                  <>
+                    <AuthInput icon={Mail} label="Email verification code">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="Enter code from email"
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value)}
+                        disabled={loading}
+                        className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                      />
+                    </AuthInput>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPendingSignupVerification(null);
+                        setVerificationCode("");
+                      }}
+                      disabled={loading}
+                      className="arena-focus rounded-md font-heading text-xs font-semibold text-muted-foreground hover:text-foreground"
+                    >
+                      Change signup details
+                    </button>
+                  </>
+                )}
+
                 {!isSignup && (
                   <div className="flex justify-end">
                     <button
@@ -564,11 +575,12 @@ const LoginScreen = () => {
                     <ButtonLoadingScreen />
                   ) : (
                     <>
-                      {isSignup ? "Create Account" : "Login"}
+                      {pendingSignupVerification ? "Verify Email" : isSignup ? "Create Account" : "Login"}
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
                 </NeonButton>
+                <div id="clerk-captcha" />
               </form>
 
               <div className={isSignup ? "" : "mt-auto pt-6"}>
@@ -581,7 +593,7 @@ const LoginScreen = () => {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <motion.button
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => handleGoogleLogin()}
+                    onClick={() => handleOAuthLogin("google")}
                     disabled={loading || Boolean(socialLoading)}
                     type="button"
                     className="arena-focus flex min-h-11 items-center justify-center gap-2 rounded-lg border border-glass-border bg-background/55 px-3 text-sm font-heading font-semibold text-foreground transition-colors hover:border-primary/45 hover:bg-primary/10 disabled:opacity-50"
@@ -608,7 +620,7 @@ const LoginScreen = () => {
                   </motion.button>
                   <motion.button
                     whileTap={{ scale: 0.98 }}
-                    onClick={handleFacebookLogin}
+                    onClick={() => handleOAuthLogin("facebook")}
                     disabled={loading || Boolean(socialLoading)}
                     type="button"
                     className="arena-focus flex min-h-11 items-center justify-center gap-2 rounded-lg border border-glass-border bg-background/55 px-3 text-sm font-heading font-semibold text-foreground transition-colors hover:border-secondary/45 hover:bg-secondary/10 disabled:opacity-50"
@@ -624,7 +636,11 @@ const LoginScreen = () => {
                   {isSignup ? "Already have an account? " : "New to Battle4Arena? "}
                   <button
                     type="button"
-                    onClick={() => setIsSignup(!isSignup)}
+                    onClick={() => {
+                      setIsSignup(!isSignup);
+                      setPendingSignupVerification(null);
+                      setVerificationCode("");
+                    }}
                     disabled={loading}
                     className="arena-focus rounded-md font-bold text-primary"
                   >

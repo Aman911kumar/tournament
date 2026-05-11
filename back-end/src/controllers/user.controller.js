@@ -24,6 +24,7 @@ import {
 import { expireStaleRazorpayPayments } from '../services/paymentExpiry.service.js'
 import { sendEmailVerification, sendPasswordResetEmail, sendPhoneVerificationEmail } from '../services/auth.service.js'
 import { getPushPublicKey } from '../services/notification.service.js'
+import { syncClerkUserFromRequest, updateClerkUserName } from '../services/clerkUser.service.js'
 
 const generateAccessTokenAndRefreshToken = async (userId) => {
     try {
@@ -84,6 +85,16 @@ const normalizePhoneNumber = (value = "") => {
 };
 
 const normalizeEmail = (value = "") => String(value).trim().toLowerCase();
+
+const normalizePersonName = (value = "") => String(value || "").trim().slice(0, 50);
+
+const splitDisplayName = (name = "") => {
+    const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+    return {
+        firstName: normalizePersonName(parts[0] || ""),
+        lastName: normalizePersonName(parts.slice(1).join(" ")),
+    };
+};
 
 const isValidEmail = (value = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
 
@@ -287,6 +298,17 @@ const findOrCreateSocialUser = async ({ provider, providerId, email, name, pictu
             isUpdated = true;
         }
 
+        const socialName = splitDisplayName(name);
+        if (!existingUser.firstName && socialName.firstName) {
+            existingUser.firstName = socialName.firstName;
+            isUpdated = true;
+        }
+
+        if (!existingUser.lastName && socialName.lastName) {
+            existingUser.lastName = socialName.lastName;
+            isUpdated = true;
+        }
+
         if (!existingUser.avatar?.url && picture) {
             existingUser.avatar = { ...existingUser.avatar, url: picture };
             isUpdated = true;
@@ -306,11 +328,14 @@ const findOrCreateSocialUser = async ({ provider, providerId, email, name, pictu
     try {
         const username = await createUniqueUsername(name, accountEmail, providerId);
         const password = crypto.randomBytes(32).toString("hex");
+        const socialName = splitDisplayName(name);
 
         const userArr = await User.create(
             [
                 {
                     username,
+                    firstName: socialName.firstName,
+                    lastName: socialName.lastName,
                     email: accountEmail,
                     emailVerified: Boolean(normalizedEmail),
                     socialProvider: provider,
@@ -456,9 +481,11 @@ const getFacebookProfile = async ({ accessToken, access_token, userID }) => {
 // Auth & Account___________________________________________________________________________________________________
 
 const registerUser = asyncHandler(async (req, res) => {
-    const { username, phone_number, password, email } = req.body;
+    const { username, phone_number, password, email, firstName, first_name, lastName, last_name } = req.body;
     const normalizedEmail = email ? normalizeEmail(email) : undefined;
     const normalizedPhone = normalizePhoneNumber(phone_number);
+    const normalizedFirstName = normalizePersonName(firstName ?? first_name);
+    const normalizedLastName = normalizePersonName(lastName ?? last_name);
 
     // Validate required fields
     [
@@ -503,6 +530,8 @@ const registerUser = asyncHandler(async (req, res) => {
                 phone_number: normalizedPhone,
                 password,
                 email: normalizedEmail,
+                firstName: normalizedFirstName,
+                lastName: normalizedLastName,
                 passwordLoginEnabled: true,
                 linkedProviders: [
                     { provider: "password", providerId: username, verified: true },
@@ -611,6 +640,21 @@ const loginWithFacebook = asyncHandler(async (req, res) => {
     const user = await findOrCreateSocialUser(profile);
 
     return issueAuthResponse(res, user, "Logged in with Facebook successfully");
+});
+
+const syncClerkUserAccount = asyncHandler(async (req, res) => {
+    const user = await syncClerkUserFromRequest(req, {
+        force: true,
+        select: "-password -refreshToken -emailVerificationToken -phoneVerificationToken -resetPasswordToken",
+    }) || req.user;
+
+    if (!user) {
+        throw new ApiError(401, "Clerk user is not authenticated");
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, { user: await buildUserProfileResponse(user) }, "Clerk user synced successfully")
+    );
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
@@ -862,18 +906,24 @@ const getUserById = asyncHandler(async (req, res) => {
 const updateUserProfile = asyncHandler(async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) throw new ApiError(404, "User not found");
-    const { username, email, phone_number, gamename, gameid, dateOfBirth, gender } = req.body;
+    const { username, firstName, first_name, lastName, last_name, email, phone_number, gamename, gameid, dateOfBirth, gender } = req.body;
     // console.log(username, gamename, gameid, dateOfBirth, gender, password)
     const isSocialUser = Boolean(user.socialProvider);
     const wantsPhoneUpdate = Object.prototype.hasOwnProperty.call(req.body, "phone_number");
     const wantsEmailUpdate = Object.prototype.hasOwnProperty.call(req.body, "email");
+    const wantsFirstNameUpdate = Object.prototype.hasOwnProperty.call(req.body, "firstName") || Object.prototype.hasOwnProperty.call(req.body, "first_name");
+    const wantsLastNameUpdate = Object.prototype.hasOwnProperty.call(req.body, "lastName") || Object.prototype.hasOwnProperty.call(req.body, "last_name");
     const nextPhoneNumber = wantsPhoneUpdate ? normalizePhoneNumber(phone_number) : undefined;
     const nextEmail = wantsEmailUpdate ? normalizeEmail(email) : undefined;
+    const nextFirstName = wantsFirstNameUpdate ? normalizePersonName(firstName ?? first_name) : undefined;
+    const nextLastName = wantsLastNameUpdate ? normalizePersonName(lastName ?? last_name) : undefined;
     const currentPhoneNumber = isProviderPhoneNumber(user.phone_number) ? "" : normalizePhoneNumber(user.phone_number);
     const currentEmail = normalizeEmail(user.email);
     const phoneChanged = wantsPhoneUpdate && nextPhoneNumber !== currentPhoneNumber;
     const emailChanged = wantsEmailUpdate && nextEmail !== currentEmail;
     const usernameChanged = Boolean(username?.trim()) && username.trim() !== user.username;
+    const firstNameChanged = wantsFirstNameUpdate && nextFirstName !== normalizePersonName(user.firstName);
+    const lastNameChanged = wantsLastNameUpdate && nextLastName !== normalizePersonName(user.lastName);
     const gamenameChanged = Boolean(gamename?.trim()) && gamename.trim() !== user.gamename;
     const gameidChanged = Boolean(gameid?.trim()) && gameid.trim() !== user.gameid;
     const nextDateOfBirth = toDateInputString(dateOfBirth);
@@ -882,7 +932,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     }
     const dateOfBirthChanged = Boolean(dateOfBirth?.trim()) && nextDateOfBirth !== toDateInputString(user.dateOfBirth);
     const genderChanged = Boolean(gender?.trim()) && gender.trim() !== user.gender;
-    const wantsOtherUpdate = usernameChanged || emailChanged || gamenameChanged || gameidChanged || dateOfBirthChanged || genderChanged;
+    const wantsOtherUpdate = usernameChanged || emailChanged || firstNameChanged || lastNameChanged || gamenameChanged || gameidChanged || dateOfBirthChanged || genderChanged;
     const hasAnyUpdate = phoneChanged || wantsOtherUpdate;
 
     if (wantsEmailUpdate && !nextEmail) {
@@ -934,6 +984,8 @@ const updateUserProfile = asyncHandler(async (req, res) => {
         updates.emailVerified = false;
     }
 
+    if (firstNameChanged) updates.firstName = nextFirstName;
+    if (lastNameChanged) updates.lastName = nextLastName;
     if (gamenameChanged) updates.gamename = gamename.trim();
     if (gameidChanged) updates.gameid = gameid.trim();
     if (dateOfBirthChanged) updates.dateOfBirth = new Date(dateOfBirth);
@@ -957,6 +1009,15 @@ const updateUserProfile = asyncHandler(async (req, res) => {
         },
         { new: true, runValidators: true }
     ).select("-password -refreshToken -accessToken");
+
+    if (user.clerkId && (firstNameChanged || lastNameChanged)) {
+        updateClerkUserName(user.clerkId, {
+            firstName: updatedUser.firstName,
+            lastName: updatedUser.lastName,
+        }).catch((error) => {
+            console.error("Failed to sync Clerk name:", error?.message || error);
+        });
+    }
 
     return res.status(200).json(
         new ApiResponse(200, { user: await buildUserProfileResponse(updatedUser) }, "User profile updated successfully")
@@ -1691,6 +1752,7 @@ export {
     loginUser,
     loginWithGoogle,
     loginWithFacebook,
+    syncClerkUserAccount,
     logoutUser,
     renewTokens,
     forgotPassword,

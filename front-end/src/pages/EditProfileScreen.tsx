@@ -30,6 +30,8 @@ import { getErrorMessage, getErrorToast } from "@/lib/page-utils";
 
 interface ProfileForm {
   username: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone_number: string;
   dateOfBirth: string;
@@ -38,6 +40,8 @@ interface ProfileForm {
 
 const emptyForm: ProfileForm = {
   username: "",
+  firstName: "",
+  lastName: "",
   email: "",
   phone_number: "",
   dateOfBirth: "",
@@ -69,6 +73,8 @@ const isValidPhoneNumber = (value: string) => /^[6-9]\d{9}$/.test(normalizePhone
 
 const toForm = (user: ProfileUser): ProfileForm => ({
   username: user.username ?? "",
+  firstName: user.firstName ?? "",
+  lastName: user.lastName ?? "",
   email: user.email ?? "",
   phone_number: getEditablePhoneNumber(user.phone_number),
   dateOfBirth: formatDateInput(user.dateOfBirth),
@@ -119,6 +125,8 @@ const EditProfileScreen = () => {
   const hasChanges = useMemo(
     () =>
       form.username.trim() !== initialForm.username ||
+      form.firstName.trim() !== initialForm.firstName ||
+      form.lastName.trim() !== initialForm.lastName ||
       form.email.trim() !== initialForm.email ||
       form.phone_number.trim() !== initialForm.phone_number ||
       form.dateOfBirth !== initialForm.dateOfBirth ||
@@ -204,6 +212,8 @@ const EditProfileScreen = () => {
       setSaving(true);
       const payload: ProfileUpdatePayload = {};
       if (form.username.trim() !== initialForm.username) payload.username = form.username.trim();
+      if (form.firstName.trim() !== initialForm.firstName) payload.firstName = form.firstName.trim();
+      if (form.lastName.trim() !== initialForm.lastName) payload.lastName = form.lastName.trim();
       if (form.email.trim() !== initialForm.email) payload.email = form.email.trim().toLowerCase();
       if (form.phone_number.trim() !== initialForm.phone_number) payload.phone_number = normalizePhoneNumber(form.phone_number);
       if (form.dateOfBirth !== initialForm.dateOfBirth) payload.dateOfBirth = form.dateOfBirth;
@@ -282,7 +292,9 @@ const EditProfileScreen = () => {
             </div>
           </div>
           <div className="min-w-0">
-            <p className="truncate font-heading text-base font-bold">{form.username || "Player"}</p>
+            <p className="truncate font-heading text-base font-bold">
+              {[form.firstName, form.lastName].filter(Boolean).join(" ") || form.username || "Player"}
+            </p>
             <p className="truncate text-xs text-muted-foreground">{form.email || form.phone_number || "Add contact details"}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <VerificationBadge verified={emailVerified} />
@@ -327,8 +339,20 @@ const EditProfileScreen = () => {
                 <User className="h-4 w-4 text-primary" />
                 <h2 className="font-heading text-sm font-bold">Identity</h2>
               </div>
-              <label className="mb-1 block text-[10px] font-heading text-muted-foreground">Username</label>
-              <input value={form.username} onChange={(e) => update("username", e.target.value)} disabled={saving} className={inputClass} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-[10px] font-heading text-muted-foreground">First Name</label>
+                  <input value={form.firstName} onChange={(e) => update("firstName", e.target.value)} disabled={saving} className={inputClass} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-heading text-muted-foreground">Last Name</label>
+                  <input value={form.lastName} onChange={(e) => update("lastName", e.target.value)} disabled={saving} className={inputClass} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-[10px] font-heading text-muted-foreground">Username</label>
+                  <input value={form.username} onChange={(e) => update("username", e.target.value)} disabled={saving} className={inputClass} />
+                </div>
+              </div>
             </GlassCard>
 
             <GlassCard>

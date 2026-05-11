@@ -1,6 +1,7 @@
 import { io, Socket } from "socket.io-client";
 import { API_BASE_URL } from "@/api/client";
 import { getAccessToken } from "@/lib/auth-storage";
+import { getClerkAccessToken } from "@/lib/clerk-session";
 import type { AdminMonitoringData } from "@/api/admin";
 import type { NotificationItem } from "@/api/notifications";
 
@@ -19,14 +20,15 @@ let socket: Socket<NotificationEvents> | null = null;
 
 const getSocketUrl = () => API_BASE_URL.replace(/\/api\/v\d+\/?$/, "");
 
-export const getNotificationSocket = (): Socket<NotificationEvents> | null => {
-  const token = getAccessToken();
-  if (!token) return null;
+const getSocketToken = async () => (await getClerkAccessToken()) || getAccessToken() || "";
 
+export const getNotificationSocket = (): Socket<NotificationEvents> | null => {
   if (socket?.connected || socket?.active) return socket;
 
   socket = io(getSocketUrl(), {
-    auth: { token },
+    auth: async (callback) => {
+      callback({ token: await getSocketToken() });
+    },
     transports: ["websocket", "polling"],
     withCredentials: true,
     autoConnect: true,

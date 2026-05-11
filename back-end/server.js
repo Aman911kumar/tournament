@@ -3,7 +3,8 @@ import { createServer } from 'http';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import compression from 'compression';
-import { PORT, CORS_ORIGIN } from './env.js';
+import { clerkMiddleware } from '@clerk/express';
+import { PORT, CORS_ORIGIN, CLERK_SECRET_KEY } from './env.js';
 import connect_db from './src/database/dataBaseConnect.js';
 import routes from './src/routes/all.routes.js';
 import cookieParser from 'cookie-parser';
@@ -108,6 +109,10 @@ app.use((req, res, next) => {
 
 app.use(requestMetrics);
 app.use(sanitizeRequest);
+
+if (CLERK_SECRET_KEY) {
+    app.use(clerkMiddleware());
+}
 
 // // Serve static files
 // app.use(express.static("public"));

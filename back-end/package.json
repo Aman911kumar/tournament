@@ -12,6 +12,8 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@clerk/backend": "^3.4.7",
+    "@clerk/express": "^2.1.15",
     "@socket.io/redis-adapter": "^8.3.0",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",

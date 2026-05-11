@@ -37,6 +37,8 @@ const SMTP_PASS = process.env.SMTP_PASS
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || (EMAIL_FROM.includes("@") ? `mailto:${EMAIL_FROM.match(/<([^>]+)>/)?.[1] || EMAIL_FROM}` : "mailto:no-reply@localhost")
+const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY
+const CLERK_JWT_KEY = process.env.CLERK_JWT_KEY
 
 export {
     PORT,
@@ -69,4 +71,6 @@ export {
     VAPID_PUBLIC_KEY,
     VAPID_PRIVATE_KEY,
     VAPID_SUBJECT,
+    CLERK_SECRET_KEY,
+    CLERK_JWT_KEY,
 }
