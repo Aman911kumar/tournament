@@ -4,6 +4,7 @@ import { createClient } from "redis";
 import jwt from "jsonwebtoken";
 import { ACCESS_TOKEN_SECRET } from "../../env.js";
 import { User } from "../models/user.model.js";
+import { registerChatSocketHandlers } from "../sockets/chat.socket.js";
 
 let io;
 let redisAdapterReady = false;
@@ -120,6 +121,7 @@ export const initSocket = (server, allowedOrigins = []) => {
             socket.emit("admin:presence", getSocketStats());
         }
         socket.emit("notification:ready", { userId: socket.userId });
+        registerChatSocketHandlers(io, socket);
         emitAdminPresence();
 
         socket.on("disconnect", () => {

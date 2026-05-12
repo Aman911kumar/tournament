@@ -48,6 +48,12 @@ export const walletLimiter = makeRateLimit({
     message: "Too many wallet requests. Please wait a moment before trying again.",
 });
 
+export const chatLimiter = makeRateLimit({
+    windowMs: toNumber(process.env.RATE_LIMIT_CHAT_WINDOW_MS, 60 * 1000),
+    max: toNumber(process.env.RATE_LIMIT_CHAT_MAX, 90),
+    message: "Too many chat actions. Please slow down and try again shortly.",
+});
+
 export const reportLimiter = makeRateLimit({
     windowMs: toNumber(process.env.RATE_LIMIT_REPORT_WINDOW_MS, 10 * 60 * 1000),
     max: toNumber(process.env.RATE_LIMIT_REPORT_MAX, 8),

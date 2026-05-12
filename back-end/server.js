@@ -20,6 +20,7 @@ import { getMonitoringSnapshot } from './src/services/monitoring.service.js';
 
 const __dirname = path.resolve();
 const distPath = path.join(__dirname, "dist");
+const uploadPath = path.resolve(process.env.UPLOAD_DIR || "uploads");
 
 // App configuration
 const app = express();
@@ -108,6 +109,14 @@ app.use((req, res, next) => {
 
 app.use(requestMetrics);
 app.use(sanitizeRequest);
+app.use(
+    "/uploads",
+    express.static(uploadPath, {
+        fallthrough: false,
+        immutable: true,
+        maxAge: "7d",
+    })
+);
 
 // // Serve static files
 // app.use(express.static("public"));

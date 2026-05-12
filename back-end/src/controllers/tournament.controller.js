@@ -16,6 +16,8 @@ import { calculateFeeSplit, getPlatformFeePercent, roundCurrency } from '../util
 import { applyPrizeSettings, assignTournamentResults, updatePrizePool } from '../services/tournamentPrize.service.js';
 import { createNotification, createNotifications } from '../services/notification.service.js';
 import { findActiveTournamentBan } from '../services/moderation.service.js';
+import { createChatMessage, createSystemChatMessage, getChatRoomName } from "../services/chat.service.js";
+import { getSocketServer } from "../services/socket.service.js";
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from "uuid";
 
@@ -183,6 +185,12 @@ const normalizeType = (type, teamSize) => {
 
 const userCanManageTournament = (user, tournament) => {
     return hasRole(user, "admin") || tournament.organizer?.toString() === user._id.toString();
+};
+
+const emitChatMessageToTournament = (tournamentId, message) => {
+    const io = getSocketServer();
+    if (!io || !message) return;
+    io.to(getChatRoomName(tournamentId)).emit("chat:message", message);
 };
 
 const getGameAccountKey = (game) => game === "callofduty" ? "cod" : game;
@@ -681,6 +689,7 @@ const updateTournament = asyncHandler(async (req, res) => {
     const tournament = await Tournament.findById(tournamentId);
     if (!tournament) throw new ApiError(404, "Tournament not found");
     const previousRoomDetails = { ...(tournament.room_details?.toObject?.() || tournament.room_details || {}) };
+    const previousStatus = tournament.status;
 
     if (!userCanManageTournament(req.user, tournament)) {
         throw new ApiError(403, "Not authorized to update this tournament");
@@ -786,6 +795,17 @@ const updateTournament = asyncHandler(async (req, res) => {
     if (hasRoomDetailsChanged(previousRoomDetails, tournament.room_details)) {
         await notifyJoinedUsersAboutRoom(tournament);
     }
+    if (previousStatus !== "running" && tournament.status === "running") {
+        createSystemChatMessage({
+            tournamentId,
+            body: "Match started",
+            metadata: { action: "match_started" },
+        })
+            .then((message) => emitChatMessageToTournament(tournamentId, message))
+            .catch((error) => {
+                console.error("Failed to create match started chat message:", error.message);
+            });
+    }
     const participantStats = await getParticipantStats([tournament._id]);
 
     return res.status(200).json(
@@ -828,6 +848,21 @@ const notifyTournamentRoomDetails = asyncHandler(async (req, res) => {
     }
 
     const notifiedCount = await notifyJoinedUsersAboutRoom(tournament);
+    createChatMessage({
+        user: req.user,
+        tournamentId,
+        body: "Room details shared",
+        type: "room_card",
+        metadata: {
+            roomId: room.roomId || "",
+            roomPass: room.roomPass || "",
+            roomJoinTime: room.roomJoinTime || null,
+        },
+    })
+        .then((result) => emitChatMessageToTournament(tournamentId, result.message))
+        .catch((error) => {
+            console.error("Failed to share room details in chat:", error.message);
+        });
     const participantStats = await getParticipantStats([tournament._id]);
 
     return res.status(200).json(
@@ -1358,6 +1393,21 @@ const joinTournament = asyncHandler(async (req, res) => {
         }
 
         await session.commitTransaction();
+
+        createSystemChatMessage({
+            tournamentId,
+            body: `${req.user.username} joined the tournament`,
+            metadata: {
+                action: "player_joined",
+                user: req.user._id,
+                members: memberIds,
+                registration: registrationArr[0]._id,
+            },
+        })
+            .then((message) => emitChatMessageToTournament(tournamentId, message))
+            .catch((error) => {
+                console.error("Failed to create tournament join chat message:", error.message);
+            });
 
         const joinedRoom = tournament.room_details || {};
         if (joinedRoom.roomId || joinedRoom.roomPass || joinedRoom.roomJoinTime) {

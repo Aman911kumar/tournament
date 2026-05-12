@@ -13,6 +13,7 @@ import notificationRoutes from "./notification.routes.js";
 import healthRoutes from "./health.routes.js";
 import monitoringRoutes from "./monitoring.routes.js";
 import moderationRoutes from "./moderation.routes.js";
+import chatRoutes from "./chat.routes.js";
 
 const router = express.Router();
 
@@ -39,6 +40,9 @@ router.use("/notifications", notificationRoutes);
 
 // Reports and moderation routes
 router.use("/moderation", moderationRoutes);
+
+// Tournament room chat routes
+router.use("/chat", chatRoutes);
 
 // Game Account routes
 router.use("/game-account",gameAccount)

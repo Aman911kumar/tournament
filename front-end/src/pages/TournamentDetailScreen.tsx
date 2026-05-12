@@ -505,14 +505,16 @@ const TournamentDetailScreen = () => {
               </div>
             </GlassCard>
 
-            {/* Comments Link */}
-            <GlassCard delay={0.2} onClick={() => navigate(`/tournament/${tournament._id}/comments`)} className="cursor-pointer">
+            {/* Room Chat Link */}
+            <GlassCard delay={0.2} onClick={() => navigate(`/tournament/${tournament._id}/chat`)} className="cursor-pointer">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <MessageCircle className="w-4 h-4 text-primary" />
-                  <span className="font-heading font-bold text-sm">Comments & Chat</span>
+                  <span className="font-heading font-bold text-sm">Room Chat</span>
                 </div>
-                <span className="text-[10px] text-primary font-heading">5 messages</span>
+                <span className="text-[10px] text-primary font-heading">
+                  {registered ? "Live room" : "Joined players only"}
+                </span>
               </div>
             </GlassCard>
 

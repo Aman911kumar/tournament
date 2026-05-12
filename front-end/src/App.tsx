@@ -116,6 +116,7 @@ const App = () => (
                   <Route path="/my-tournaments" element={<MyTournamentsScreen />} />
                   <Route path="/tournament/:id" element={<TournamentDetailScreen />} />
                   <Route path="/tournament/:id/slots" element={<SlotSelectionScreen />} />
+                  <Route path="/tournament/:id/chat" element={<TournamentCommentsScreen />} />
                   <Route path="/tournament/:id/comments" element={<TournamentCommentsScreen />} />
                   <Route path="/tournament/:id/distribute-prizes" element={<PrizeDistributionScreen />} />
                   <Route path="/wallet" element={<WalletScreen />} />

@@ -22,10 +22,24 @@ const NotificationRealtimeBridge = () => {
           : undefined,
       });
     };
+    const handleChatNotification = (payload: { tournamentId: string; message: { body?: string; sender?: { username?: string } | null; type?: string } }) => {
+      if ([`/tournament/${payload.tournamentId}/comments`, `/tournament/${payload.tournamentId}/chat`].includes(window.location.pathname)) return;
+      const sender = payload.message.sender?.username || "Room chat";
+      const body = payload.message.body || (payload.message.type === "image" ? "Sent an image" : "Sent a file");
+      toast.info(sender, {
+        description: body,
+        action: {
+          label: "Open",
+          onClick: () => navigate(`/tournament/${payload.tournamentId}/chat`),
+        },
+      });
+    };
 
     socket.on("notification:new", handleNewNotification);
+    socket.on("chat:notify", handleChatNotification);
     return () => {
       socket.off("notification:new", handleNewNotification);
+      socket.off("chat:notify", handleChatNotification);
     };
   }, [navigate]);
 

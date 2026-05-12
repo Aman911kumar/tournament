@@ -3,6 +3,7 @@ import { API_BASE_URL } from "@/api/client";
 import { getAccessToken } from "@/lib/auth-storage";
 import type { AdminMonitoringData } from "@/api/admin";
 import type { NotificationItem } from "@/api/notifications";
+import type { ChatMessage } from "@/api/chat";
 
 type NotificationEvents = {
   "notification:new": (notification: NotificationItem) => void;
@@ -13,6 +14,7 @@ type NotificationEvents = {
   "moderation:report:updated": (payload: unknown) => void;
   "moderation:ban": (payload: unknown) => void;
   "moderation:unban": (payload: unknown) => void;
+  "chat:notify": (payload: { tournamentId: string; message: ChatMessage }) => void;
 };
 
 let socket: Socket<NotificationEvents> | null = null;
