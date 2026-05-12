@@ -44,6 +44,7 @@ const smtpVerifyOnSend = parseBoolean(process.env.SMTP_VERIFY_ON_SEND, false);
 const smtpConnectionTimeout = positiveNumber(process.env.SMTP_CONNECTION_TIMEOUT_MS, 8000);
 const smtpGreetingTimeout = positiveNumber(process.env.SMTP_GREETING_TIMEOUT_MS, 8000);
 const smtpSocketTimeout = positiveNumber(process.env.SMTP_SOCKET_TIMEOUT_MS, 12000);
+const smtpPoolEnabled = parseBoolean(process.env.SMTP_POOL, false);
 const defaultFrom = cleanEnv(EMAIL_FROM) || (smtpUser ? `Battle4Arena <${smtpUser}>` : "");
 
 const getEmailConfigError = () => {
@@ -57,9 +58,13 @@ const buildTransportOptions = () => ({
     port: smtpPort,
     secure: smtpSecure,
     requireTLS: !smtpSecure && smtpRequireTls,
-    pool: true,
-    maxConnections: positiveNumber(process.env.SMTP_MAX_CONNECTIONS, 2),
-    maxMessages: positiveNumber(process.env.SMTP_MAX_MESSAGES, 50),
+    pool: smtpPoolEnabled,
+    ...(smtpPoolEnabled
+        ? {
+            maxConnections: positiveNumber(process.env.SMTP_MAX_CONNECTIONS, 2),
+            maxMessages: positiveNumber(process.env.SMTP_MAX_MESSAGES, 50),
+        }
+        : {}),
     connectionTimeout: smtpConnectionTimeout,
     greetingTimeout: smtpGreetingTimeout,
     socketTimeout: smtpSocketTimeout,
@@ -78,12 +83,14 @@ const buildTransportOptions = () => ({
     },
 });
 
-const mailTransporter = getEmailConfigError()
-    ? null
-    : nodemailer.createTransport(buildTransportOptions());
+const createMailTransporter = () => {
+    const configError = getEmailConfigError();
+    if (configError) {
+        throw new ApiError(500, `Email service is not configured: ${configError}`);
+    }
 
-let transporterVerified = false;
-let transporterVerifyPromise = null;
+    return nodemailer.createTransport(buildTransportOptions());
+};
 
 const getEmailFailureMessage = (error) => {
     const code = error?.code || error?.command || "";
@@ -106,33 +113,25 @@ const getEmailFailureMessage = (error) => {
 };
 
 const ensureEmailTransportReady = async () => {
-    const configError = getEmailConfigError();
-    if (configError) {
-        throw new ApiError(500, `Email service is not configured: ${configError}`);
-    }
-    if (!mailTransporter) {
-        throw new ApiError(500, "Email service is not configured");
-    }
-    if (!smtpVerifyOnSend || transporterVerified) return;
-
-    if (!transporterVerifyPromise) {
-        transporterVerifyPromise = mailTransporter.verify()
-            .then(() => {
-                transporterVerified = true;
-            })
-            .catch((error) => {
-                transporterVerified = false;
-                throw new ApiError(502, getEmailFailureMessage(error));
-            })
-            .finally(() => {
-                transporterVerifyPromise = null;
-            });
+    if (!smtpVerifyOnSend) {
+        const configError = getEmailConfigError();
+        if (configError) {
+            throw new ApiError(500, `Email service is not configured: ${configError}`);
+        }
+        return;
     }
 
-    await transporterVerifyPromise;
+    const transporter = createMailTransporter();
+    try {
+        await transporter.verify();
+    } catch (error) {
+        throw new ApiError(502, getEmailFailureMessage(error));
+    } finally {
+        if (typeof transporter.close === "function") transporter.close();
+    }
 };
 
-export const isEmailServiceConfigured = () => Boolean(mailTransporter);
+export const isEmailServiceConfigured = () => !getEmailConfigError();
 export const verifyEmailTransport = ensureEmailTransportReady;
 
 // Resend implementation kept commented for rollback/reference only.
@@ -172,14 +171,31 @@ export const verifyEmailTransport = ensureEmailTransportReady;
 const sendEmailWithSmtp = async ({ to, subject, html, text, from = EMAIL_FROM, replyTo }) => {
     await ensureEmailTransportReady();
 
-    return mailTransporter.sendMail({
+    const transporter = createMailTransporter();
+    const message = {
         from: cleanEnv(from) || defaultFrom,
         to: cleanEnv(to),
         subject,
         html,
         ...(text ? { text } : {}),
         ...(replyTo ? { replyTo: cleanEnv(replyTo) } : {}),
-    });
+    };
+
+    try {
+        return await new Promise((resolve, reject) => {
+            transporter.sendMail(message, (error, info) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                resolve(info);
+            });
+        });
+    } catch (error) {
+        throw new ApiError(502, getEmailFailureMessage(error));
+    } finally {
+        if (typeof transporter.close === "function") transporter.close();
+    }
 };
 
 const escapeHtml = (value = "") =>
