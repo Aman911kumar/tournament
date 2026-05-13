@@ -26,7 +26,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
       expand={true}
       gap={8}
       visibleToasts={3}
-      offset={16}
+      offset={{
+        top: "calc(env(safe-area-inset-top) + 16px)",
+        bottom: "calc(env(safe-area-inset-bottom) + 16px)",
+        left: 16,
+        right: 16,
+      }}
       toastOptions={{
         classNames: {
           // SAFE BASE STYLE

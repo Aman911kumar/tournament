@@ -14,3 +14,7 @@ build/
 # OS / IDE files
 .DS_Store
 .vscode/
+
+android
+capacitor.config.json
+capacitor.config.ts
