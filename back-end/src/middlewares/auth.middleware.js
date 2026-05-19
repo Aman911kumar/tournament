@@ -35,7 +35,7 @@ const hasAdminPermission = (user, ...requiredPermissions) => {
     return permissions.has("*") || requiredPermissions.some((permission) => permissions.has(permission));
 };
 
-const authUserSelect = "_id username email emailVerified phone_number phoneVerified linkedProviders avatar role adminPermissions accountStatus suspendedUntil mutedUntil isActive creatorRequest preferences walletBalance socialProvider passwordLoginEnabled dateOfBirth gender lastLoginAt createdAt updatedAt";
+const authUserSelect = "_id username email emailVerified phone_number phoneVerified linkedProviders avatar role adminPermissions accountStatus suspendedUntil mutedUntil isActive creatorRequest preferences walletBalance socialProvider passwordLoginEnabled dateOfBirth gender onboarding legalAgreements lastLoginAt createdAt updatedAt";
 
 const assertUsableAccount = (user) => {
     if (!user) return;

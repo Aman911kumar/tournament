@@ -77,7 +77,7 @@ const HelpCenterScreen = () => {
           {[
             { icon: CreditCard, label: "Wallet", route: "/wallet" },
             { icon: Trophy, label: "My Tournaments", route: "/my-tournaments" },
-            { icon: Shield, label: "Rules and Regulations", route: "/rules" },
+            { icon: Shield, label: "Legal & Policies", route: "/legal/terms" },
           ].map((item) => (
             <button key={item.label} onClick={() => navigate(item.route)} className="flex w-full items-center justify-between border-t border-glass-border py-3 text-left first:border-t-0">
               <span className="flex items-center gap-2 text-sm font-heading">

@@ -17,6 +17,7 @@ import path from "path";
 import { expireStaleRazorpayPayments } from './src/services/paymentExpiry.service.js';
 import { emitToAdmins, initSocket } from './src/services/socket.service.js';
 import { getMonitoringSnapshot } from './src/services/monitoring.service.js';
+import { initEmailSystem } from "./src/services/email/index.js";
 
 const __dirname = path.resolve();
 const distPath = path.join(__dirname, "dist");
@@ -66,11 +67,6 @@ const configuredOrigins = CORS_ORIGIN
     : [];
 
 const allowedOrigins = [
-    "http://localhost:3000",
-    // "tournament4-shubham9876794207-3100s-projects.vercel.app",
-    "https://battle4arena.vercel.app",
-    "http://192.168.29.138:8080",
-    "http://localhost:8080",
     ...configuredOrigins,
 ];
 const localDevOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
@@ -119,12 +115,7 @@ app.use(
 );
 
 // // Serve static files
-// app.use(express.static("public"));
-// app.use(express.static(distPath))
-// // 🔥 SPA fallback (IMPORTANT)
-// app.use( (req, res) => {
-//     res.sendFile(path.resolve("dist/index.html"));
-// });
+app.use(express.static("public"));
 
 // All routes
 app.use('/api/v1', globalApiLimiter, routes);
@@ -135,7 +126,7 @@ app.get("/", (req, res) => {
 
 
 app.use((req, res, next) => {
-    next(new ApiError(404, `API endpoint doesn’t exist`));
+    next(new ApiError(404, `API endpoint doesn't exist`));
     // next(new ApiError(404, `Route ${req.originalUrl} not found`));
 });
 
@@ -147,6 +138,9 @@ app.use(errorHandler);
 connect_db()
     .then(() => {
         initSocket(httpServer, allowedOrigins);
+        initEmailSystem().catch((error) => {
+            console.error("Email worker failed to start:", error?.message || error);
+        });
         runPaymentExpiry();
         paymentExpiryTimer = setInterval(runPaymentExpiry, 60 * 1000);
         paymentExpiryTimer.unref?.();

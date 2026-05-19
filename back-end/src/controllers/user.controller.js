@@ -86,6 +86,40 @@ const normalizePhoneNumber = (value = "") => {
 const normalizeEmail = (value = "") => String(value).trim().toLowerCase();
 
 const isValidEmail = (value = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
+const isValidIndianPhoneNumber = (value = "") => /^[6-9]\d{9}$/.test(normalizePhoneNumber(value));
+
+const toPositiveNumber = (value, fallback) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const clampInt = (value, min, max, fallback) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    const rounded = Math.floor(parsed);
+    return Math.min(max, Math.max(min, rounded));
+};
+
+const msFromMinutes = (minutes, fallbackMinutes) =>
+    clampInt(minutes, 1, 60 * 24 * 30, fallbackMinutes) * 60 * 1000;
+
+const msFromDays = (days, fallbackDays) =>
+    clampInt(days, 1, 365, fallbackDays) * 24 * 60 * 60 * 1000;
+
+const randomOtpCode = () => String(Math.floor(100000 + Math.random() * 900000));
+
+const sha256Hex = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
+
+const getAgeYears = (dateOfBirth) => {
+    if (!dateOfBirth) return 0;
+    const dob = new Date(dateOfBirth);
+    if (Number.isNaN(dob.getTime())) return 0;
+    const now = new Date();
+    let age = now.getFullYear() - dob.getFullYear();
+    const monthDiff = now.getMonth() - dob.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) age -= 1;
+    return age;
+};
 
 const escapeRegex = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -249,7 +283,7 @@ const findOrCreateSocialUser = async ({ provider, providerId, email, name, pictu
         ]
     });
 
-    // 🔁 EXISTING USER FLOW
+    // EXISTING USER FLOW
     if (existingUser) {
         let isUpdated = false;
 
@@ -299,7 +333,7 @@ const findOrCreateSocialUser = async ({ provider, providerId, email, name, pictu
         return existingUser;
     }
 
-    // 🆕 NEW USER FLOW (WITH TRANSACTION)
+    // NEW USER FLOW (WITH TRANSACTION)
     const session = await mongoose.startSession();
     session.startTransaction();
 
@@ -711,78 +745,399 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
     let user = null;
     for (const identifier of identifiers) {
-        user = await findUserByIdentifier(identifier);
+        user = await findUserByIdentifier(
+            identifier,
+            "+resetPasswordToken +resetPasswordExpires +resetPasswordOtpHash +resetPasswordOtpExpires +resetPasswordOtpAttempts +resetPasswordResendAvailableAt +resetPasswordResendCount +resetPasswordResendWindowStart"
+        );
         // console.log("Found user:", user, "for identifier:", identifier);
         if (user) break;
     }
 
-    if (!user) {
-        throw new ApiError(
-            404,
-            "User not found",
-            process.env.NODE_ENV === "production"
-                ? []
-                : identifiers.map((identifier) => ({
-                    field: "lookup",
-                    message: "No user matched this identifier",
-                    searched: getIdentifierDebugInfo(identifier),
-                }))
-        );
+    const now = Date.now();
+    const otpExpiryMs = toPositiveNumber(process.env.PASSWORD_RESET_OTP_EXPIRY_MS, msFromMinutes(process.env.PASSWORD_RESET_OTP_EXPIRY_MINUTES, 5));
+    const resendCooldownMs = toPositiveNumber(process.env.PASSWORD_RESET_RESEND_COOLDOWN_MS, msFromMinutes(process.env.PASSWORD_RESET_RESEND_COOLDOWN_MINUTES, 5));
+    const linkExpiryMs = toPositiveNumber(process.env.PASSWORD_RESET_LINK_EXPIRY_MS, msFromDays(process.env.PASSWORD_RESET_LINK_EXPIRY_DAYS, 4));
+    const resendWindowMs = toPositiveNumber(process.env.PASSWORD_RESET_RESEND_WINDOW_MS, msFromMinutes(process.env.PASSWORD_RESET_RESEND_WINDOW_MINUTES, 60));
+    const maxResendsPerWindow = clampInt(process.env.PASSWORD_RESET_MAX_RESENDS, 1, 25, 5);
+    const otpExpiresAt = new Date(now + otpExpiryMs);
+    const resendAvailableAt = new Date(now + resendCooldownMs);
+    const resetLinkExpiresAt = new Date(now + linkExpiryMs);
+
+    // Public request id for the OTP flow. Do not reveal whether the account exists.
+    const requestId = crypto.randomBytes(16).toString("hex");
+    const requestIdHash = crypto.createHash("sha256").update(requestId).digest("hex");
+    let devOtpCode = "";
+    let devResetToken = "";
+
+    if (user) {
+        if (!user.email || !isValidEmail(user.email)) {
+            // Don't reveal that the account exists but has no email. Treat as "sent" in prod.
+            if (process.env.NODE_ENV !== "production") {
+                throw new ApiError(400, "This account does not have a valid email for password reset");
+            }
+        }
+
+        const userResendAvailableAt = user.resetPasswordResendAvailableAt ? new Date(user.resetPasswordResendAvailableAt).getTime() : 0;
+        if (userResendAvailableAt && userResendAvailableAt > now) {
+            const remainingSeconds = Math.ceil((userResendAvailableAt - now) / 1000);
+            throw new ApiError(429, "Please wait before requesting another reset code.", [
+                { field: "passwordReset.cooldownRemainingSeconds", message: String(remainingSeconds) },
+                { field: "passwordReset.resendAvailableAt", message: new Date(userResendAvailableAt).toISOString() },
+            ]);
+        }
+
+        const windowStartMs = user.resetPasswordResendWindowStart ? new Date(user.resetPasswordResendWindowStart).getTime() : 0;
+        const inWindow = windowStartMs && windowStartMs + resendWindowMs > now;
+        const resendCount = inWindow ? Number(user.resetPasswordResendCount || 0) : 0;
+        if (resendCount >= maxResendsPerWindow) {
+            throw new ApiError(429, "Too many password reset requests. Please try again later.", [
+                { field: "passwordReset.maxResends", message: String(maxResendsPerWindow) },
+            ]);
+        }
+
+        // Generate a long-lived reset link token + a short-lived OTP code.
+        const resetToken = crypto.randomBytes(32).toString("hex");
+        const resetTokenHash = crypto.createHash("sha256").update(resetToken).digest("hex");
+        devResetToken = resetToken;
+
+        const otpCode = randomOtpCode();
+        const otpHash = crypto.createHash("sha256").update(otpCode).digest("hex");
+        devOtpCode = otpCode;
+
+        user.resetPasswordToken = resetTokenHash;
+        user.resetPasswordExpires = resetLinkExpiresAt;
+        user.resetPasswordOtpHash = otpHash;
+        user.resetPasswordOtpExpires = otpExpiresAt;
+        user.resetPasswordOtpAttempts = 0;
+        user.resetPasswordRequestIdHash = requestIdHash;
+        user.resetPasswordRequestIdExpires = otpExpiresAt;
+        user.resetPasswordGrantHash = undefined;
+        user.resetPasswordGrantExpires = undefined;
+        user.resetPasswordResendAvailableAt = resendAvailableAt;
+        user.resetPasswordResendWindowStart = inWindow ? new Date(windowStartMs) : new Date(now);
+        user.resetPasswordResendCount = resendCount + 1;
+        await user.save({ validateBeforeSave: false });
+
+        // Send email if the user has a valid email.
+        if (user.email && isValidEmail(user.email)) {
+            await sendPasswordResetEmail({
+                to: user.email,
+                username: user.username,
+                token: resetToken,
+                otpCode,
+                otpExpiresInMinutes: Math.ceil(otpExpiryMs / 60000),
+                linkExpiresInDays: Math.ceil(linkExpiryMs / (24 * 60 * 60 * 1000)),
+                requestId: req.requestId,
+            });
+        }
     }
-
-    if (!user.email || !isValidEmail(user.email)) {
-        throw new ApiError(400, "This account does not have a valid email for password reset");
-    }
-
-    // Generate a reset token (expires in 10 min)
-    const resetToken = crypto.randomBytes(32).toString("hex");
-    const resetTokenHash = crypto.createHash("sha256").update(resetToken).digest("hex");
-    const expiresInMinutes = 10;
-    const resetTokenExpires = Date.now() + expiresInMinutes * 60 * 1000;
-
-    user.resetPasswordToken = resetTokenHash;
-    user.resetPasswordExpires = resetTokenExpires;
-    await user.save({ validateBeforeSave: false });
-
-    await sendPasswordResetEmail({
-        to: user.email,
-        username: user.username,
-        token: resetToken,
-        expiresInMinutes,
-    });
 
     const responseData = {
         delivery: "email",
-        expiresInMinutes,
-        ...(process.env.NODE_ENV !== "production" ? { resetToken } : {})
+        requestId,
+        otpExpiresInSeconds: Math.ceil(otpExpiryMs / 1000),
+        otpExpiresAt: otpExpiresAt.toISOString(),
+        resendAvailableInSeconds: Math.ceil(resendCooldownMs / 1000),
+        resendAvailableAt: resendAvailableAt.toISOString(),
+        linkExpiresAt: resetLinkExpiresAt.toISOString(),
+        // Only for local development/troubleshooting. Not used by the production UI.
+        ...(process.env.NODE_ENV !== "production" && user
+            ? {
+                debug: {
+                    identifiers,
+                    otpCode: devOtpCode,
+                    resetToken: devResetToken,
+                }
+            }
+            : {}),
     };
 
     return res.status(200).json(
-        new ApiResponse(200, responseData, "Password reset email sent")
+        new ApiResponse(200, responseData, "If the account exists, we sent password reset instructions to its email.")
+    );
+});
+
+const verifyForgotPasswordOtp = asyncHandler(async (req, res) => {
+    const requestId = String(req.body?.requestId || "").trim();
+    const otp = String(req.body?.otp || "").trim();
+
+    if (!requestId || !otp) {
+        throw new ApiError(400, "Reset request id and OTP are required");
+    }
+
+    const now = Date.now();
+    const requestHash = sha256Hex(requestId);
+    const user = await User.findOne({
+        resetPasswordRequestIdHash: requestHash,
+        resetPasswordRequestIdExpires: { $gt: new Date(now) },
+    }).select("+resetPasswordOtpHash +resetPasswordOtpExpires +resetPasswordOtpAttempts +resetPasswordRequestIdHash +resetPasswordRequestIdExpires");
+
+    if (!user) {
+        throw new ApiError(400, "Invalid or expired reset code");
+    }
+
+    const otpExpiresAtMs = user.resetPasswordOtpExpires ? new Date(user.resetPasswordOtpExpires).getTime() : 0;
+    if (!otpExpiresAtMs || otpExpiresAtMs <= now) {
+        user.resetPasswordOtpHash = undefined;
+        user.resetPasswordOtpExpires = undefined;
+        user.resetPasswordOtpAttempts = 0;
+        user.resetPasswordRequestIdHash = undefined;
+        user.resetPasswordRequestIdExpires = undefined;
+        await user.save({ validateBeforeSave: false });
+        throw new ApiError(400, "Reset code has expired. Please request a new one.");
+    }
+
+    const maxVerifyAttempts = clampInt(process.env.PASSWORD_RESET_MAX_VERIFY_ATTEMPTS, 1, 20, 5);
+    const attempts = Number(user.resetPasswordOtpAttempts || 0);
+    if (attempts >= maxVerifyAttempts) {
+        throw new ApiError(429, "Too many incorrect attempts. Please request a new reset code.", [
+            { field: "passwordReset.maxVerifyAttempts", message: String(maxVerifyAttempts) },
+        ]);
+    }
+
+    const otpHash = sha256Hex(otp);
+    if (!user.resetPasswordOtpHash || otpHash !== user.resetPasswordOtpHash) {
+        user.resetPasswordOtpAttempts = attempts + 1;
+        await user.save({ validateBeforeSave: false });
+        throw new ApiError(400, "Invalid reset code", [
+            { field: "passwordReset.attemptsRemaining", message: String(Math.max(0, maxVerifyAttempts - (attempts + 1))) },
+            { field: "passwordReset.otpExpiresInSeconds", message: String(Math.max(0, Math.ceil((otpExpiresAtMs - now) / 1000))) },
+        ]);
+    }
+
+    const grantExpiryMs = toPositiveNumber(process.env.PASSWORD_RESET_GRANT_EXPIRY_MS, msFromMinutes(process.env.PASSWORD_RESET_GRANT_EXPIRY_MINUTES, 15));
+    const resetGrant = crypto.randomBytes(32).toString("hex");
+    const resetGrantHash = sha256Hex(resetGrant);
+
+    user.resetPasswordGrantHash = resetGrantHash;
+    user.resetPasswordGrantExpires = new Date(now + grantExpiryMs);
+
+    // OTP is single-use. Clear OTP + request id after successful verification.
+    user.resetPasswordOtpHash = undefined;
+    user.resetPasswordOtpExpires = undefined;
+    user.resetPasswordOtpAttempts = 0;
+    user.resetPasswordRequestIdHash = undefined;
+    user.resetPasswordRequestIdExpires = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    return res.status(200).json(
+        new ApiResponse(200, { resetGrant, expiresAt: new Date(now + grantExpiryMs).toISOString() }, "OTP verified")
+    );
+});
+
+const resendForgotPasswordOtp = asyncHandler(async (req, res) => {
+    const requestId = String(req.body?.requestId || "").trim();
+    if (!requestId) throw new ApiError(400, "Reset request id is required");
+
+    const now = Date.now();
+    const requestHash = sha256Hex(requestId);
+    const user = await User.findOne({
+        resetPasswordRequestIdHash: requestHash,
+        resetPasswordRequestIdExpires: { $gt: new Date(now) },
+    }).select("+resetPasswordResendAvailableAt +resetPasswordResendCount +resetPasswordResendWindowStart +resetPasswordOtpHash +resetPasswordOtpExpires +resetPasswordOtpAttempts +resetPasswordRequestIdHash +resetPasswordRequestIdExpires");
+
+    // Don't reveal if the request id is unknown. Return generic response.
+    const otpExpiryMs = toPositiveNumber(process.env.PASSWORD_RESET_OTP_EXPIRY_MS, msFromMinutes(process.env.PASSWORD_RESET_OTP_EXPIRY_MINUTES, 5));
+    const resendCooldownMs = toPositiveNumber(process.env.PASSWORD_RESET_RESEND_COOLDOWN_MS, msFromMinutes(process.env.PASSWORD_RESET_RESEND_COOLDOWN_MINUTES, 5));
+    const resendWindowMs = toPositiveNumber(process.env.PASSWORD_RESET_RESEND_WINDOW_MS, msFromMinutes(process.env.PASSWORD_RESET_RESEND_WINDOW_MINUTES, 60));
+    const maxResendsPerWindow = clampInt(process.env.PASSWORD_RESET_MAX_RESENDS, 1, 25, 5);
+
+    if (!user) {
+        return res.status(200).json(
+            new ApiResponse(200, {
+                otpExpiresInSeconds: Math.ceil(otpExpiryMs / 1000),
+                otpExpiresAt: new Date(now + otpExpiryMs).toISOString(),
+                resendAvailableInSeconds: Math.ceil(resendCooldownMs / 1000),
+                resendAvailableAt: new Date(now + resendCooldownMs).toISOString(),
+            }, "If the account exists, we sent password reset instructions to its email.")
+        );
+    }
+
+    const userResendAvailableAt = user.resetPasswordResendAvailableAt ? new Date(user.resetPasswordResendAvailableAt).getTime() : 0;
+    if (userResendAvailableAt && userResendAvailableAt > now) {
+        const remainingSeconds = Math.ceil((userResendAvailableAt - now) / 1000);
+        throw new ApiError(429, "Please wait before requesting another reset code.", [
+            { field: "passwordReset.cooldownRemainingSeconds", message: String(remainingSeconds) },
+            { field: "passwordReset.resendAvailableAt", message: new Date(userResendAvailableAt).toISOString() },
+        ]);
+    }
+
+    const windowStartMs = user.resetPasswordResendWindowStart ? new Date(user.resetPasswordResendWindowStart).getTime() : 0;
+    const inWindow = windowStartMs && windowStartMs + resendWindowMs > now;
+    const resendCount = inWindow ? Number(user.resetPasswordResendCount || 0) : 0;
+    if (resendCount >= maxResendsPerWindow) {
+        throw new ApiError(429, "Too many password reset requests. Please try again later.", [
+            { field: "passwordReset.maxResends", message: String(maxResendsPerWindow) },
+        ]);
+    }
+
+    const otpCode = randomOtpCode();
+    user.resetPasswordOtpHash = sha256Hex(otpCode);
+    user.resetPasswordOtpExpires = new Date(now + otpExpiryMs);
+    user.resetPasswordOtpAttempts = 0;
+    user.resetPasswordResendAvailableAt = new Date(now + resendCooldownMs);
+    user.resetPasswordResendWindowStart = inWindow ? new Date(windowStartMs) : new Date(now);
+    user.resetPasswordResendCount = resendCount + 1;
+    await user.save({ validateBeforeSave: false });
+
+    if (user.email && isValidEmail(user.email)) {
+        // Rotate reset link token when resending.
+        const linkExpiryMs = toPositiveNumber(process.env.PASSWORD_RESET_LINK_EXPIRY_MS, msFromDays(process.env.PASSWORD_RESET_LINK_EXPIRY_DAYS, 4));
+        const resetToken = crypto.randomBytes(32).toString("hex");
+        user.resetPasswordToken = sha256Hex(resetToken);
+        user.resetPasswordExpires = new Date(now + linkExpiryMs);
+        await user.save({ validateBeforeSave: false });
+
+        await sendPasswordResetEmail({
+            to: user.email,
+            username: user.username,
+            token: resetToken,
+            otpCode,
+            otpExpiresInMinutes: Math.ceil(otpExpiryMs / 60000),
+            linkExpiresInDays: Math.ceil(linkExpiryMs / (24 * 60 * 60 * 1000)),
+            requestId: req.requestId,
+        });
+    }
+
+    return res.status(200).json(
+        new ApiResponse(200, {
+            otpExpiresInSeconds: Math.ceil(otpExpiryMs / 1000),
+            otpExpiresAt: new Date(now + otpExpiryMs).toISOString(),
+            resendAvailableInSeconds: Math.ceil(resendCooldownMs / 1000),
+            resendAvailableAt: new Date(now + resendCooldownMs).toISOString(),
+            ...(process.env.NODE_ENV !== "production" ? { debug: { otpCode } } : {}),
+        }, "Reset code sent")
+    );
+});
+
+const prepareForgotPasswordResetFromLink = asyncHandler(async (req, res) => {
+    const token = String(req.body?.token || req.params?.token || "").trim();
+    if (!token) throw new ApiError(400, "Reset token is required");
+
+    const now = Date.now();
+    const tokenHash = sha256Hex(token);
+    const user = await User.findOne({
+        resetPasswordToken: tokenHash,
+        resetPasswordExpires: { $gt: new Date(now) },
+    }).select("+resetPasswordToken +resetPasswordExpires");
+
+    if (!user) {
+        throw new ApiError(400, "Reset link is invalid or expired");
+    }
+
+    const grantExpiryMs = toPositiveNumber(process.env.PASSWORD_RESET_GRANT_EXPIRY_MS, msFromMinutes(process.env.PASSWORD_RESET_GRANT_EXPIRY_MINUTES, 15));
+    const resetGrant = crypto.randomBytes(32).toString("hex");
+
+    user.resetPasswordGrantHash = sha256Hex(resetGrant);
+    user.resetPasswordGrantExpires = new Date(now + grantExpiryMs);
+
+    // One-time link: convert it into a short-lived grant.
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    user.resetPasswordOtpHash = undefined;
+    user.resetPasswordOtpExpires = undefined;
+    user.resetPasswordOtpAttempts = 0;
+    user.resetPasswordRequestIdHash = undefined;
+    user.resetPasswordRequestIdExpires = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    return res.status(200).json(
+        new ApiResponse(200, { resetGrant, expiresAt: new Date(now + grantExpiryMs).toISOString() }, "Reset link verified")
+    );
+});
+
+const completeForgotPasswordReset = asyncHandler(async (req, res) => {
+    const resetGrant = String(req.body?.resetGrant || "").trim();
+    const newPassword = String(req.body?.newPassword || "").trim();
+    if (!resetGrant || !newPassword) {
+        throw new ApiError(400, "Reset grant and new password are required");
+    }
+
+    const now = Date.now();
+    const grantHash = sha256Hex(resetGrant);
+    const user = await User.findOne({
+        resetPasswordGrantHash: grantHash,
+        resetPasswordGrantExpires: { $gt: new Date(now) },
+    }).select("+resetPasswordGrantHash +resetPasswordGrantExpires");
+
+    if (!user) {
+        throw new ApiError(400, "Reset session expired. Please restart the reset flow.");
+    }
+
+    user.password = newPassword;
+    user.passwordLoginEnabled = true;
+    user.resetPasswordGrantHash = undefined;
+    user.resetPasswordGrantExpires = undefined;
+    user.resetPasswordResendAvailableAt = undefined;
+    user.resetPasswordResendCount = 0;
+    user.resetPasswordResendWindowStart = undefined;
+    await user.save();
+
+    return res.status(200).json(
+        new ApiResponse(200, {}, "Password reset successfully")
     );
 });
 const resetPassword = asyncHandler(async (req, res) => {
     const token = req.params.token || req.body?.token;
-    const { newPassword } = req.body;
+    const { newPassword, otp } = req.body;
 
     if (!token || !newPassword || newPassword.trim() === '') {
         throw new ApiError(400, "Token and new password are required");
+    }
+
+    if (!otp || String(otp).trim() === "") {
+        throw new ApiError(400, "Reset code (OTP) is required");
     }
 
     const tokenHash = crypto.createHash("sha256").update(String(token).trim()).digest("hex");
     const user = await User.findOne({
         resetPasswordToken: tokenHash,
         resetPasswordExpires: { $gt: Date.now() } // token not expired
-    }).select("+resetPasswordToken +resetPasswordExpires");
+    }).select("+resetPasswordToken +resetPasswordExpires +resetPasswordOtpHash +resetPasswordOtpExpires +resetPasswordOtpAttempts");
 
     if (!user) {
         throw new ApiError(400, "Invalid or expired reset token");
+    }
+
+    const now = Date.now();
+    const maxVerifyAttempts = clampInt(process.env.PASSWORD_RESET_MAX_VERIFY_ATTEMPTS, 1, 20, 5);
+
+    const otpExpiresAtMs = user.resetPasswordOtpExpires ? new Date(user.resetPasswordOtpExpires).getTime() : 0;
+    if (!otpExpiresAtMs || otpExpiresAtMs <= now) {
+        user.resetPasswordOtpHash = undefined;
+        user.resetPasswordOtpExpires = undefined;
+        user.resetPasswordOtpAttempts = 0;
+        await user.save({ validateBeforeSave: false });
+        throw new ApiError(400, "Reset code has expired. Please request a new one.");
+    }
+
+    const attempts = Number(user.resetPasswordOtpAttempts || 0);
+    if (attempts >= maxVerifyAttempts) {
+        throw new ApiError(429, "Too many incorrect reset code attempts. Please request a new code.", [
+            { field: "passwordReset.maxVerifyAttempts", message: String(maxVerifyAttempts) },
+        ]);
+    }
+
+    const otpHash = crypto.createHash("sha256").update(String(otp).trim()).digest("hex");
+    if (!user.resetPasswordOtpHash || otpHash !== user.resetPasswordOtpHash) {
+        user.resetPasswordOtpAttempts = attempts + 1;
+        await user.save({ validateBeforeSave: false });
+        throw new ApiError(400, "Invalid reset code", [
+            { field: "passwordReset.attemptsRemaining", message: String(Math.max(0, maxVerifyAttempts - (attempts + 1))) },
+            { field: "passwordReset.otpExpiresInSeconds", message: String(Math.max(0, Math.ceil((otpExpiresAtMs - now) / 1000))) },
+        ]);
     }
 
     user.password = newPassword;
     user.passwordLoginEnabled = true;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
+    user.resetPasswordOtpHash = undefined;
+    user.resetPasswordOtpExpires = undefined;
+    user.resetPasswordOtpAttempts = 0;
+    user.resetPasswordResendAvailableAt = undefined;
+    user.resetPasswordResendCount = 0;
+    user.resetPasswordResendWindowStart = undefined;
     await user.save();
 
     return res.status(200).json(
@@ -963,6 +1318,94 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     );
 });
 
+const completeUserOnboarding = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id);
+    if (!user) throw new ApiError(404, "User not found");
+
+    const { phone_number, username, dateOfBirth, agreements } = req.body || {};
+    const normalizedPhone = normalizePhoneNumber(phone_number);
+    const nextDateOfBirth = toDateInputString(dateOfBirth);
+
+    if (!normalizedPhone) throw new ApiError(400, "Phone number is required");
+    if (!isValidIndianPhoneNumber(normalizedPhone)) {
+        throw new ApiError(400, "Enter a valid 10 digit Indian phone number");
+    }
+    if (!nextDateOfBirth) throw new ApiError(400, "Date of birth is required");
+
+    const dobDate = new Date(nextDateOfBirth);
+    if (Number.isNaN(dobDate.getTime())) throw new ApiError(400, "Invalid date of birth");
+    const age = getAgeYears(dobDate);
+    if (age > 120) throw new ApiError(400, "Invalid date of birth");
+
+    if (age < 13) {
+        throw new ApiError(
+            403,
+            "Battle4Arena is for players aged 13+. You can't create or use an account right now. If this is a mistake, contact support."
+        );
+    }
+
+    const acceptedTerms = Boolean(agreements?.terms);
+    const acceptedPrivacy = Boolean(agreements?.privacy);
+    const acceptedCommunity = Boolean(agreements?.community);
+    if (!acceptedTerms || !acceptedPrivacy || !acceptedCommunity) {
+        throw new ApiError(400, "You must agree to the Terms, Privacy Policy, and Community Guidelines");
+    }
+
+    // Optional username customization
+    const wantsUsernameUpdate = Boolean(username?.trim()) && username.trim() !== user.username;
+    if (wantsUsernameUpdate) {
+        const nextUsername = String(username).trim();
+        if (!/^[a-zA-Z0-9_]{4,30}$/.test(nextUsername)) {
+            throw new ApiError(400, "Username must be 4-30 letters, numbers, or underscores");
+        }
+        const existingUser = await User.findOne({ username: nextUsername });
+        if (existingUser && existingUser._id.toString() !== user._id.toString()) {
+            throw new ApiError(400, "Username already exists, choose another one");
+        }
+        user.username = nextUsername;
+    }
+
+    // Phone uniqueness
+    const currentPhone = isProviderPhoneNumber(user.phone_number) ? "" : normalizePhoneNumber(user.phone_number);
+    if (normalizedPhone !== currentPhone) {
+        const existingPhoneUser = await User.findOne({ phone_number: normalizedPhone });
+        if (existingPhoneUser && existingPhoneUser._id.toString() !== user._id.toString()) {
+            throw new ApiError(400, "Phone number already exists");
+        }
+        user.phone_number = normalizedPhone;
+        user.phoneVerified = false;
+        user.linkedProviders = [
+            ...(user.linkedProviders || []).filter((link) => link.provider !== "phone"),
+            { provider: "phone", providerId: normalizedPhone, verified: false },
+        ];
+    }
+
+    // Date of birth
+    user.dateOfBirth = dobDate;
+
+    const now = new Date();
+    const version = String(req.body?.agreementsVersion || "2026-05-19").trim();
+    user.legalAgreements = {
+        acceptedAt: now,
+        termsAcceptedAt: now,
+        privacyAcceptedAt: now,
+        communityAcceptedAt: now,
+        version,
+    };
+    user.onboarding = {
+        completedAt: now,
+        source: user.socialProvider || "unknown",
+        ageBand: age < 18 ? "teen" : "adult",
+    };
+
+    await user.save();
+
+    const updatedUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
+    return res.status(200).json(
+        new ApiResponse(200, { user: await buildUserProfileResponse(updatedUser) }, "Onboarding completed successfully")
+    );
+});
+
 const verifyProfileEmail = asyncHandler(async (req, res) => {
     const user = await User.findById(req.user._id).select("+emailVerificationToken +emailVerificationExpires");
     if (!user) throw new ApiError(404, "User not found");
@@ -990,6 +1433,7 @@ const verifyProfileEmail = asyncHandler(async (req, res) => {
         username: user.username,
         token: rawToken,
         expiresInMinutes,
+        requestId: req.requestId,
     });
 
     const updatedUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
@@ -1063,6 +1507,7 @@ const verifyProfilePhone = asyncHandler(async (req, res) => {
         phoneNumber,
         token: rawToken,
         expiresInMinutes,
+        requestId: req.requestId,
     });
 
     const updatedUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
@@ -1694,11 +2139,16 @@ export {
     logoutUser,
     renewTokens,
     forgotPassword,
+    verifyForgotPasswordOtp,
+    resendForgotPasswordOtp,
+    prepareForgotPasswordResetFromLink,
+    completeForgotPasswordReset,
     resetPassword,
     changePassword,
     getUserProfile,
     getUserById,
     updateUserProfile,
+    completeUserOnboarding,
     verifyProfileEmail,
     confirmEmailVerification,
     verifyProfilePhone,

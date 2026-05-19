@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
@@ -26,6 +26,7 @@ import { setAuthTokens } from "@/lib/auth-storage";
 import ButtonLoadingScreen from "@/components/ui/buttonLoadingScreen";
 import { getErrorToast } from "@/lib/page-utils";
 import { useGoogleLogin } from "@react-oauth/google";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID;
 const FACEBOOK_GRAPH_VERSION = import.meta.env.VITE_FACEBOOK_GRAPH_VERSION || "v25.0";
@@ -51,6 +52,11 @@ const arenaStats = [
 ];
 
 const signupRules = ["Email required", "Phone required", "6+ char password"];
+const LEGAL_LINKS = {
+  terms: "/legal/terms",
+  privacy: "/legal/privacy",
+  community: "/legal/community",
+};
 
 const modeTransition = { duration: 0.22, ease: "easeOut" as const };
 
@@ -79,7 +85,7 @@ const AuthInput = ({
 }: {
   icon: typeof Mail;
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) => (
   <label className="group block space-y-1.5">
     <span className="flex items-center gap-1.5 font-heading text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -212,8 +218,32 @@ const LoginScreen = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<"google" | "facebook" | null>(null);
+  const [agreedPolicies, setAgreedPolicies] = useState(false);
+  const [agreementError, setAgreementError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<"username" | "email" | "identifier" | "password", string>>>({});
   const shouldReduceMotion = useReducedMotion();
   const navigate = useNavigate();
+  const submittingRef = useRef(false);
+  const submitAbortRef = useRef<AbortController | null>(null);
+  const agreementRef = useRef<HTMLButtonElement | null>(null);
+  const socialSubmittingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    // Clear agreement state when leaving signup mode.
+    if (!isSignup) {
+      setAgreedPolicies(false);
+      setAgreementError("");
+    }
+    setFieldErrors({});
+  }, [isSignup]);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      submitAbortRef.current?.abort();
+    };
+  }, []);
 
   const completeLogin = (res: AuthResponse) => {
     setAuthTokens({
@@ -223,22 +253,28 @@ const LoginScreen = () => {
     const user = res.data.user;
     const phoneNumber = String(user?.phone_number || "").trim();
     const isSocialUser = Boolean(user?.socialProvider);
-    const needsPhoneNumber = isSocialUser && (!phoneNumber || /^(google|facebook):/i.test(phoneNumber));
-    const needsPasswordSetup = isSocialUser && !needsPhoneNumber && user?.passwordLoginEnabled !== true;
+    const needsOnboarding = isSocialUser && (
+      !user?.onboarding?.completedAt ||
+      !user?.legalAgreements?.acceptedAt ||
+      !phoneNumber ||
+      /^(google|facebook):/i.test(phoneNumber) ||
+      !user?.dateOfBirth
+    );
+    const needsPasswordSetup = isSocialUser && !needsOnboarding && user?.passwordLoginEnabled !== true;
     toast.success(res.message);
-    navigate(needsPhoneNumber ? "/edit-profile" : needsPasswordSetup ? "/change-password" : "/");
+    navigate(needsOnboarding ? "/onboarding" : needsPasswordSetup ? "/change-password" : "/");
   };
 
   const submitGoogleLogin = async (tokenResponse: GoogleLoginPayload) => {
     try {
-      setSocialLoading("google");
       const res = await google(tokenResponse);
       completeLogin(res);
     } catch (err) {
       const errorToast = getErrorToast(err, { action: "Google login", fallback: "Google login failed." });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
-      setSocialLoading(null);
+      if (mountedRef.current) setSocialLoading(null);
+      socialSubmittingRef.current = false;
     }
   };
 
@@ -247,13 +283,24 @@ const LoginScreen = () => {
       void submitGoogleLogin(tokenResponse);
     },
     onError: () => {
+      if (mountedRef.current) setSocialLoading(null);
+      socialSubmittingRef.current = false;
       toast.error("Google login failed.");
     },
     scope: "openid email profile",
   });
 
+  const startGoogleLogin = () => {
+    if (socialSubmittingRef.current || loading || Boolean(socialLoading)) return;
+    socialSubmittingRef.current = true;
+    setSocialLoading("google");
+    handleGoogleLogin();
+  };
+
   const handleFacebookLogin = async () => {
+    if (socialSubmittingRef.current || loading || Boolean(socialLoading)) return;
     try {
+      socialSubmittingRef.current = true;
       const isLocalDev = ["localhost", "127.0.0.1"].includes(window.location.hostname);
       if (window.location.protocol !== "https:" && !isLocalDev) {
         toast.error("Facebook login needs HTTPS", {
@@ -261,7 +308,7 @@ const LoginScreen = () => {
         });
         return;
       }
-      setSocialLoading("facebook");
+      if (mountedRef.current) setSocialLoading("facebook");
       await loadFacebookSdk();
       const response = await requestFacebookLogin();
 
@@ -276,12 +323,14 @@ const LoginScreen = () => {
       const errorToast = getErrorToast(err, { action: "Facebook login", fallback: "Facebook login failed." });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
-      setSocialLoading(null);
+      if (mountedRef.current) setSocialLoading(null);
+      socialSubmittingRef.current = false;
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current || loading) return;
 
     const identifierValue = identifier.trim();
     const normalizedPhone = normalizePhoneNumber(identifierValue);
@@ -292,53 +341,90 @@ const LoginScreen = () => {
         : identifierValue;
     const normalizedEmail = email.trim().toLowerCase();
 
-    if (!identifierValue || !password) {
+    const nextErrors: Partial<Record<"username" | "email" | "identifier" | "password", string>> = {};
+
+    if (!identifierValue) {
+      nextErrors.identifier = isSignup ? "Phone number is required." : "Username, phone, or email is required.";
+    }
+    if (!password) {
+      nextErrors.password = "Password is required.";
+    }
+    if (isSignup && !username.trim()) {
+      nextErrors.username = "Username is required.";
+    }
+    if (isSignup && !normalizedEmail) {
+      nextErrors.email = "Email is required.";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
       toast.error("Phone/email and password are required.");
       return;
     }
 
     if (!isValidPhoneNumber(identifierValue) && !isValidEmail(identifierValue) && !isValidUsername(identifierValue)) {
+      setFieldErrors((current) => ({ ...current, identifier: "Enter a valid username, phone number, or email." }));
       toast.error("Enter a valid username, phone number, or email.");
       return;
     }
 
     if (password.trim().length < PASSWORD_MIN_LENGTH) {
+      setFieldErrors((current) => ({ ...current, password: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.` }));
       toast.error(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`);
       return;
     }
 
     if (isSignup && !isValidUsername(username)) {
+      setFieldErrors((current) => ({ ...current, username: "Username must be 4-30 letters, numbers, or underscores." }));
       toast.error("Username must be 4-30 letters, numbers, or underscores.");
       return;
     }
 
     if (isSignup && !isValidEmail(normalizedEmail)) {
+      setFieldErrors((current) => ({ ...current, email: "Enter a valid email address." }));
       toast.error("Enter a valid email address.");
       return;
     }
 
     if (isSignup && !isValidPhoneNumber(identifierValue)) {
+      setFieldErrors((current) => ({ ...current, identifier: "Enter a valid 10 digit phone number." }));
       toast.error("Enter a valid 10 digit phone number.");
       return;
     }
 
     try {
-      setLoading(true);
+      if (isSignup && !agreedPolicies) {
+        const message = "Please agree to the Terms & Conditions and Privacy Policy to continue.";
+        setAgreementError(message);
+        toast.error(message);
+        requestAnimationFrame(() => agreementRef.current?.focus());
+        return;
+      }
+
+      setAgreementError("");
+      setFieldErrors({});
+      submittingRef.current = true;
+      if (mountedRef.current) setLoading(true);
+      submitAbortRef.current?.abort();
+      const controller = new AbortController();
+      submitAbortRef.current = controller;
       const res = isSignup
         ? await signup({
           email: normalizedEmail,
           password,
           username: username.trim(),
           phone_number: normalizedPhone,
-        })
-        : await login({ identifier: loginIdentifier, password });
+        }, { signal: controller.signal })
+        : await login({ identifier: loginIdentifier, password }, { signal: controller.signal });
       completeLogin(res);
     }
     catch (err) {
       const errorToast = getErrorToast(err, { action: isSignup ? "Signup" : "Login", fallback: "Authentication failed." });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
+      submittingRef.current = false;
+      submitAbortRef.current = null;
     }
   };
 
@@ -497,21 +583,39 @@ const LoginScreen = () => {
                         type="text"
                         placeholder="ak_player"
                         value={username}
-                        onChange={(e) => setUsername(e.target.value)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setUsername(value);
+                          if (fieldErrors.username && isValidUsername(value)) {
+                            setFieldErrors((current) => ({ ...current, username: undefined }));
+                          }
+                        }}
                         disabled={loading}
+                        aria-invalid={Boolean(fieldErrors.username)}
+                        aria-describedby={fieldErrors.username ? "auth-username-error" : undefined}
                         className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
                       />
                     </AuthInput>
+                    {fieldErrors.username && <p id="auth-username-error" className="text-[11px] text-destructive">{fieldErrors.username}</p>}
                     <AuthInput icon={Mail} label="Email address">
                       <input
                         type="email"
                         placeholder="example@email.com"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setEmail(value);
+                          if (fieldErrors.email && isValidEmail(value.trim().toLowerCase())) {
+                            setFieldErrors((current) => ({ ...current, email: undefined }));
+                          }
+                        }}
                         disabled={loading}
+                        aria-invalid={Boolean(fieldErrors.email)}
+                        aria-describedby={fieldErrors.email ? "auth-email-error" : undefined}
                         className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
                       />
                     </AuthInput>
+                    {fieldErrors.email && <p id="auth-email-error" className="text-[11px] text-destructive">{fieldErrors.email}</p>}
                   </>
                 )}
 
@@ -521,19 +625,37 @@ const LoginScreen = () => {
                     inputMode={isSignup ? "tel" : "text"}
                     placeholder={isSignup ? "10 digit phone number" : "Username, phone, or email"}
                     value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setIdentifier(value);
+                      const ok = isSignup ? isValidPhoneNumber(value) : (isValidEmail(value) || isValidPhoneNumber(value) || isValidUsername(value));
+                      if (fieldErrors.identifier && ok) {
+                        setFieldErrors((current) => ({ ...current, identifier: undefined }));
+                      }
+                    }}
                     disabled={loading}
+                    aria-invalid={Boolean(fieldErrors.identifier)}
+                    aria-describedby={fieldErrors.identifier ? "auth-identifier-error" : undefined}
                     className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
                   />
                 </AuthInput>
+                {fieldErrors.identifier && <p id="auth-identifier-error" className="text-[11px] text-destructive">{fieldErrors.identifier}</p>}
 
                 <AuthInput icon={Lock} label="Password">
                   <input
                     type={showPass ? "text" : "password"}
                     placeholder="Enter password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setPassword(value);
+                      if (fieldErrors.password && value.trim().length >= PASSWORD_MIN_LENGTH) {
+                        setFieldErrors((current) => ({ ...current, password: undefined }));
+                      }
+                    }}
                     disabled={loading}
+                    aria-invalid={Boolean(fieldErrors.password)}
+                    aria-describedby={fieldErrors.password ? "auth-password-error" : undefined}
                     className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
                   />
                   <button
@@ -546,6 +668,46 @@ const LoginScreen = () => {
                     {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </AuthInput>
+                {fieldErrors.password && <p id="auth-password-error" className="text-[11px] text-destructive">{fieldErrors.password}</p>}
+
+                {isSignup && (
+                  <div className="space-y-1">
+                    <div
+                      className={`flex items-start gap-3 rounded-lg border bg-background/35 px-3.5 py-3 transition-colors ${
+                        agreementError ? "border-destructive/55" : "border-glass-border"
+                      }`}
+                    >
+                      <Checkbox
+                        ref={agreementRef}
+                        id="signup-agree"
+                        checked={agreedPolicies}
+                        disabled={loading}
+                        onCheckedChange={(checked) => {
+                          const value = checked === true;
+                          setAgreedPolicies(value);
+                          if (value) setAgreementError("");
+                        }}
+                        aria-invalid={Boolean(agreementError)}
+                      />
+                      <label htmlFor="signup-agree" className="min-w-0 text-xs leading-5 text-muted-foreground">
+                        I agree to the{" "}
+                        <Link to={LEGAL_LINKS.terms} className="arena-focus rounded-sm font-heading font-bold text-primary">
+                          Terms & Conditions
+                        </Link>{" "}
+                        and{" "}
+                        <Link to={LEGAL_LINKS.privacy} className="arena-focus rounded-sm font-heading font-bold text-primary">
+                          Privacy Policy
+                        </Link>
+                        . I will follow the{" "}
+                        <Link to={LEGAL_LINKS.community} className="arena-focus rounded-sm font-heading font-bold text-primary">
+                          Community Guidelines
+                        </Link>
+                        .
+                      </label>
+                    </div>
+                    {agreementError && <p className="text-[11px] text-destructive">{agreementError}</p>}
+                  </div>
+                )}
 
                 {!isSignup && (
                   <div className="flex justify-end">
@@ -559,9 +721,9 @@ const LoginScreen = () => {
                   </div>
                 )}
 
-                <NeonButton type="submit" full disabled={loading} className="min-h-12">
+                <NeonButton type="submit" full disabled={loading || (isSignup && !agreedPolicies)} className="min-h-12">
                   {loading ? (
-                    <ButtonLoadingScreen />
+                    <ButtonLoadingScreen label={isSignup ? "Creating..." : "Logging in..."} />
                   ) : (
                     <>
                       {isSignup ? "Create Account" : "Login"}
@@ -581,7 +743,7 @@ const LoginScreen = () => {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <motion.button
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => handleGoogleLogin()}
+                    onClick={startGoogleLogin}
                     disabled={loading || Boolean(socialLoading)}
                     type="button"
                     className="arena-focus flex min-h-11 items-center justify-center gap-2 rounded-lg border border-glass-border bg-background/55 px-3 text-sm font-heading font-semibold text-foreground transition-colors hover:border-primary/45 hover:bg-primary/10 disabled:opacity-50"

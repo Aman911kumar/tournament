@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Crown,
   Edit,
-  FileText,
   Gamepad2,
   HelpCircle,
   Lock,
@@ -52,8 +51,7 @@ const menuItems = [
 
 const helpMenu = [
   { icon: HelpCircle, label: "Help Center", route: "/help" },
-  { icon: ShieldCheck, label: "Rules & Regulations", route: "/rules" },
-  { icon: FileText, label: "Privacy Policy", route: "/privacy" },
+  { icon: ShieldCheck, label: "Legal & Policies", route: "/legal/terms" },
 ];
 
 const creatorMenu = [

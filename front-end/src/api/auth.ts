@@ -32,6 +32,14 @@ export interface User {
   phone_number?: string;
   socialProvider?: "google" | "facebook";
   passwordLoginEnabled?: boolean;
+  onboarding?: { completedAt?: string | null; source?: string } | null;
+  legalAgreements?: {
+    acceptedAt?: string | null;
+    termsAcceptedAt?: string | null;
+    privacyAcceptedAt?: string | null;
+    communityAcceptedAt?: string | null;
+    version?: string;
+  } | null;
   dateOfBirth: string | null;
   gender: string | null;
   gamename: string;
@@ -71,12 +79,36 @@ export interface ChangePasswordPayload {
 }
 
 export interface ForgotPasswordResponse {
-  resetToken?: string;
-  expiresInMinutes?: number;
+  delivery?: "email" | string;
+  requestId?: string;
+  otpExpiresInSeconds?: number;
+  otpExpiresAt?: string;
+  resendAvailableInSeconds?: number;
+  resendAvailableAt?: string;
+  linkExpiresAt?: string;
+  resetToken?: string; // dev-only
+  otpCode?: string;    // dev-only
+  debug?: unknown;
 }
 
 export interface ResetPasswordPayload {
   token: string;
+  otp: string;
+  newPassword: string;
+}
+
+export interface ForgotPasswordVerifyOtpPayload {
+  requestId: string;
+  otp: string;
+}
+
+export interface ForgotPasswordGrantResponse {
+  resetGrant: string;
+  expiresAt?: string;
+}
+
+export interface ForgotPasswordCompletePayload {
+  resetGrant: string;
   newPassword: string;
 }
 
@@ -88,32 +120,39 @@ export const ENDPOINTS = {
   signup: "/auth/register",
   changePassword: "/auth/change-password",
   forgotPassword: "/auth/forgot-password",
+  forgotPasswordVerifyOtp: "/auth/forgot-password/verify-otp",
+  forgotPasswordResend: "/auth/forgot-password/resend",
+  forgotPasswordPrepare: "/auth/forgot-password/prepare",
+  forgotPasswordComplete: "/auth/forgot-password/complete",
   resetPassword: (token: string) => `/auth/reset-password/${encodeURIComponent(token)}`,
   socialLogin: (provider: "google" | "facebook") => `/auth/${provider}`,
 };
 
 
 
-export async function google(payload: GoogleLoginPayload): Promise<AuthResponse> {
+export async function google(payload: GoogleLoginPayload, options: RequestInit = {}): Promise<AuthResponse> {
   return apiFetch<AuthResponse>(ENDPOINTS.google, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
+    ...options,
   });
 }
 
-export async function facebook(payload: FacebookLoginPayload): Promise<AuthResponse> {
+export async function facebook(payload: FacebookLoginPayload, options: RequestInit = {}): Promise<AuthResponse> {
   return apiFetch<AuthResponse>(ENDPOINTS.facebook, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
+    ...options,
   });
 }
-export async function login(payload: LoginPayload): Promise<AuthResponse> {
+export async function login(payload: LoginPayload, options: RequestInit = {}): Promise<AuthResponse> {
   return apiFetch<AuthResponse>(ENDPOINTS.login, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
+    ...options,
   });
 }
 
@@ -124,11 +163,12 @@ export async function logout(): Promise<ApiResponse> {
   });
 }
 
-export async function signup(payload: SignupPayload): Promise<AuthResponse> {
+export async function signup(payload: SignupPayload, options: RequestInit = {}): Promise<AuthResponse> {
   return apiFetch<AuthResponse>(ENDPOINTS.signup, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
+    ...options,
   });
 }
 
@@ -136,7 +176,7 @@ export async function changePassword(payload: ChangePasswordPayload):Promise<Api
   return apiFetch(ENDPOINTS.changePassword, { method: "PATCH", body: JSON.stringify(payload) , credentials:"include" });
 }
 
-export async function forgotPassword(identifier: string): Promise<ApiResponse<ForgotPasswordResponse>> {
+export async function forgotPassword(identifier: string, options: RequestInit = {}): Promise<ApiResponse<ForgotPasswordResponse>> {
   const trimmedIdentifier = identifier.trim();
   const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedIdentifier);
   const digitsOnly = trimmedIdentifier.replace(/\D/g, "");
@@ -156,12 +196,58 @@ export async function forgotPassword(identifier: string): Promise<ApiResponse<Fo
       ...(email ? { email } : {}),
       ...(!isEmail && !isPhone ? { username: trimmedIdentifier } : {}),
     }),
+    ...options,
   });
 }
 
-export async function resetPassword(payload: ResetPasswordPayload): Promise<ApiResponse> {
+export async function resetPassword(payload: ResetPasswordPayload, options: RequestInit = {}): Promise<ApiResponse> {
   return apiFetch(ENDPOINTS.resetPassword(payload.token), {
     method: "PUT",
-    body: JSON.stringify({ newPassword: payload.newPassword }),
+    body: JSON.stringify({ newPassword: payload.newPassword, otp: payload.otp }),
+    ...options,
+  });
+}
+
+export async function verifyForgotPasswordOtp(
+  payload: ForgotPasswordVerifyOtpPayload,
+  options: RequestInit = {},
+): Promise<ApiResponse<ForgotPasswordGrantResponse>> {
+  return apiFetch(ENDPOINTS.forgotPasswordVerifyOtp, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    ...options,
+  });
+}
+
+export async function resendForgotPasswordOtp(
+  requestId: string,
+  options: RequestInit = {},
+): Promise<ApiResponse<ForgotPasswordResponse>> {
+  return apiFetch(ENDPOINTS.forgotPasswordResend, {
+    method: "POST",
+    body: JSON.stringify({ requestId }),
+    ...options,
+  });
+}
+
+export async function prepareForgotPasswordResetFromLink(
+  token: string,
+  options: RequestInit = {},
+): Promise<ApiResponse<ForgotPasswordGrantResponse>> {
+  return apiFetch(ENDPOINTS.forgotPasswordPrepare, {
+    method: "POST",
+    body: JSON.stringify({ token }),
+    ...options,
+  });
+}
+
+export async function completeForgotPasswordReset(
+  payload: ForgotPasswordCompletePayload,
+  options: RequestInit = {},
+): Promise<ApiResponse> {
+  return apiFetch(ENDPOINTS.forgotPasswordComplete, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+    ...options,
   });
 }

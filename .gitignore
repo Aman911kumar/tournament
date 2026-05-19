@@ -18,3 +18,4 @@ build/
 android
 capacitor.config.json
 capacitor.config.ts
+*.zip

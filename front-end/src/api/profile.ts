@@ -4,6 +4,7 @@ import { apiFetch,ApiResponse } from "./client";
 export const ENDPOINTS = {
   me: "/user/profile",
   update: "/user/profile",
+  onboarding: "/user/profile/onboarding",
   stats: "/profile/stats",
   becomeCreator: "/user/creator",
   leaveCreator: "/user/creator",
@@ -43,6 +44,14 @@ export interface User {
   avatar?: { public_id?: string; url?: string };
   dateOfBirth: string | null;
   gender: string | null;
+  onboarding?: { completedAt?: string | null; source?: string } | null;
+  legalAgreements?: {
+    acceptedAt?: string | null;
+    termsAcceptedAt?: string | null;
+    privacyAcceptedAt?: string | null;
+    communityAcceptedAt?: string | null;
+    version?: string;
+  } | null;
   walletBalance: number;
   playerEarnings?: number;
   playerMonthlyChange?: number;
@@ -61,6 +70,14 @@ export interface User {
 
   stats?: Stats;
   preferences: Preferences;
+}
+
+export interface CompleteOnboardingPayload {
+  phone_number: string;
+  username?: string;
+  dateOfBirth: string;
+  agreements: { terms: boolean; privacy: boolean; community: boolean };
+  agreementsVersion?: string;
 }
 
 export interface Stats {
@@ -82,6 +99,13 @@ export async function getMyProfile(): Promise<ApiResponse<{ user: User }>> {
 export async function updateProfile(payload: ProfileUpdatePayload):Promise<ApiResponse> {
   return apiFetch(ENDPOINTS.update, { method: "PATCH", body: JSON.stringify(payload) , credentials:"include"});
   // return { success: true };
+}
+
+export async function completeOnboarding(
+  payload: CompleteOnboardingPayload,
+  options: RequestInit = {},
+): Promise<ApiResponse<{ user: User }>> {
+  return apiFetch(ENDPOINTS.onboarding, { method: "POST", body: JSON.stringify(payload), credentials: "include", ...options });
 }
 
 export async function verifyEmail(): Promise<ApiResponse<{ user: User }>> {

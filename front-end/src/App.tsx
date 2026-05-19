@@ -9,6 +9,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import BottomNav from "./components/BottomNav";
 import NotificationRealtimeBridge from "./components/NotificationRealtimeBridge";
 import NetworkStatusBanner from "./components/NetworkStatusBanner";
+import OnboardingGate from "./components/OnboardingGate";
 import { toast } from "@/components/ui/sonner";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { ApiError } from "@/api/client";
@@ -16,7 +17,10 @@ import { ApiError } from "@/api/client";
 const Index = lazy(() => import("./pages/Index.tsx"));
 const LandingPage = lazy(() => import("./pages/LandingPage.tsx"));
 const LoginScreen = lazy(() => import("./pages/LoginScreen.tsx"));
-const ForgotPasswordScreen = lazy(() => import("./pages/ForgotPasswordScreen.tsx"));
+const ForgotPasswordRequestScreen = lazy(() => import("./pages/ForgotPasswordRequestScreen.tsx"));
+const ForgotPasswordOtpScreen = lazy(() => import("./pages/ForgotPasswordOtpScreen.tsx"));
+const ForgotPasswordResetScreen = lazy(() => import("./pages/ForgotPasswordResetScreen.tsx"));
+const ForgotPasswordExpiredScreen = lazy(() => import("./pages/ForgotPasswordExpiredScreen.tsx"));
 const VerifyEmailScreen = lazy(() => import("./pages/VerifyEmailScreen.tsx"));
 const VerifyPhoneScreen = lazy(() => import("./pages/VerifyPhoneScreen.tsx"));
 const Test = lazy(() => import("./pages/test.tsx"));
@@ -49,9 +53,11 @@ const TournamentCommentsScreen = lazy(() => import("./pages/TournamentCommentsSc
 const HelpCenterScreen = lazy(() => import("./pages/HelpCenterScreen.tsx"));
 const RulesScreen = lazy(() => import("./pages/RulesScreen.tsx"));
 const PrivacyPolicyScreen = lazy(() => import("./pages/PrivacyPolicyScreen.tsx"));
+const LegalCenterScreen = lazy(() => import("./pages/LegalCenterScreen.tsx"));
+const GoogleOnboardingScreen = lazy(() => import("./pages/GoogleOnboardingScreen.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
-const VITE_GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
+const VITE_GOOGLE_CLIENT_ID = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || "");
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -69,6 +75,7 @@ const queryClient = new QueryClient({
 const ProtectedShell = () => (
   <ProtectedRoute>
     <div className="arena-shell min-h-screen pb-24">
+      <OnboardingGate />
       <Outlet />
     </div>
     <NotificationRealtimeBridge />
@@ -106,10 +113,23 @@ const App = () => (
               <Routes>
                 <Route path="/landing" element={<LandingPage />} />
                 <Route path="/login" element={<LoginScreen />} />
-                <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
+                <Route path="/forgot-password" element={<ForgotPasswordRequestScreen />} />
+                <Route path="/forgot-password/verify" element={<ForgotPasswordOtpScreen />} />
+                <Route path="/forgot-password/reset" element={<ForgotPasswordResetScreen />} />
+                <Route path="/forgot-password/expired" element={<ForgotPasswordExpiredScreen />} />
                 <Route path="/verify-email" element={<VerifyEmailScreen />} />
                 <Route path="/verify-phone" element={<VerifyPhoneScreen />} />
                 <Route path="/test" element={<Test />} />
+                <Route path="/legal" element={<LegalCenterScreen />} />
+                <Route path="/legal/:doc" element={<LegalCenterScreen />} />
+                <Route
+                  path="/onboarding"
+                  element={
+                    <ProtectedRoute>
+                      <GoogleOnboardingScreen />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route element={<ProtectedShell />}>
                   <Route path="/" element={<Index />} />
                   <Route path="/tournaments" element={<TournamentsScreen />} />

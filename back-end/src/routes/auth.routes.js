@@ -7,6 +7,10 @@ import {
   logoutUser,
   renewTokens,
   forgotPassword,
+  verifyForgotPasswordOtp,
+  resendForgotPasswordOtp,
+  prepareForgotPasswordResetFromLink,
+  completeForgotPasswordReset,
   resetPassword,
   changePassword,
 } from "../controllers/user.controller.js";
@@ -23,6 +27,10 @@ router.post("/login", authLimiter, loginUser);
 router.post("/refresh-token", renewTokens);
 router.post("/renew-token", renewTokens);
 router.post("/forgot-password", passwordResetLimiter, forgotPassword);
+router.post("/forgot-password/verify-otp", passwordResetLimiter, verifyForgotPasswordOtp);
+router.post("/forgot-password/resend", passwordResetLimiter, resendForgotPasswordOtp);
+router.post("/forgot-password/prepare", passwordResetLimiter, prepareForgotPasswordResetFromLink);
+router.put("/forgot-password/complete", passwordResetLimiter, completeForgotPasswordReset);
 router.put("/reset-password/:token", passwordResetLimiter, resetPassword);
 
 // Protected routes

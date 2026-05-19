@@ -177,6 +177,72 @@ const userSchema = new mongoose.Schema({
         type: Date,
         select: false,
     },
+    resetPasswordOtpHash: {
+        type: String,
+        select: false,
+    },
+    resetPasswordOtpExpires: {
+        type: Date,
+        select: false,
+    },
+    resetPasswordOtpAttempts: {
+        type: Number,
+        select: false,
+        default: 0,
+        min: 0,
+    },
+    resetPasswordRequestIdHash: {
+        type: String,
+        select: false,
+    },
+    resetPasswordRequestIdExpires: {
+        type: Date,
+        select: false,
+    },
+    resetPasswordResendAvailableAt: {
+        type: Date,
+        select: false,
+        default: null,
+    },
+    resetPasswordResendCount: {
+        type: Number,
+        select: false,
+        default: 0,
+        min: 0,
+    },
+    resetPasswordResendWindowStart: {
+        type: Date,
+        select: false,
+        default: null,
+    },
+    resetPasswordGrantHash: {
+        type: String,
+        select: false,
+    },
+    resetPasswordGrantExpires: {
+        type: Date,
+        select: false,
+    },
+    onboarding: {
+        completedAt: { type: Date, default: null },
+        source: {
+            type: String,
+            enum: ["google", "facebook", "password", "admin", "unknown"],
+            default: "unknown",
+        },
+        ageBand: {
+            type: String,
+            enum: ["teen", "adult"],
+            default: null,
+        },
+    },
+    legalAgreements: {
+        acceptedAt: { type: Date, default: null },
+        termsAcceptedAt: { type: Date, default: null },
+        privacyAcceptedAt: { type: Date, default: null },
+        communityAcceptedAt: { type: Date, default: null },
+        version: { type: String, trim: true, default: "" },
+    },
 }, { timestamps: true });
 
 userSchema.index(
