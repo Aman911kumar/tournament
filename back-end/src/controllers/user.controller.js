@@ -769,68 +769,65 @@ const forgotPassword = asyncHandler(async (req, res) => {
     let devOtpCode = "";
     let devResetToken = "";
 
-    if (user) {
-        if (!user.email || !isValidEmail(user.email)) {
-            // Don't reveal that the account exists but has no email. Treat as "sent" in prod.
-            if (process.env.NODE_ENV !== "production") {
-                throw new ApiError(400, "This account does not have a valid email for password reset");
-            }
-        }
-
-        const userResendAvailableAt = user.resetPasswordResendAvailableAt ? new Date(user.resetPasswordResendAvailableAt).getTime() : 0;
-        if (userResendAvailableAt && userResendAvailableAt > now) {
-            const remainingSeconds = Math.ceil((userResendAvailableAt - now) / 1000);
-            throw new ApiError(429, "Please wait before requesting another reset code.", [
-                { field: "passwordReset.cooldownRemainingSeconds", message: String(remainingSeconds) },
-                { field: "passwordReset.resendAvailableAt", message: new Date(userResendAvailableAt).toISOString() },
-            ]);
-        }
-
-        const windowStartMs = user.resetPasswordResendWindowStart ? new Date(user.resetPasswordResendWindowStart).getTime() : 0;
-        const inWindow = windowStartMs && windowStartMs + resendWindowMs > now;
-        const resendCount = inWindow ? Number(user.resetPasswordResendCount || 0) : 0;
-        if (resendCount >= maxResendsPerWindow) {
-            throw new ApiError(429, "Too many password reset requests. Please try again later.", [
-                { field: "passwordReset.maxResends", message: String(maxResendsPerWindow) },
-            ]);
-        }
-
-        // Generate a long-lived reset link token + a short-lived OTP code.
-        const resetToken = crypto.randomBytes(32).toString("hex");
-        const resetTokenHash = crypto.createHash("sha256").update(resetToken).digest("hex");
-        devResetToken = resetToken;
-
-        const otpCode = randomOtpCode();
-        const otpHash = crypto.createHash("sha256").update(otpCode).digest("hex");
-        devOtpCode = otpCode;
-
-        user.resetPasswordToken = resetTokenHash;
-        user.resetPasswordExpires = resetLinkExpiresAt;
-        user.resetPasswordOtpHash = otpHash;
-        user.resetPasswordOtpExpires = otpExpiresAt;
-        user.resetPasswordOtpAttempts = 0;
-        user.resetPasswordRequestIdHash = requestIdHash;
-        user.resetPasswordRequestIdExpires = otpExpiresAt;
-        user.resetPasswordGrantHash = undefined;
-        user.resetPasswordGrantExpires = undefined;
-        user.resetPasswordResendAvailableAt = resendAvailableAt;
-        user.resetPasswordResendWindowStart = inWindow ? new Date(windowStartMs) : new Date(now);
-        user.resetPasswordResendCount = resendCount + 1;
-        await user.save({ validateBeforeSave: false });
-
-        // Send email if the user has a valid email.
-        if (user.email && isValidEmail(user.email)) {
-            await sendPasswordResetEmail({
-                to: user.email,
-                username: user.username,
-                token: resetToken,
-                otpCode,
-                otpExpiresInMinutes: Math.ceil(otpExpiryMs / 60000),
-                linkExpiresInDays: Math.ceil(linkExpiryMs / (24 * 60 * 60 * 1000)),
-                requestId: req.requestId,
-            });
-        }
+    if (!user) {
+        // User requested behavior: only proceed when an account exists.
+        throw new ApiError(404, "Account not found for the provided username/email/phone.");
     }
+
+    if (!user.email || !isValidEmail(user.email)) {
+        throw new ApiError(400, "This account does not have a valid email address for password reset.");
+    }
+
+    const userResendAvailableAt = user.resetPasswordResendAvailableAt ? new Date(user.resetPasswordResendAvailableAt).getTime() : 0;
+    if (userResendAvailableAt && userResendAvailableAt > now) {
+        const remainingSeconds = Math.ceil((userResendAvailableAt - now) / 1000);
+        throw new ApiError(429, "Please wait before requesting another reset code.", [
+            { field: "passwordReset.cooldownRemainingSeconds", message: String(remainingSeconds) },
+            { field: "passwordReset.resendAvailableAt", message: new Date(userResendAvailableAt).toISOString() },
+        ]);
+    }
+
+    const windowStartMs = user.resetPasswordResendWindowStart ? new Date(user.resetPasswordResendWindowStart).getTime() : 0;
+    const inWindow = windowStartMs && windowStartMs + resendWindowMs > now;
+    const resendCount = inWindow ? Number(user.resetPasswordResendCount || 0) : 0;
+    if (resendCount >= maxResendsPerWindow) {
+        throw new ApiError(429, "Too many password reset requests. Please try again later.", [
+            { field: "passwordReset.maxResends", message: String(maxResendsPerWindow) },
+        ]);
+    }
+
+    // Generate a long-lived reset link token + a short-lived OTP code.
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenHash = crypto.createHash("sha256").update(resetToken).digest("hex");
+    devResetToken = resetToken;
+
+    const otpCode = randomOtpCode();
+    const otpHash = crypto.createHash("sha256").update(otpCode).digest("hex");
+    devOtpCode = otpCode;
+
+    user.resetPasswordToken = resetTokenHash;
+    user.resetPasswordExpires = resetLinkExpiresAt;
+    user.resetPasswordOtpHash = otpHash;
+    user.resetPasswordOtpExpires = otpExpiresAt;
+    user.resetPasswordOtpAttempts = 0;
+    user.resetPasswordRequestIdHash = requestIdHash;
+    user.resetPasswordRequestIdExpires = otpExpiresAt;
+    user.resetPasswordGrantHash = undefined;
+    user.resetPasswordGrantExpires = undefined;
+    user.resetPasswordResendAvailableAt = resendAvailableAt;
+    user.resetPasswordResendWindowStart = inWindow ? new Date(windowStartMs) : new Date(now);
+    user.resetPasswordResendCount = resendCount + 1;
+    await user.save({ validateBeforeSave: false });
+
+    await sendPasswordResetEmail({
+        to: user.email,
+        username: user.username,
+        token: resetToken,
+        otpCode,
+        otpExpiresInMinutes: Math.ceil(otpExpiryMs / 60000),
+        linkExpiresInDays: Math.ceil(linkExpiryMs / (24 * 60 * 60 * 1000)),
+        requestId: req.requestId,
+    });
 
     const responseData = {
         delivery: "email",
@@ -853,7 +850,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
     };
 
     return res.status(200).json(
-        new ApiResponse(200, responseData, "If the account exists, we sent password reset instructions to its email.")
+        new ApiResponse(200, responseData, "Password reset instructions have been sent to your email.")
     );
 });
 
