@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://battle4arena.com/sitemap.xml
