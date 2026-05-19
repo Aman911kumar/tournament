@@ -146,6 +146,11 @@ export const sendEmailDirect = async (request) => {
   for (const provider of providers) {
     const health = await checkProviderHealth(provider);
     if (health && health.ok === false) {
+      // Don't silently skip: surface the health reason so operators can diagnose quickly.
+      errors.push({
+        provider: provider.name,
+        error: health.reason || "health_check_failed",
+      });
       continue;
     }
 
@@ -239,10 +244,12 @@ export const enqueueEmail = async (request) => {
   if (shouldFireAndForget()) {
     setImmediate(() => {
       sendWithRetriesInline(job).catch((error) => {
+        const details = error?.errors || error?.details || [];
         console.error("Email send failed (fire-and-forget):", {
           idempotencyKey,
           requestId: request.requestId,
           message: error?.message || error,
+          errors: Array.isArray(details) ? details : [],
         });
       });
     });
