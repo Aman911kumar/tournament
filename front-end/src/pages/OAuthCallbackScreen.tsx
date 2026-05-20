@@ -12,6 +12,13 @@ const parseCode = (search: string) => {
   return String(params.get("code") || "").trim();
 };
 
+const parseError = (search: string) => {
+  const params = new URLSearchParams(search);
+  const error = String(params.get("error") || "").trim();
+  const description = String(params.get("error_description") || "").trim();
+  return { error, description };
+};
+
 export default function OAuthCallbackScreen() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -19,6 +26,7 @@ export default function OAuthCallbackScreen() {
   const ranRef = useRef(false);
 
   const code = useMemo(() => parseCode(location.search), [location.search]);
+  const { error, description } = useMemo(() => parseError(location.search), [location.search]);
 
   useEffect(() => {
     if (ranRef.current) return;
@@ -26,6 +34,12 @@ export default function OAuthCallbackScreen() {
 
     (async () => {
       try {
+        if (error) {
+          toast.error("Login failed", { description: description || "Please try again." });
+          navigate("/login", { replace: true });
+          return;
+        }
+
         if (!code) {
           toast.error("Login failed", { description: "Missing login code. Please try again." });
           navigate("/login", { replace: true });
@@ -72,4 +86,3 @@ export default function OAuthCallbackScreen() {
     </div>
   );
 }
-

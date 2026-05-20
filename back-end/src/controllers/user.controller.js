@@ -247,6 +247,54 @@ const assertAllowedReturnTo = (returnTo) => {
     return url.toString();
 };
 
+const resolveDefaultReturnTo = () => {
+    const candidates = [
+        ...(String(APP_PUBLIC_URL || "").split(",").map((v) => v.trim()).filter(Boolean)),
+        ...(String(process.env.CORS_ORIGIN || "").split(",").map((v) => v.trim()).filter(Boolean)),
+    ];
+
+    for (const item of candidates) {
+        try {
+            const url = new URL(item);
+            return `${url.origin}/oauth/callback`;
+        } catch {
+            // ignore invalid entries
+        }
+    }
+
+    return "http://localhost:8080/oauth/callback";
+};
+
+const resolveAllowedReturnToOrDefault = (rawReturnTo) => {
+    // Never throw here. If the returnTo is missing/invalid/not-allowed, fall back to a safe app URL.
+    const value = String(rawReturnTo || "").trim();
+    if (!value) return resolveDefaultReturnTo();
+    try {
+        return assertAllowedReturnTo(value);
+    } catch {
+        return resolveDefaultReturnTo();
+    }
+};
+
+const redirectOAuthResult = (res, { returnTo, provider, code, error, errorDescription }) => {
+    let target = returnTo || resolveDefaultReturnTo();
+    try {
+        const url = new URL(String(target));
+        if (provider) url.searchParams.set("provider", String(provider));
+        if (code) url.searchParams.set("code", String(code));
+        if (error) url.searchParams.set("error", String(error));
+        if (errorDescription) url.searchParams.set("error_description", String(errorDescription));
+        return res.redirect(url.toString());
+    } catch {
+        // If the returnTo is malformed for any reason, fall back to the app public url.
+        const fallback = new URL(resolveDefaultReturnTo());
+        if (provider) fallback.searchParams.set("provider", String(provider));
+        if (error) fallback.searchParams.set("error", String(error));
+        if (errorDescription) fallback.searchParams.set("error_description", String(errorDescription));
+        return res.redirect(fallback.toString());
+    }
+};
+
 const getAgeYears = (dateOfBirth) => {
     if (!dateOfBirth) return 0;
     const dob = new Date(dateOfBirth);
@@ -791,204 +839,362 @@ const startOAuthLogin = asyncHandler(async (req, res) => {
     }
 
     const rawReturnTo = req.query?.returnTo || req.query?.return_to || req.query?.returnUrl || req.query?.return_url || "";
-    const returnTo = assertAllowedReturnTo(rawReturnTo);
+    const returnTo = resolveAllowedReturnToOrDefault(rawReturnTo);
 
-    const state = crypto.randomBytes(16).toString("hex");
-    const createdAt = Date.now();
-
-    const ctx = {
-        provider,
-        state,
-        returnTo,
-        createdAt,
-    };
-
-    res.cookie(OAUTH_STATE_COOKIE, signOAuthCookie(ctx), {
-        ...options,
-        maxAge: OAUTH_STATE_TTL_MS,
-    });
-
-    const apiPublicUrl = resolveApiPublicUrl(req);
-    const callbackUrl = `${apiPublicUrl}/api/v1/auth/oauth/${provider}/callback`;
-
-    if (provider === "google") {
-        if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-            throw new ApiError(500, "GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET is missing");
+    try {
+        if (provider === "google" && (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET)) {
+            return redirectOAuthResult(res, {
+                returnTo,
+                provider,
+                error: "provider_not_configured",
+                errorDescription: "Google login is not configured. Contact support.",
+            });
         }
 
-        const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-        authUrl.searchParams.set("client_id", GOOGLE_CLIENT_ID);
-        authUrl.searchParams.set("redirect_uri", callbackUrl);
-        authUrl.searchParams.set("response_type", "code");
-        authUrl.searchParams.set("scope", "openid email profile");
-        authUrl.searchParams.set("state", state);
-        // Keep it lightweight; refresh tokens are not required for basic sign-in.
-        authUrl.searchParams.set("access_type", "online");
+        if (provider === "facebook" && (!FACEBOOK_APP_ID || !FACEBOOK_APP_SECRET)) {
+            return redirectOAuthResult(res, {
+                returnTo,
+                provider,
+                error: "provider_not_configured",
+                errorDescription: "Facebook login is not configured. Contact support.",
+            });
+        }
 
-        return res.redirect(authUrl.toString());
+        const state = crypto.randomBytes(16).toString("hex");
+        const createdAt = Date.now();
+
+        const ctx = {
+            provider,
+            state,
+            returnTo,
+            createdAt,
+        };
+
+        res.cookie(OAUTH_STATE_COOKIE, signOAuthCookie(ctx), {
+            ...options,
+            maxAge: OAUTH_STATE_TTL_MS,
+        });
+
+        const apiPublicUrl = resolveApiPublicUrl(req);
+        const callbackUrl = `${apiPublicUrl}/api/v1/auth/oauth/${provider}/callback`;
+
+        if (provider === "google") {
+            const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+            authUrl.searchParams.set("client_id", GOOGLE_CLIENT_ID);
+            authUrl.searchParams.set("redirect_uri", callbackUrl);
+            authUrl.searchParams.set("response_type", "code");
+            authUrl.searchParams.set("scope", "openid email profile");
+            authUrl.searchParams.set("state", state);
+            // Keep it lightweight; refresh tokens are not required for basic sign-in.
+            authUrl.searchParams.set("access_type", "online");
+
+            return res.redirect(authUrl.toString());
+        }
+
+        const fbUrl = new URL(`https://www.facebook.com/${FACEBOOK_GRAPH_VERSION}/dialog/oauth`);
+        fbUrl.searchParams.set("client_id", FACEBOOK_APP_ID);
+        fbUrl.searchParams.set("redirect_uri", callbackUrl);
+        fbUrl.searchParams.set("response_type", "code");
+        fbUrl.searchParams.set("scope", "public_profile,email");
+        fbUrl.searchParams.set("state", state);
+
+        return res.redirect(fbUrl.toString());
+    } catch (err) {
+        return redirectOAuthResult(res, {
+            returnTo,
+            provider,
+            error: "oauth_start_failed",
+            errorDescription: "Could not start login. Please try again.",
+        });
     }
-
-    if (!FACEBOOK_APP_ID || !FACEBOOK_APP_SECRET) {
-        throw new ApiError(500, "FACEBOOK_APP_ID/FACEBOOK_APP_SECRET is missing");
-    }
-
-    const fbUrl = new URL(`https://www.facebook.com/${FACEBOOK_GRAPH_VERSION}/dialog/oauth`);
-    fbUrl.searchParams.set("client_id", FACEBOOK_APP_ID);
-    fbUrl.searchParams.set("redirect_uri", callbackUrl);
-    fbUrl.searchParams.set("response_type", "code");
-    fbUrl.searchParams.set("scope", "public_profile,email");
-    fbUrl.searchParams.set("state", state);
-
-    return res.redirect(fbUrl.toString());
 });
 
 const oauthGoogleCallback = asyncHandler(async (req, res) => {
-    const code = String(req.query?.code || "").trim();
-    const state = String(req.query?.state || "").trim();
-    const error = String(req.query?.error || "").trim();
-    const errorDescription = String(req.query?.error_description || "").trim();
-
-    const signed = req.cookies?.[OAUTH_STATE_COOKIE] || "";
-    const ctx = verifyOAuthCookie(signed);
-
-    res.clearCookie(OAUTH_STATE_COOKIE, options);
-
-    if (!ctx || ctx.provider !== "google") {
-        throw new ApiError(401, "OAuth session expired. Please try again.");
-    }
-
-    if (!state || state !== ctx.state) {
-        throw new ApiError(401, "OAuth state mismatch. Please try again.");
-    }
-
-    if (Date.now() - Number(ctx.createdAt || 0) > OAUTH_STATE_TTL_MS) {
-        throw new ApiError(401, "OAuth session expired. Please try again.");
-    }
-
-    if (error) {
-        throw new ApiError(401, `Google login failed: ${errorDescription || error}`);
-    }
-
-    if (!code) {
-        throw new ApiError(400, "Google OAuth code is missing");
-    }
-
-    const apiPublicUrl = resolveApiPublicUrl(req);
-    const callbackUrl = `${apiPublicUrl}/api/v1/auth/oauth/google/callback`;
-
-    // Exchange code for tokens (server-side).
-    const tokenBody = new URLSearchParams({
-        code,
-        client_id: String(GOOGLE_CLIENT_ID || ""),
-        client_secret: String(GOOGLE_CLIENT_SECRET || ""),
-        redirect_uri: callbackUrl,
-        grant_type: "authorization_code",
-    });
-
-    let idToken = "";
+    let ctx = null;
     try {
-        const { data } = await axios.post("https://oauth2.googleapis.com/token", tokenBody.toString(), {
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        const code = String(req.query?.code || "").trim();
+        const state = String(req.query?.state || "").trim();
+        const error = String(req.query?.error || "").trim();
+        const errorDescription = String(req.query?.error_description || "").trim();
+
+        const signed = req.cookies?.[OAUTH_STATE_COOKIE] || "";
+        ctx = verifyOAuthCookie(signed);
+
+        res.clearCookie(OAUTH_STATE_COOKIE, options);
+
+        if (!ctx || ctx.provider !== "google") {
+            return redirectOAuthResult(res, {
+                provider: "google",
+                error: "oauth_session_expired",
+                errorDescription: "Login session expired. Please try again.",
+            });
+        }
+
+        if (!state || state !== ctx.state) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "google",
+                error: "oauth_state_mismatch",
+                errorDescription: "Login state mismatch. Please try again.",
+            });
+        }
+
+        if (Date.now() - Number(ctx.createdAt || 0) > OAUTH_STATE_TTL_MS) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "google",
+                error: "oauth_session_expired",
+                errorDescription: "Login session expired. Please try again.",
+            });
+        }
+
+        if (error) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "google",
+                error: "google_login_failed",
+                errorDescription: errorDescription || error,
+            });
+        }
+
+        if (!code) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "google",
+                error: "missing_code",
+                errorDescription: "Google login did not return a code. Please try again.",
+            });
+        }
+
+        const apiPublicUrl = resolveApiPublicUrl(req);
+        const callbackUrl = `${apiPublicUrl}/api/v1/auth/oauth/google/callback`;
+
+        // Exchange code for tokens (server-side).
+        const tokenBody = new URLSearchParams({
+            code,
+            client_id: String(GOOGLE_CLIENT_ID || ""),
+            client_secret: String(GOOGLE_CLIENT_SECRET || ""),
+            redirect_uri: callbackUrl,
+            grant_type: "authorization_code",
         });
-        idToken = data?.id_token || "";
+
+        let idToken = "";
+        try {
+            const { data } = await axios.post("https://oauth2.googleapis.com/token", tokenBody.toString(), {
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            });
+            idToken = data?.id_token || "";
+        } catch (err) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "google",
+                error: "token_exchange_failed",
+                errorDescription:
+                    err?.response?.data?.error_description || err?.response?.data?.error || "Google token exchange failed",
+            });
+        }
+
+        let profile;
+        try {
+            profile = await getGoogleProfile({ credential: idToken });
+        } catch (err) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "google",
+                error: "invalid_google_token",
+                errorDescription: err?.message || "Google login could not be verified",
+            });
+        }
+
+        let user;
+        try {
+            user = await findOrCreateSocialUser(profile);
+        } catch (err) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "google",
+                error: "account_sync_failed",
+                errorDescription: err?.message || "Could not finish Google login. Please try again.",
+            });
+        }
+
+        const loginCode = crypto.randomBytes(32).toString("hex");
+        const codeHash = sha256Hex(loginCode);
+        const ttlMs = toPositiveNumber(process.env.OAUTH_LOGIN_CODE_TTL_MS, 5 * 60 * 1000);
+
+        try {
+            await OAuthLoginCode.create({
+                user: user._id,
+                provider: "google",
+                codeHash,
+                expiresAt: new Date(Date.now() + ttlMs),
+                createdIp: String(req.ip || ""),
+                createdUserAgent: String(req.get("user-agent") || ""),
+            });
+        } catch (err) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "google",
+                error: "login_persist_failed",
+                errorDescription: "Could not complete login. Please try again.",
+            });
+        }
+
+        return redirectOAuthResult(res, {
+            returnTo: ctx.returnTo,
+            provider: "google",
+            code: loginCode,
+        });
     } catch (err) {
-        throw new ApiError(401, err?.response?.data?.error_description || "Google token exchange failed");
+        return redirectOAuthResult(res, {
+            returnTo: ctx?.returnTo,
+            provider: "google",
+            error: "oauth_callback_failed",
+            errorDescription: "Login failed. Please try again.",
+        });
     }
-
-    const profile = await getGoogleProfile({ credential: idToken });
-    const user = await findOrCreateSocialUser(profile);
-
-    const loginCode = crypto.randomBytes(32).toString("hex");
-    const codeHash = sha256Hex(loginCode);
-    const ttlMs = toPositiveNumber(process.env.OAUTH_LOGIN_CODE_TTL_MS, 5 * 60 * 1000);
-
-    await OAuthLoginCode.create({
-        user: user._id,
-        provider: "google",
-        codeHash,
-        expiresAt: new Date(Date.now() + ttlMs),
-        createdIp: String(req.ip || ""),
-        createdUserAgent: String(req.get("user-agent") || ""),
-    });
-
-    const returnUrl = new URL(String(ctx.returnTo));
-    returnUrl.searchParams.set("code", loginCode);
-    returnUrl.searchParams.set("provider", "google");
-
-    return res.redirect(returnUrl.toString());
 });
 
 const oauthFacebookCallback = asyncHandler(async (req, res) => {
-    const code = String(req.query?.code || "").trim();
-    const state = String(req.query?.state || "").trim();
-    const error = String(req.query?.error || "").trim();
-    const errorReason = String(req.query?.error_reason || "").trim();
-    const errorDescription = String(req.query?.error_description || "").trim();
-
-    const signed = req.cookies?.[OAUTH_STATE_COOKIE] || "";
-    const ctx = verifyOAuthCookie(signed);
-
-    res.clearCookie(OAUTH_STATE_COOKIE, options);
-
-    if (!ctx || ctx.provider !== "facebook") {
-        throw new ApiError(401, "OAuth session expired. Please try again.");
-    }
-
-    if (!state || state !== ctx.state) {
-        throw new ApiError(401, "OAuth state mismatch. Please try again.");
-    }
-
-    if (Date.now() - Number(ctx.createdAt || 0) > OAUTH_STATE_TTL_MS) {
-        throw new ApiError(401, "OAuth session expired. Please try again.");
-    }
-
-    if (error) {
-        throw new ApiError(401, `Facebook login failed: ${errorDescription || errorReason || error}`);
-    }
-
-    if (!code) {
-        throw new ApiError(400, "Facebook OAuth code is missing");
-    }
-
-    const apiPublicUrl = resolveApiPublicUrl(req);
-    const callbackUrl = `${apiPublicUrl}/api/v1/auth/oauth/facebook/callback`;
-
-    let accessToken = "";
+    let ctx = null;
     try {
-        const { data } = await axios.get(`https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/oauth/access_token`, {
-            params: {
-                client_id: FACEBOOK_APP_ID,
-                client_secret: FACEBOOK_APP_SECRET,
-                redirect_uri: callbackUrl,
-                code,
-            },
+        const code = String(req.query?.code || "").trim();
+        const state = String(req.query?.state || "").trim();
+        const error = String(req.query?.error || "").trim();
+        const errorReason = String(req.query?.error_reason || "").trim();
+        const errorDescription = String(req.query?.error_description || "").trim();
+
+        const signed = req.cookies?.[OAUTH_STATE_COOKIE] || "";
+        ctx = verifyOAuthCookie(signed);
+
+        res.clearCookie(OAUTH_STATE_COOKIE, options);
+
+        if (!ctx || ctx.provider !== "facebook") {
+            return redirectOAuthResult(res, {
+                provider: "facebook",
+                error: "oauth_session_expired",
+                errorDescription: "Login session expired. Please try again.",
+            });
+        }
+
+        if (!state || state !== ctx.state) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "facebook",
+                error: "oauth_state_mismatch",
+                errorDescription: "Login state mismatch. Please try again.",
+            });
+        }
+
+        if (Date.now() - Number(ctx.createdAt || 0) > OAUTH_STATE_TTL_MS) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "facebook",
+                error: "oauth_session_expired",
+                errorDescription: "Login session expired. Please try again.",
+            });
+        }
+
+        if (error) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "facebook",
+                error: "facebook_login_failed",
+                errorDescription: errorDescription || errorReason || error,
+            });
+        }
+
+        if (!code) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "facebook",
+                error: "missing_code",
+                errorDescription: "Facebook login did not return a code. Please try again.",
+            });
+        }
+
+        const apiPublicUrl = resolveApiPublicUrl(req);
+        const callbackUrl = `${apiPublicUrl}/api/v1/auth/oauth/facebook/callback`;
+
+        let accessToken = "";
+        try {
+            const { data } = await axios.get(`https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/oauth/access_token`, {
+                params: {
+                    client_id: FACEBOOK_APP_ID,
+                    client_secret: FACEBOOK_APP_SECRET,
+                    redirect_uri: callbackUrl,
+                    code,
+                },
+            });
+            accessToken = data?.access_token || "";
+        } catch (err) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "facebook",
+                error: "token_exchange_failed",
+                errorDescription: err?.response?.data?.error?.message || "Facebook token exchange failed",
+            });
+        }
+
+        let profile;
+        try {
+            profile = await getFacebookProfile({ accessToken });
+        } catch (err) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "facebook",
+                error: "invalid_facebook_token",
+                errorDescription: err?.message || "Facebook login could not be verified",
+            });
+        }
+
+        let user;
+        try {
+            user = await findOrCreateSocialUser(profile);
+        } catch (err) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "facebook",
+                error: "account_sync_failed",
+                errorDescription: err?.message || "Could not finish Facebook login. Please try again.",
+            });
+        }
+
+        const loginCode = crypto.randomBytes(32).toString("hex");
+        const codeHash = sha256Hex(loginCode);
+        const ttlMs = toPositiveNumber(process.env.OAUTH_LOGIN_CODE_TTL_MS, 5 * 60 * 1000);
+
+        try {
+            await OAuthLoginCode.create({
+                user: user._id,
+                provider: "facebook",
+                codeHash,
+                expiresAt: new Date(Date.now() + ttlMs),
+                createdIp: String(req.ip || ""),
+                createdUserAgent: String(req.get("user-agent") || ""),
+            });
+        } catch (err) {
+            return redirectOAuthResult(res, {
+                returnTo: ctx.returnTo,
+                provider: "facebook",
+                error: "login_persist_failed",
+                errorDescription: "Could not complete login. Please try again.",
+            });
+        }
+
+        return redirectOAuthResult(res, {
+            returnTo: ctx.returnTo,
+            provider: "facebook",
+            code: loginCode,
         });
-        accessToken = data?.access_token || "";
     } catch (err) {
-        throw new ApiError(401, err?.response?.data?.error?.message || "Facebook token exchange failed");
+        return redirectOAuthResult(res, {
+            returnTo: ctx?.returnTo,
+            provider: "facebook",
+            error: "oauth_callback_failed",
+            errorDescription: "Login failed. Please try again.",
+        });
     }
-
-    const profile = await getFacebookProfile({ accessToken });
-    const user = await findOrCreateSocialUser(profile);
-
-    const loginCode = crypto.randomBytes(32).toString("hex");
-    const codeHash = sha256Hex(loginCode);
-    const ttlMs = toPositiveNumber(process.env.OAUTH_LOGIN_CODE_TTL_MS, 5 * 60 * 1000);
-
-    await OAuthLoginCode.create({
-        user: user._id,
-        provider: "facebook",
-        codeHash,
-        expiresAt: new Date(Date.now() + ttlMs),
-        createdIp: String(req.ip || ""),
-        createdUserAgent: String(req.get("user-agent") || ""),
-    });
-
-    const returnUrl = new URL(String(ctx.returnTo));
-    returnUrl.searchParams.set("code", loginCode);
-    returnUrl.searchParams.set("provider", "facebook");
-
-    return res.redirect(returnUrl.toString());
 });
 
 const completeOAuthLogin = asyncHandler(async (req, res) => {
