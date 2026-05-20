@@ -3,14 +3,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { GoogleOAuthProvider } from "@react-oauth/google";
 import { Analytics } from "@vercel/analytics/react";
 import ProtectedRoute from "./components/ProtectedRoute";
 import BottomNav from "./components/BottomNav";
 import NotificationRealtimeBridge from "./components/NotificationRealtimeBridge";
 import NetworkStatusBanner from "./components/NetworkStatusBanner";
 import OnboardingGate from "./components/OnboardingGate";
-import { toast } from "@/components/ui/sonner";
+import CapacitorUrlListener from "./components/CapacitorUrlListener";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { ApiError } from "@/api/client";
 
@@ -23,6 +22,7 @@ const ForgotPasswordResetScreen = lazy(() => import("./pages/ForgotPasswordReset
 const ForgotPasswordExpiredScreen = lazy(() => import("./pages/ForgotPasswordExpiredScreen.tsx"));
 const VerifyEmailScreen = lazy(() => import("./pages/VerifyEmailScreen.tsx"));
 const VerifyPhoneScreen = lazy(() => import("./pages/VerifyPhoneScreen.tsx"));
+const OAuthCallbackScreen = lazy(() => import("./pages/OAuthCallbackScreen.tsx"));
 const Test = lazy(() => import("./pages/test.tsx"));
 const TournamentsScreen = lazy(() => import("./pages/TournamentsScreen.tsx"));
 const TournamentDetailScreen = lazy(() => import("./pages/TournamentDetailScreen.tsx"));
@@ -57,7 +57,6 @@ const LegalCenterScreen = lazy(() => import("./pages/LegalCenterScreen.tsx"));
 const GoogleOnboardingScreen = lazy(() => import("./pages/GoogleOnboardingScreen.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
-const VITE_GOOGLE_CLIENT_ID = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || "");
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -101,16 +100,9 @@ const App = () => (
         <NetworkStatusBanner />
         <Analytics />
         <BrowserRouter>
-          <GoogleOAuthProvider
-            clientId={VITE_GOOGLE_CLIENT_ID}
-            onScriptLoadError={() => {
-              toast.error("Google login unavailable", {
-                description: "Try phone/email login or refresh this page.",
-              });
-            }}
-          >
-            <Suspense fallback={<RouteLoader />}>
-              <Routes>
+          <CapacitorUrlListener />
+          <Suspense fallback={<RouteLoader />}>
+            <Routes>
                 <Route path="/landing" element={<LandingPage />} />
                 <Route path="/login" element={<LoginScreen />} />
                 <Route path="/forgot-password" element={<ForgotPasswordRequestScreen />} />
@@ -119,6 +111,7 @@ const App = () => (
                 <Route path="/forgot-password/expired" element={<ForgotPasswordExpiredScreen />} />
                 <Route path="/verify-email" element={<VerifyEmailScreen />} />
                 <Route path="/verify-phone" element={<VerifyPhoneScreen />} />
+                <Route path="/oauth/callback" element={<OAuthCallbackScreen />} />
                 <Route path="/test" element={<Test />} />
                 <Route path="/legal" element={<LegalCenterScreen />} />
                 <Route path="/legal/:doc" element={<LegalCenterScreen />} />
@@ -165,9 +158,8 @@ const App = () => (
                   <Route path="/privacy" element={<PrivacyPolicyScreen />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </GoogleOAuthProvider>
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

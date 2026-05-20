@@ -4,6 +4,10 @@ import {
   loginUser,
   loginWithGoogle,
   loginWithFacebook,
+  startOAuthLogin,
+  oauthGoogleCallback,
+  oauthFacebookCallback,
+  completeOAuthLogin,
   logoutUser,
   renewTokens,
   forgotPassword,
@@ -22,6 +26,12 @@ const router = express.Router();
 // Public routes
 router.post("/google", authLimiter, loginWithGoogle);
 router.post("/facebook", authLimiter, loginWithFacebook);
+
+// Redirect-based OAuth flow (Web + Android WebView/APK compatible)
+router.get("/oauth/:provider/start", authLimiter, startOAuthLogin);
+router.get("/oauth/google/callback", authLimiter, oauthGoogleCallback);
+router.get("/oauth/facebook/callback", authLimiter, oauthFacebookCallback);
+router.post("/oauth/complete", authLimiter, completeOAuthLogin);
 router.post("/register", authLimiter, registerUser);
 router.post("/login", authLimiter, loginUser);
 router.post("/refresh-token", renewTokens);

@@ -95,6 +95,7 @@ const publicAuthPaths = [
   "/auth/register",
   "/auth/google",
   "/auth/facebook",
+  "/auth/oauth",
   "/auth/forgot-password",
   "/auth/reset-password",
 ];

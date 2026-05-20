@@ -15,15 +15,20 @@ import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import axios from 'axios'
 import {
+    ACCESS_TOKEN_SECRET,
     FACEBOOK_APP_ID,
     FACEBOOK_APP_SECRET,
     FACEBOOK_GRAPH_VERSION,
     GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    APP_PUBLIC_URL,
+    API_PUBLIC_URL,
     REFRESH_TOKEN_SECRET
 } from '../../env.js'
 import { expireStaleRazorpayPayments } from '../services/paymentExpiry.service.js'
 import { sendEmailVerification, sendPasswordResetEmail, sendPhoneVerificationEmail } from '../services/auth.service.js'
 import { getPushPublicKey } from '../services/notification.service.js'
+import { OAuthLoginCode } from "../models/oauthLoginCode.model.js";
 
 const generateAccessTokenAndRefreshToken = async (userId) => {
     try {
@@ -109,6 +114,138 @@ const msFromDays = (days, fallbackDays) =>
 const randomOtpCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
 const sha256Hex = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
+
+// OAuth redirect login (Web + mobile via external browser + deep links)
+const OAUTH_STATE_COOKIE = "b4a_oauth_state";
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+
+const base64UrlEncode = (input) =>
+    Buffer.from(typeof input === "string" ? input : JSON.stringify(input), "utf8")
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/g, "");
+
+const base64UrlDecodeJson = (value = "") => {
+    const normalized = String(value).replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "===".slice((normalized.length + 3) % 4);
+    const json = Buffer.from(padded, "base64").toString("utf8");
+    return JSON.parse(json);
+};
+
+const timingSafeEqual = (a, b) => {
+    try {
+        const ba = Buffer.from(String(a));
+        const bb = Buffer.from(String(b));
+        if (ba.length !== bb.length) return false;
+        return crypto.timingSafeEqual(ba, bb);
+    } catch {
+        return false;
+    }
+};
+
+const signOAuthCookie = (payload) => {
+    if (!ACCESS_TOKEN_SECRET) {
+        throw new ApiError(500, "ACCESS_TOKEN_SECRET is missing");
+    }
+    const body = base64UrlEncode(payload);
+    const sig = crypto
+        .createHmac("sha256", String(ACCESS_TOKEN_SECRET))
+        .update(body)
+        .digest("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/g, "");
+    return `${body}.${sig}`;
+};
+
+const verifyOAuthCookie = (signedValue) => {
+    const raw = String(signedValue || "");
+    const [body, sig] = raw.split(".");
+    if (!body || !sig) return null;
+    if (!ACCESS_TOKEN_SECRET) return null;
+
+    const expectedSig = crypto
+        .createHmac("sha256", String(ACCESS_TOKEN_SECRET))
+        .update(body)
+        .digest("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/g, "");
+
+    if (!timingSafeEqual(expectedSig, sig)) return null;
+    try {
+        return base64UrlDecodeJson(body);
+    } catch {
+        return null;
+    }
+};
+
+const resolveApiPublicUrl = (req) => {
+    const fromEnv = String(API_PUBLIC_URL || "").trim().replace(/\/$/, "");
+    if (fromEnv) return fromEnv;
+
+    const proto = (req.headers["x-forwarded-proto"] || req.protocol || "https").toString().split(",")[0].trim();
+    const host = (req.headers["x-forwarded-host"] || req.get("host") || "").toString().split(",")[0].trim();
+    if (!host) return "";
+    return `${proto}://${host}`;
+};
+
+const resolveAllowedReturnOrigins = () => {
+    const list = [
+        ...(String(APP_PUBLIC_URL || "").split(",").map((v) => v.trim()).filter(Boolean)),
+        ...(String(process.env.CORS_ORIGIN || "").split(",").map((v) => v.trim()).filter(Boolean)),
+        ...(String(process.env.OAUTH_ALLOWED_RETURN_ORIGINS || "").split(",").map((v) => v.trim()).filter(Boolean)),
+    ];
+
+    const origins = new Set();
+    for (const item of list) {
+        try {
+            if (!item) continue;
+            const url = new URL(item);
+            origins.add(url.origin);
+        } catch {
+            // ignore
+        }
+    }
+    return origins;
+};
+
+const resolveAllowedReturnSchemes = () => {
+    const list = [
+        ...(String(process.env.APP_DEEPLINK_SCHEME || "battle4arena").split(",").map((v) => v.trim()).filter(Boolean)),
+        ...(String(process.env.OAUTH_ALLOWED_RETURN_SCHEMES || "").split(",").map((v) => v.trim()).filter(Boolean)),
+    ];
+    return new Set(list.map((v) => v.replace(/:$/, "")));
+};
+
+const assertAllowedReturnTo = (returnTo) => {
+    const value = String(returnTo || "").trim();
+    if (!value) throw new ApiError(400, "returnTo is required");
+
+    let url;
+    try {
+        url = new URL(value);
+    } catch {
+        throw new ApiError(400, "Invalid returnTo URL");
+    }
+
+    const allowedOrigins = resolveAllowedReturnOrigins();
+    const allowedSchemes = resolveAllowedReturnSchemes();
+
+    if (url.protocol === "http:" || url.protocol === "https:") {
+        if (!allowedOrigins.has(url.origin)) {
+            throw new ApiError(400, "returnTo origin is not allowed");
+        }
+        return url.toString();
+    }
+
+    const scheme = url.protocol.replace(/:$/, "");
+    if (!allowedSchemes.has(scheme)) {
+        throw new ApiError(400, "returnTo scheme is not allowed");
+    }
+    return url.toString();
+};
 
 const getAgeYears = (dateOfBirth) => {
     if (!dateOfBirth) return 0;
@@ -645,6 +782,242 @@ const loginWithFacebook = asyncHandler(async (req, res) => {
     const user = await findOrCreateSocialUser(profile);
 
     return issueAuthResponse(res, user, "Logged in with Facebook successfully");
+});
+
+const startOAuthLogin = asyncHandler(async (req, res) => {
+    const provider = String(req.params.provider || "").trim().toLowerCase();
+    if (!["google", "facebook"].includes(provider)) {
+        throw new ApiError(404, "OAuth provider not supported");
+    }
+
+    const rawReturnTo = req.query?.returnTo || req.query?.return_to || req.query?.returnUrl || req.query?.return_url || "";
+    const returnTo = assertAllowedReturnTo(rawReturnTo);
+
+    const state = crypto.randomBytes(16).toString("hex");
+    const createdAt = Date.now();
+
+    const ctx = {
+        provider,
+        state,
+        returnTo,
+        createdAt,
+    };
+
+    res.cookie(OAUTH_STATE_COOKIE, signOAuthCookie(ctx), {
+        ...options,
+        maxAge: OAUTH_STATE_TTL_MS,
+    });
+
+    const apiPublicUrl = resolveApiPublicUrl(req);
+    const callbackUrl = `${apiPublicUrl}/api/v1/auth/oauth/${provider}/callback`;
+
+    if (provider === "google") {
+        if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+            throw new ApiError(500, "GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET is missing");
+        }
+
+        const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+        authUrl.searchParams.set("client_id", GOOGLE_CLIENT_ID);
+        authUrl.searchParams.set("redirect_uri", callbackUrl);
+        authUrl.searchParams.set("response_type", "code");
+        authUrl.searchParams.set("scope", "openid email profile");
+        authUrl.searchParams.set("state", state);
+        // Keep it lightweight; refresh tokens are not required for basic sign-in.
+        authUrl.searchParams.set("access_type", "online");
+
+        return res.redirect(authUrl.toString());
+    }
+
+    if (!FACEBOOK_APP_ID || !FACEBOOK_APP_SECRET) {
+        throw new ApiError(500, "FACEBOOK_APP_ID/FACEBOOK_APP_SECRET is missing");
+    }
+
+    const fbUrl = new URL(`https://www.facebook.com/${FACEBOOK_GRAPH_VERSION}/dialog/oauth`);
+    fbUrl.searchParams.set("client_id", FACEBOOK_APP_ID);
+    fbUrl.searchParams.set("redirect_uri", callbackUrl);
+    fbUrl.searchParams.set("response_type", "code");
+    fbUrl.searchParams.set("scope", "public_profile,email");
+    fbUrl.searchParams.set("state", state);
+
+    return res.redirect(fbUrl.toString());
+});
+
+const oauthGoogleCallback = asyncHandler(async (req, res) => {
+    const code = String(req.query?.code || "").trim();
+    const state = String(req.query?.state || "").trim();
+    const error = String(req.query?.error || "").trim();
+    const errorDescription = String(req.query?.error_description || "").trim();
+
+    const signed = req.cookies?.[OAUTH_STATE_COOKIE] || "";
+    const ctx = verifyOAuthCookie(signed);
+
+    res.clearCookie(OAUTH_STATE_COOKIE, options);
+
+    if (!ctx || ctx.provider !== "google") {
+        throw new ApiError(401, "OAuth session expired. Please try again.");
+    }
+
+    if (!state || state !== ctx.state) {
+        throw new ApiError(401, "OAuth state mismatch. Please try again.");
+    }
+
+    if (Date.now() - Number(ctx.createdAt || 0) > OAUTH_STATE_TTL_MS) {
+        throw new ApiError(401, "OAuth session expired. Please try again.");
+    }
+
+    if (error) {
+        throw new ApiError(401, `Google login failed: ${errorDescription || error}`);
+    }
+
+    if (!code) {
+        throw new ApiError(400, "Google OAuth code is missing");
+    }
+
+    const apiPublicUrl = resolveApiPublicUrl(req);
+    const callbackUrl = `${apiPublicUrl}/api/v1/auth/oauth/google/callback`;
+
+    // Exchange code for tokens (server-side).
+    const tokenBody = new URLSearchParams({
+        code,
+        client_id: String(GOOGLE_CLIENT_ID || ""),
+        client_secret: String(GOOGLE_CLIENT_SECRET || ""),
+        redirect_uri: callbackUrl,
+        grant_type: "authorization_code",
+    });
+
+    let idToken = "";
+    try {
+        const { data } = await axios.post("https://oauth2.googleapis.com/token", tokenBody.toString(), {
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        });
+        idToken = data?.id_token || "";
+    } catch (err) {
+        throw new ApiError(401, err?.response?.data?.error_description || "Google token exchange failed");
+    }
+
+    const profile = await getGoogleProfile({ credential: idToken });
+    const user = await findOrCreateSocialUser(profile);
+
+    const loginCode = crypto.randomBytes(32).toString("hex");
+    const codeHash = sha256Hex(loginCode);
+    const ttlMs = toPositiveNumber(process.env.OAUTH_LOGIN_CODE_TTL_MS, 5 * 60 * 1000);
+
+    await OAuthLoginCode.create({
+        user: user._id,
+        provider: "google",
+        codeHash,
+        expiresAt: new Date(Date.now() + ttlMs),
+        createdIp: String(req.ip || ""),
+        createdUserAgent: String(req.get("user-agent") || ""),
+    });
+
+    const returnUrl = new URL(String(ctx.returnTo));
+    returnUrl.searchParams.set("code", loginCode);
+    returnUrl.searchParams.set("provider", "google");
+
+    return res.redirect(returnUrl.toString());
+});
+
+const oauthFacebookCallback = asyncHandler(async (req, res) => {
+    const code = String(req.query?.code || "").trim();
+    const state = String(req.query?.state || "").trim();
+    const error = String(req.query?.error || "").trim();
+    const errorReason = String(req.query?.error_reason || "").trim();
+    const errorDescription = String(req.query?.error_description || "").trim();
+
+    const signed = req.cookies?.[OAUTH_STATE_COOKIE] || "";
+    const ctx = verifyOAuthCookie(signed);
+
+    res.clearCookie(OAUTH_STATE_COOKIE, options);
+
+    if (!ctx || ctx.provider !== "facebook") {
+        throw new ApiError(401, "OAuth session expired. Please try again.");
+    }
+
+    if (!state || state !== ctx.state) {
+        throw new ApiError(401, "OAuth state mismatch. Please try again.");
+    }
+
+    if (Date.now() - Number(ctx.createdAt || 0) > OAUTH_STATE_TTL_MS) {
+        throw new ApiError(401, "OAuth session expired. Please try again.");
+    }
+
+    if (error) {
+        throw new ApiError(401, `Facebook login failed: ${errorDescription || errorReason || error}`);
+    }
+
+    if (!code) {
+        throw new ApiError(400, "Facebook OAuth code is missing");
+    }
+
+    const apiPublicUrl = resolveApiPublicUrl(req);
+    const callbackUrl = `${apiPublicUrl}/api/v1/auth/oauth/facebook/callback`;
+
+    let accessToken = "";
+    try {
+        const { data } = await axios.get(`https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/oauth/access_token`, {
+            params: {
+                client_id: FACEBOOK_APP_ID,
+                client_secret: FACEBOOK_APP_SECRET,
+                redirect_uri: callbackUrl,
+                code,
+            },
+        });
+        accessToken = data?.access_token || "";
+    } catch (err) {
+        throw new ApiError(401, err?.response?.data?.error?.message || "Facebook token exchange failed");
+    }
+
+    const profile = await getFacebookProfile({ accessToken });
+    const user = await findOrCreateSocialUser(profile);
+
+    const loginCode = crypto.randomBytes(32).toString("hex");
+    const codeHash = sha256Hex(loginCode);
+    const ttlMs = toPositiveNumber(process.env.OAUTH_LOGIN_CODE_TTL_MS, 5 * 60 * 1000);
+
+    await OAuthLoginCode.create({
+        user: user._id,
+        provider: "facebook",
+        codeHash,
+        expiresAt: new Date(Date.now() + ttlMs),
+        createdIp: String(req.ip || ""),
+        createdUserAgent: String(req.get("user-agent") || ""),
+    });
+
+    const returnUrl = new URL(String(ctx.returnTo));
+    returnUrl.searchParams.set("code", loginCode);
+    returnUrl.searchParams.set("provider", "facebook");
+
+    return res.redirect(returnUrl.toString());
+});
+
+const completeOAuthLogin = asyncHandler(async (req, res) => {
+    const code = String(req.body?.code || "").trim();
+    if (!code) {
+        throw new ApiError(400, "Login code is required");
+    }
+
+    const codeHash = sha256Hex(code);
+
+    const loginCode = await OAuthLoginCode.findOne({
+        codeHash,
+        usedAt: null,
+        expiresAt: { $gt: new Date() },
+    });
+
+    if (!loginCode) {
+        throw new ApiError(401, "Login code expired. Please try again.");
+    }
+
+    loginCode.usedAt = new Date();
+    await loginCode.save({ validateBeforeSave: false });
+
+    const user = await User.findById(loginCode.user);
+    if (!user) {
+        throw new ApiError(401, "User not found");
+    }
+
+    return issueAuthResponse(res, user, `Logged in with ${loginCode.provider} successfully`);
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
@@ -2133,6 +2506,10 @@ export {
     loginUser,
     loginWithGoogle,
     loginWithFacebook,
+    startOAuthLogin,
+    oauthGoogleCallback,
+    oauthFacebookCallback,
+    completeOAuthLogin,
     logoutUser,
     renewTokens,
     forgotPassword,

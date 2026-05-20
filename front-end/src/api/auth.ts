@@ -115,6 +115,8 @@ export interface ForgotPasswordCompletePayload {
 export const ENDPOINTS = {
   google: "/auth/google",
   facebook: "/auth/facebook",
+  oauthStart: (provider: "google" | "facebook") => `/auth/oauth/${provider}/start`,
+  oauthComplete: "/auth/oauth/complete",
   login: "/auth/login",
   logout: "/auth/logout",
   signup: "/auth/register",
@@ -127,6 +129,19 @@ export const ENDPOINTS = {
   resetPassword: (token: string) => `/auth/reset-password/${encodeURIComponent(token)}`,
   socialLogin: (provider: "google" | "facebook") => `/auth/${provider}`,
 };
+
+export interface OAuthCompletePayload {
+  code: string;
+}
+
+export async function oauthComplete(payload: OAuthCompletePayload, options: RequestInit = {}): Promise<AuthResponse> {
+  return apiFetch<AuthResponse>(ENDPOINTS.oauthComplete, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    credentials: "include",
+    ...options,
+  });
+}
 
 
 

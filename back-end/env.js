@@ -16,6 +16,7 @@ const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET
 const REFRESH_TOKEN_EXPIRY = process.env.REFRESH_TOKEN_EXPIRY
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
 const FACEBOOK_APP_ID = process.env.FACEBOOK_APP_ID
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET
 const FACEBOOK_GRAPH_VERSION = process.env.FACEBOOK_GRAPH_VERSION || "v25.0"
@@ -29,6 +30,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY
 const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER
 const EMAIL_FROM = process.env.EMAIL_FROM || (process.env.SMTP_USER ? `BattleArena <${process.env.SMTP_USER}>` : "BattleArena <no-reply@localhost>")
 const APP_PUBLIC_URL = process.env.APP_PUBLIC_URL || process.env.CORS_ORIGIN || "http://localhost:8080"
+const API_PUBLIC_URL = process.env.API_PUBLIC_URL || ""
 const SMTP_HOST = process.env.SMTP_HOST
 const SMTP_PORT = process.env.SMTP_PORT
 const SMTP_SECURE = process.env.SMTP_SECURE
@@ -48,6 +50,7 @@ export {
     REFRESH_TOKEN_EXPIRY,
     RAPIDAPI_KEY,
     GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
     FACEBOOK_APP_ID,
     FACEBOOK_APP_SECRET,
     FACEBOOK_GRAPH_VERSION,
@@ -61,6 +64,7 @@ export {
     EMAIL_PROVIDER,
     EMAIL_FROM,
     APP_PUBLIC_URL,
+    API_PUBLIC_URL,
     SMTP_HOST,
     SMTP_PORT,
     SMTP_SECURE,

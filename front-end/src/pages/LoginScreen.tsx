@@ -20,19 +20,18 @@ import {
 } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
 import heroBg from "@/assets/hero-bg.jpg";
-import { facebook, google, login, signup, AuthResponse, FacebookLoginPayload, GoogleLoginPayload } from "@/api/auth";
+import { login, signup, AuthResponse, ENDPOINTS } from "@/api/auth";
 import { toast } from "@/components/ui/sonner";
 import { setAuthTokens } from "@/lib/auth-storage";
 import ButtonLoadingScreen from "@/components/ui/buttonLoadingScreen";
 import { getErrorToast } from "@/lib/page-utils";
-import { useGoogleLogin } from "@react-oauth/google";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Capacitor } from "@capacitor/core";
+import { Browser } from "@capacitor/browser";
+import { resolveAbsoluteApiUrl } from "@/lib/oauth";
 
-const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID;
-const FACEBOOK_GRAPH_VERSION = import.meta.env.VITE_FACEBOOK_GRAPH_VERSION || "v25.0";
 const PASSWORD_MIN_LENGTH = 6;
-let facebookSdkPromise: Promise<void> | null = null;
-let facebookSdkInitialized = false;
+const DEEPLINK_SCHEME = String(import.meta.env.VITE_APP_DEEPLINK_SCHEME || "battle4arena").trim() || "battle4arena";
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
@@ -98,116 +97,7 @@ const AuthInput = ({
   </label>
 );
 
-type FacebookLoginResponse = {
-  authResponse?: FacebookLoginPayload;
-  status?: string;
-};
-
-const initFacebookSdk = () => {
-  if (!window.FB) {
-    throw new Error("Facebook login is not ready yet. Try again in a moment.");
-  }
-
-  if (facebookSdkInitialized) {
-    return;
-  }
-
-  window.FB.init({
-    appId: FACEBOOK_APP_ID,
-    cookie: true,
-    xfbml: false,
-    version: FACEBOOK_GRAPH_VERSION,
-  });
-  facebookSdkInitialized = true;
-};
-
-const loadFacebookSdk = () => {
-  if (facebookSdkPromise) {
-    return facebookSdkPromise;
-  }
-
-  facebookSdkPromise = new Promise<void>((resolve, reject) => {
-    if (!FACEBOOK_APP_ID) {
-      reject(new Error("Facebook app id is missing. Add VITE_FACEBOOK_APP_ID to front-end/.env."));
-      return;
-    }
-
-    let settled = false;
-    const timeoutRef: { current?: number } = {};
-
-    const finish = () => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (timeoutRef.current) {
-        window.clearTimeout(timeoutRef.current);
-      }
-
-      try {
-        initFacebookSdk();
-        resolve();
-      } catch (error) {
-        facebookSdkPromise = null;
-        reject(error);
-      }
-    };
-
-    const fail = (error: Error) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      if (timeoutRef.current) {
-        window.clearTimeout(timeoutRef.current);
-      }
-      facebookSdkPromise = null;
-      reject(error);
-    };
-
-    if (window.FB) {
-      finish();
-      return;
-    }
-
-    window.fbAsyncInit = finish;
-    timeoutRef.current = window.setTimeout(
-      () => fail(new Error("Facebook login took too long to load. Please refresh and try again.")),
-      15000,
-    );
-
-    const existingScript = document.getElementById("facebook-jssdk");
-    if (existingScript) {
-      existingScript.addEventListener("load", finish, { once: true });
-      existingScript.addEventListener("error", () => fail(new Error("Could not load Facebook login.")), { once: true });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.id = "facebook-jssdk";
-    script.src = "https://connect.facebook.net/en_US/sdk.js";
-    script.async = true;
-    script.defer = true;
-    script.crossOrigin = "anonymous";
-    script.onerror = () => fail(new Error("Could not load Facebook login."));
-    document.body.appendChild(script);
-  });
-
-  return facebookSdkPromise;
-};
-
-const requestFacebookLogin = () =>
-  new Promise<FacebookLoginResponse>((resolve, reject) => {
-    if (!window.FB?.login) {
-      reject(new Error("Facebook login is not ready yet. Try again in a moment."));
-      return;
-    }
-
-    window.FB.login(
-      (response) => resolve(response),
-      { scope: "public_profile,email", return_scopes: true },
-    );
-  });
+// Redirect-based auth is used for both Google and Facebook (Web + APK/WebView compatible).
 
 const LoginScreen = () => {
   const [isSignup, setIsSignup] = useState(false);
@@ -265,64 +155,27 @@ const LoginScreen = () => {
     navigate(needsOnboarding ? "/onboarding" : needsPasswordSetup ? "/change-password" : "/");
   };
 
-  const submitGoogleLogin = async (tokenResponse: GoogleLoginPayload) => {
-    try {
-      const res = await google(tokenResponse);
-      completeLogin(res);
-    } catch (err) {
-      const errorToast = getErrorToast(err, { action: "Google login", fallback: "Google login failed." });
-      toast.error(errorToast.title, { description: errorToast.description });
-    } finally {
-      if (mountedRef.current) setSocialLoading(null);
-      socialSubmittingRef.current = false;
-    }
-  };
-
-  const handleGoogleLogin = useGoogleLogin({
-    onSuccess: (tokenResponse) => {
-      void submitGoogleLogin(tokenResponse);
-    },
-    onError: () => {
-      if (mountedRef.current) setSocialLoading(null);
-      socialSubmittingRef.current = false;
-      toast.error("Google login failed.");
-    },
-    scope: "openid email profile",
-  });
-
-  const startGoogleLogin = () => {
+  const startRedirectSocialLogin = async (provider: "google" | "facebook") => {
     if (socialSubmittingRef.current || loading || Boolean(socialLoading)) return;
     socialSubmittingRef.current = true;
-    setSocialLoading("google");
-    handleGoogleLogin();
-  };
+    setSocialLoading(provider);
 
-  const handleFacebookLogin = async () => {
-    if (socialSubmittingRef.current || loading || Boolean(socialLoading)) return;
     try {
-      socialSubmittingRef.current = true;
-      const isLocalDev = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-      if (window.location.protocol !== "https:" && !isLocalDev) {
-        toast.error("Facebook login needs HTTPS", {
-          description: "Facebook blocks FB.login on plain HTTP. Use the deployed HTTPS site or an HTTPS dev tunnel.",
-        });
-        return;
-      }
-      if (mountedRef.current) setSocialLoading("facebook");
-      await loadFacebookSdk();
-      const response = await requestFacebookLogin();
+      const isNative = Capacitor.isNativePlatform();
+      const returnTo = isNative ? `${DEEPLINK_SCHEME}://oauth/callback` : `${window.location.origin}/oauth/callback`;
 
-      if (!response.authResponse?.accessToken) {
-        toast.error("Facebook login was cancelled.");
-        return;
-      }
+      const startPath = `${ENDPOINTS.oauthStart(provider)}?returnTo=${encodeURIComponent(returnTo)}`;
+      const startUrl = resolveAbsoluteApiUrl(startPath);
 
-      const res = await facebook(response.authResponse);
-      completeLogin(res);
+      if (isNative) {
+        await Browser.open({ url: startUrl });
+        // OAuthCallbackScreen will finish the login when the app is reopened via deep link.
+      } else {
+        window.location.href = startUrl;
+      }
     } catch (err) {
-      const errorToast = getErrorToast(err, { action: "Facebook login", fallback: "Facebook login failed." });
+      const errorToast = getErrorToast(err, { action: `${provider} login`, fallback: `${provider} login failed.` });
       toast.error(errorToast.title, { description: errorToast.description });
-    } finally {
       if (mountedRef.current) setSocialLoading(null);
       socialSubmittingRef.current = false;
     }
@@ -743,7 +596,7 @@ const LoginScreen = () => {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <motion.button
                     whileTap={{ scale: 0.98 }}
-                    onClick={startGoogleLogin}
+                    onClick={() => void startRedirectSocialLogin("google")}
                     disabled={loading || Boolean(socialLoading)}
                     type="button"
                     className="arena-focus flex min-h-11 items-center justify-center gap-2 rounded-lg border border-glass-border bg-background/55 px-3 text-sm font-heading font-semibold text-foreground transition-colors hover:border-primary/45 hover:bg-primary/10 disabled:opacity-50"
@@ -770,7 +623,7 @@ const LoginScreen = () => {
                   </motion.button>
                   <motion.button
                     whileTap={{ scale: 0.98 }}
-                    onClick={handleFacebookLogin}
+                    onClick={() => void startRedirectSocialLogin("facebook")}
                     disabled={loading || Boolean(socialLoading)}
                     type="button"
                     className="arena-focus flex min-h-11 items-center justify-center gap-2 rounded-lg border border-glass-border bg-background/55 px-3 text-sm font-heading font-semibold text-foreground transition-colors hover:border-secondary/45 hover:bg-secondary/10 disabled:opacity-50"
