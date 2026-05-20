@@ -7,7 +7,8 @@
     "dev": "nodemon server.js",
     "email:check": "node scripts/check-email-providers.js",
     "worker:email": "node email-worker.js",
-    "test": "node --test"
+    "test": "node --test",
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",

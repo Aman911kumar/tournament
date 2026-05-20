@@ -8,6 +8,8 @@ import {
 } from "../../env.js";
 import { User } from "../models/user.model.js";
 
+let indexesEnsured = false;
+
 const ensureUserPhoneIndex = async () => {
     try {
         const indexes = await User.collection.indexes();
@@ -51,19 +53,55 @@ const ensureUserPhoneIndex = async () => {
 
 const connect_db = async () => {
     try {
+        if (mongoose.connection.readyState === 1) {
+            if (!indexesEnsured) {
+                await ensureUserPhoneIndex();
+                indexesEnsured = true;
+            }
+            return mongoose.connection;
+        }
+
+        // Serverless-safe connection caching (Vercel): reuse the same in-flight promise/connection per runtime.
+        const globalKey = "__b4a_mongooseConnectPromise__";
+        const existingPromise = globalThis[globalKey];
+        if (existingPromise) {
+            const connection = await existingPromise;
+            if (!indexesEnsured) {
+                await ensureUserPhoneIndex();
+                indexesEnsured = true;
+            }
+            return connection?.connection || mongoose.connection;
+        }
+
         mongoose.set("strictQuery", true);
 
-        const connection = await mongoose.connect(MONGODB_URI, {
+        const connectPromise = mongoose.connect(MONGODB_URI, {
             autoIndex: process.env.NODE_ENV !== "production",
             maxPoolSize: Number(MONGODB_MAX_POOL_SIZE || 50),
             minPoolSize: Number(MONGODB_MIN_POOL_SIZE || 0),
             maxIdleTimeMS: Number(MONGODB_MAX_IDLE_TIME_MS || 60000),
             waitQueueTimeoutMS: Number(MONGODB_WAIT_QUEUE_TIMEOUT_MS || 5000),
             serverSelectionTimeoutMS: 10000,
-        })
-        await ensureUserPhoneIndex();
-        console.log(`\nDatabase connected successfully to :${connection.connection.host}`)
+        });
+
+        globalThis[globalKey] = connectPromise;
+
+        const connection = await connectPromise;
+
+        if (!indexesEnsured) {
+            await ensureUserPhoneIndex();
+            indexesEnsured = true;
+        }
+
+        console.log(`\nDatabase connected successfully to :${connection.connection.host}`);
+        return connection;
     } catch (error) {
+        // Clear cached promise on failure so next invocation can retry.
+        try {
+            delete globalThis["__b4a_mongooseConnectPromise__"];
+        } catch {
+            // ignore
+        }
         throw error
     }
 }
