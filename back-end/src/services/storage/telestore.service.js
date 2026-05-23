@@ -85,12 +85,11 @@ export const buildChatFolderPath = ({ tournament }) => {
     const gameName = sanitizeFolderName(tournament?.game || "General");
     const title = sanitizeFolderName(tournament?.title || "Tournament");
     const startLabel = tournament?.startAt ? datePart(tournament.startAt) : "unscheduled";
+    const tournamentFolderName = sanitizeFolderName(`${gameName} - ${title} - ${startLabel} - ${shortId}`);
 
     return [
         getConfig().rootFolderName,
-        gameName,
-        `${title} - ${startLabel} - ${shortId}`,
-        datePart(),
+        tournamentFolderName,
     ].map((part) => sanitizeFolderName(part));
 };
 
