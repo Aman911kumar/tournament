@@ -1,5 +1,5 @@
 import { io, Socket } from "socket.io-client";
-import { API_BASE_URL } from "@/api/client";
+import { getRealtimeServerUrl, warmRealtimeBackend } from "@/api/client";
 import { getAccessToken } from "@/lib/auth-storage";
 import type { AdminMonitoringData } from "@/api/admin";
 import type { NotificationItem } from "@/api/notifications";
@@ -19,19 +19,26 @@ type NotificationEvents = {
 
 let socket: Socket<NotificationEvents> | null = null;
 
-const getSocketUrl = () => API_BASE_URL.replace(/\/api\/v\d+\/?$/, "");
-
 export const getNotificationSocket = (): Socket<NotificationEvents> | null => {
   const token = getAccessToken();
   if (!token) return null;
+  void warmRealtimeBackend("notification-socket");
 
-  if (socket?.connected || socket?.active) return socket;
+  if (socket?.connected || socket?.active) {
+    socket.auth = { token };
+    return socket;
+  }
 
-  socket = io(getSocketUrl(), {
+  socket = io(getRealtimeServerUrl(), {
     auth: { token },
     transports: ["websocket", "polling"],
     withCredentials: true,
     autoConnect: true,
+    multiplex: true,
+    timeout: 8_000,
+    reconnectionDelay: 700,
+    reconnectionDelayMax: 4_000,
+    randomizationFactor: 0.35,
   });
 
   return socket;

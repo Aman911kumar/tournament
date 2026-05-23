@@ -12,6 +12,7 @@ import securityHeaders from "./middlewares/securityHeaders.middleware.js";
 import requestMetrics from "./middlewares/requestMetrics.middleware.js";
 import sanitizeRequest from "./middlewares/sanitizeRequest.middleware.js";
 import ApiError from "./utils/ApiError.js";
+import { getRuntimeConfig } from "./utils/runtime.js";
 
 export const getAllowedOrigins = () => {
   const configuredOrigins = CORS_ORIGIN
@@ -22,8 +23,10 @@ export const getAllowedOrigins = () => {
 
 export const createApp = () => {
   const uploadPath = path.resolve(process.env.UPLOAD_DIR || "uploads");
+  const runtime = getRuntimeConfig();
 
   const app = express();
+  app.locals.runtime = runtime;
 
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
@@ -67,6 +70,8 @@ export const createApp = () => {
       `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     req.requestId = requestId;
     res.setHeader("x-request-id", requestId);
+    res.setHeader("x-b4a-platform", runtime.platform);
+    res.setHeader("x-b4a-server-role", runtime.role);
     next();
   });
 
@@ -89,7 +94,13 @@ export const createApp = () => {
   app.use("/api/v1", globalApiLimiter, routes);
 
   app.get("/", (req, res) => {
-    res.json("server is live");
+    res.json({
+      ok: true,
+      message: "server is live",
+      platform: runtime.platform,
+      role: runtime.role,
+      realtimeEnabled: runtime.realtimeEnabled,
+    });
   });
 
   app.use((req, res, next) => {
@@ -103,4 +114,3 @@ export const createApp = () => {
 };
 
 export default createApp;
-

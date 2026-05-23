@@ -185,3 +185,31 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+@media (max-width: 640px) {
+  body {
+    background:
+      linear-gradient(180deg, hsl(228 32% 7%) 0%, hsl(226 34% 5%) 100%),
+      hsl(var(--background));
+  }
+
+  .arena-shell {
+    background:
+      linear-gradient(180deg, hsl(var(--primary) / 0.045), transparent 18rem),
+      hsl(var(--background));
+  }
+
+  .backdrop-blur-xl,
+  .backdrop-blur-md,
+  .backdrop-blur-sm {
+    --tw-backdrop-blur: blur(8px);
+  }
+
+  .neon-glow-purple,
+  .neon-glow-blue,
+  .neon-glow-green {
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.12),
+      inset 0 1px 0 hsl(var(--foreground) / 0.04);
+  }
+}

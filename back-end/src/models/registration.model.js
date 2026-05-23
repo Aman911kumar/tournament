@@ -78,8 +78,12 @@ const RegistrationSchema = new mongoose.Schema({
 RegistrationSchema.index({ tournament: 1, user: 1 });
 RegistrationSchema.index({ tournament: 1, status: 1 });
 RegistrationSchema.index({ tournament: 1, slotNumber: 1 });
+RegistrationSchema.index({ tournament: 1, status: 1, user: 1 });
+RegistrationSchema.index({ tournament: 1, status: 1, team: 1 });
 RegistrationSchema.index({ user: 1, status: 1, createdAt: -1 });
+RegistrationSchema.index({ user: 1, createdAt: -1 });
 RegistrationSchema.index({ team: 1, status: 1 });
+RegistrationSchema.index({ team: 1, createdAt: -1 });
 
 // Validate based on tournament type
 RegistrationSchema.pre("validate", function (next) {

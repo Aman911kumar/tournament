@@ -14,6 +14,7 @@ import healthRoutes from "./health.routes.js";
 import monitoringRoutes from "./monitoring.routes.js";
 import moderationRoutes from "./moderation.routes.js";
 import chatRoutes from "./chat.routes.js";
+import emailRoutes from "./email.routes.js";
 
 const router = express.Router();
 
@@ -22,6 +23,9 @@ router.use("/health", healthRoutes);
 
 // Frontend monitoring ingest. Admin-only reads live under /admin/monitoring.
 router.use("/monitoring", monitoringRoutes);
+
+// Internal cross-runtime email dispatch. Only the fast/Vercel role is allowed to send.
+router.use("/email", emailRoutes);
 
 // Auth routes
 router.use("/auth", authRoutes);

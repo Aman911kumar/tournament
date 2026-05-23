@@ -1,4 +1,5 @@
 import ApiError from "../../utils/ApiError.js";
+import { getRuntimeConfig, SERVER_ROLES } from "../../utils/runtime.js";
 import { EMAIL_PROVIDERS, EMAIL_TEMPLATE_TYPES } from "./email.constants.js";
 import { enqueueEmailJob, isEmailQueueEnabled } from "./email.queue.js";
 import {
@@ -95,17 +96,108 @@ const checkProviderHealth = async (provider) => {
   return getCachedHealth(provider.name);
 };
 
-const shouldSendInline = () => parseBoolean(process.env.EMAIL_SEND_INLINE, false);
-
-const shouldFireAndForget = () =>
-  parseBoolean(process.env.EMAIL_FIRE_AND_FORGET, true) && !isEmailQueueEnabled() && !shouldSendInline();
-
 const retryConfig = () => ({
   attempts: clampInt(process.env.EMAIL_MAX_RETRIES, 1, 20, 4),
   baseDelayMs: Number(process.env.EMAIL_RETRY_DELAY_MS || process.env.EMAIL_RETRY_DELAY || 1500) || 1500,
 });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const canSendEmailLocally = () => {
+  const runtime = getRuntimeConfig();
+  if (parseBoolean(process.env.EMAIL_ALLOW_LOCAL_SEND, false)) return true;
+  if (runtime.isLocal) return true;
+  if (runtime.isRender || runtime.role === SERVER_ROLES.REALTIME) return false;
+  return runtime.isVercel || runtime.role === SERVER_ROLES.FAST || runtime.role === SERVER_ROLES.HYBRID;
+};
+
+const shouldSendInline = () => {
+  const runtime = getRuntimeConfig();
+  if ((runtime.isServerless || runtime.role === SERVER_ROLES.FAST) && !parseBoolean(process.env.EMAIL_FORCE_QUEUE, false)) {
+    return true;
+  }
+
+  const configured = process.env.EMAIL_SEND_INLINE;
+  if (cleanEnv(configured)) return parseBoolean(configured, false);
+  return false;
+};
+
+const shouldFireAndForget = () => {
+  const runtime = getRuntimeConfig();
+  if (runtime.isServerless || runtime.role === SERVER_ROLES.FAST) return false;
+  return parseBoolean(process.env.EMAIL_FIRE_AND_FORGET, true) && !isEmailQueueEnabled() && !shouldSendInline();
+};
+
+const getFastEmailDispatchUrl = () => {
+  const exact = cleanEnv(process.env.EMAIL_INTERNAL_SEND_URL || process.env.EMAIL_DISPATCH_URL || "");
+  if (exact) return exact;
+
+  const base = cleanEnv(
+    process.env.EMAIL_FAST_API_URL ||
+    process.env.FAST_API_PUBLIC_URL ||
+    process.env.API_PUBLIC_URL ||
+    ""
+  ).replace(/\/$/, "");
+
+  if (!base) return "";
+  return `${base.replace(/\/api\/v\d+\/?$/, "")}/api/v1/email/internal/send`;
+};
+
+const shouldDelegateEmail = () => {
+  if (canSendEmailLocally()) return false;
+  return parseBoolean(process.env.EMAIL_DELEGATE_TO_FAST_API, true);
+};
+
+const delegateEmailToFastApi = async (job) => {
+  const url = getFastEmailDispatchUrl();
+  const secret = cleanEnv(process.env.INTERNAL_EMAIL_SECRET || process.env.EMAIL_INTERNAL_SECRET || "");
+
+  if (!url || !secret) {
+    throw new ApiError(503, "Email dispatch is disabled on this backend role. Configure EMAIL_FAST_API_URL and INTERNAL_EMAIL_SECRET to delegate through Vercel.");
+  }
+
+  const controller = new AbortController();
+  const timeoutMs = clampInt(process.env.EMAIL_DELEGATE_TIMEOUT_MS, 3_000, 60_000, 15_000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-email-secret": secret,
+        ...(job.requestId ? { "x-request-id": job.requestId } : {}),
+      },
+      body: JSON.stringify({ email: job }),
+    });
+
+    const text = await response.text();
+    const json = text ? JSON.parse(text) : null;
+
+    if (!response.ok) {
+      throw new ApiError(response.status, json?.message || "Fast email dispatch failed", json?.errors || []);
+    }
+
+    return {
+      delegated: true,
+      idempotencyKey: job.idempotencyKey,
+      provider: json?.data?.provider,
+      messageId: json?.data?.messageId,
+      fastRequestId: json?.requestId || json?.data?.requestId,
+    };
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new ApiError(504, "Fast email dispatch timed out");
+    }
+    if (error instanceof SyntaxError) {
+      throw new ApiError(502, "Fast email dispatch returned an invalid response");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+};
 
 const sendWithRetriesInline = async (job) => {
   const { attempts, baseDelayMs } = retryConfig();
@@ -129,6 +221,10 @@ const sendWithRetriesInline = async (job) => {
 };
 
 export const sendEmailDirect = async (request) => {
+  if (!canSendEmailLocally()) {
+    throw new ApiError(409, "Email dispatch is disabled on this backend role. Use the fast API email dispatcher.");
+  }
+
   assertValidRecipient(request.to);
   if (!request.subject || !request.html) {
     throw new ApiError(400, "Email subject and html are required");
@@ -204,6 +300,12 @@ export const enqueueEmail = async (request) => {
     idempotencyKey,
     queuedAt: new Date().toISOString(),
   };
+
+  // Realtime/Render deployments must not touch SMTP. They delegate email work to
+  // the fast Vercel API, which owns auth/email-capable workflows.
+  if (shouldDelegateEmail()) {
+    return delegateEmailToFastApi(job);
+  }
 
   // Queue mode (preferred in production).
   if (isEmailQueueEnabled() && !shouldSendInline()) {

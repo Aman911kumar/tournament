@@ -13,6 +13,7 @@ const ADMIN_SOCKET_ROLES = ["super_admin", "admin", "moderator", "support", "fin
 const connectionAttempts = new Map();
 const SOCKET_WINDOW_MS = Number(process.env.SOCKET_RATE_LIMIT_WINDOW_MS || 60_000);
 const SOCKET_MAX_CONNECTIONS = Number(process.env.SOCKET_RATE_LIMIT_MAX || 60);
+let cleanupTimer = null;
 
 const cleanupConnectionAttempts = () => {
     const now = Date.now();
@@ -20,9 +21,6 @@ const cleanupConnectionAttempts = () => {
         if (now - value.startedAt > SOCKET_WINDOW_MS) connectionAttempts.delete(key);
     }
 };
-
-const cleanupTimer = setInterval(cleanupConnectionAttempts, SOCKET_WINDOW_MS);
-cleanupTimer.unref?.();
 
 const getTokenFromSocket = (socket) => {
     const authToken = socket.handshake.auth?.token;
@@ -60,6 +58,11 @@ const setupRedisAdapter = async () => {
 };
 
 export const initSocket = (server, allowedOrigins = []) => {
+    if (!cleanupTimer) {
+        cleanupTimer = setInterval(cleanupConnectionAttempts, SOCKET_WINDOW_MS);
+        cleanupTimer.unref?.();
+    }
+
     io = new Server(server, {
         cors: {
             origin: (origin, callback) => {

@@ -151,6 +151,7 @@ const chatMessageSchema = new mongoose.Schema(
 
 chatMessageSchema.index({ tournament: 1, createdAt: -1, _id: -1 });
 chatMessageSchema.index({ tournament: 1, status: 1, createdAt: -1 });
+chatMessageSchema.index({ tournament: 1, sender: 1, type: 1, createdAt: -1 });
 chatMessageSchema.index({ tournament: 1, pinnedAt: -1 });
 chatMessageSchema.index({ mentions: 1, createdAt: -1 });
 

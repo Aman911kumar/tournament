@@ -4,7 +4,8 @@
 import { clearAuthTokens, getAccessToken, getRefreshToken, hasAuthSession, setAuthTokens } from "@/lib/auth-storage";
 
 const DEFAULT_API_BASE_URL = "/api/v1";
-const PRODUCTION_API_FALLBACK = "https://tournamentbackend-vulj.onrender.com/api/v1";
+const FAST_PRODUCTION_API_FALLBACK = "https://api.battle4arena.fun/api/v1";
+const REALTIME_PRODUCTION_API_FALLBACK = "https://realtime.battle4arena.fun/api/v1";
 
 const isPrivateOrLocalHost = (hostname: string) => {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
@@ -15,11 +16,13 @@ const isPrivateOrLocalHost = (hostname: string) => {
   return false;
 };
 
-const resolveApiBaseUrl = () => {
-  const configured = String(import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).trim();
+const normalizeBaseUrl = (value: string) => value.replace(/\/$/, "");
+
+const resolveApiBaseUrl = (configuredValue: unknown, productionFallback: string) => {
+  const configured = String(configuredValue || DEFAULT_API_BASE_URL).trim();
 
   if (typeof window === "undefined" || !configured.startsWith("http")) {
-    return configured.replace(/\/$/, "");
+    return normalizeBaseUrl(configured);
   }
 
   try {
@@ -28,17 +31,46 @@ const resolveApiBaseUrl = () => {
     const apiIsPrivate = isPrivateOrLocalHost(apiUrl.hostname);
 
     if (appIsPublic && apiIsPrivate) {
-      return String(import.meta.env.VITE_PRODUCTION_API_BASE_URL || PRODUCTION_API_FALLBACK).replace(/\/$/, "");
+      return normalizeBaseUrl(String(productionFallback));
     }
   } catch {
     return DEFAULT_API_BASE_URL;
   }
 
-  return configured.replace(/\/$/, "");
+  return normalizeBaseUrl(configured);
 };
 
-export const API_BASE_URL = resolveApiBaseUrl();
+export type ApiTarget = "fast" | "realtime";
+
+export const FAST_API_BASE_URL = resolveApiBaseUrl(
+  import.meta.env.VITE_FAST_API_BASE_URL || import.meta.env.VITE_API_BASE_URL,
+  String(import.meta.env.VITE_PRODUCTION_API_BASE_URL || FAST_PRODUCTION_API_FALLBACK),
+);
+
+const configuredRealtimeApi =
+  import.meta.env.VITE_REALTIME_API_BASE_URL ||
+  import.meta.env.VITE_SOCKET_API_BASE_URL ||
+  (import.meta.env.DEV ? import.meta.env.VITE_API_BASE_URL : REALTIME_PRODUCTION_API_FALLBACK);
+
+export const REALTIME_API_BASE_URL = resolveApiBaseUrl(
+  configuredRealtimeApi,
+  String(import.meta.env.VITE_PRODUCTION_REALTIME_API_BASE_URL || REALTIME_PRODUCTION_API_FALLBACK),
+);
+
+export const API_BASE_URL = FAST_API_BASE_URL;
 const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || (import.meta.env.PROD ? 45000 : 20000));
+const API_SLOW_REQUEST_MS = Number(import.meta.env.VITE_API_SLOW_REQUEST_MS || (import.meta.env.PROD ? 2500 : 1000));
+const API_PERF_LOGS =
+  String(import.meta.env.VITE_API_PERF_LOGS || "").toLowerCase() === "true" || import.meta.env.DEV;
+const REALTIME_WAKEUP_COOLDOWN_MS = Number(import.meta.env.VITE_REALTIME_WAKEUP_COOLDOWN_MS || 120_000);
+const inFlightGetRequests = new Map<string, Promise<unknown>>();
+let lastRealtimeWarmupAt = 0;
+let realtimeWarmupPromise: Promise<boolean> | null = null;
+
+export type ApiFetchOptions = RequestInit & {
+  apiTarget?: ApiTarget;
+  skipRealtimeWarmup?: boolean;
+};
 
 export type ApiErrorDetail = Record<string, unknown>;
 
@@ -99,6 +131,75 @@ const publicAuthPaths = [
   "/auth/forgot-password",
   "/auth/reset-password",
 ];
+
+const realtimePathPatterns = [
+  /^\/chat(?:\/|$)/,
+  /^\/notifications(?:\/|$)/,
+  /^\/moderation(?:\/|$)/,
+  /^\/admin(?:\/|$)/,
+  /^\/tournaments\/[^/]+\/(?:notify-room|distribute-prizes)(?:\/|$)/,
+];
+
+const normalizeApiPath = (path: string) => (path.startsWith("/") ? path : `/${path}`);
+
+export const inferApiTarget = (path: string): ApiTarget => {
+  if (path.startsWith("http")) return "fast";
+  const normalized = normalizeApiPath(path).split("?")[0];
+  return realtimePathPatterns.some((pattern) => pattern.test(normalized)) ? "realtime" : "fast";
+};
+
+export const getApiBaseUrlForPath = (path: string, target?: ApiTarget) => {
+  if (path.startsWith("http")) return "";
+  return (target || inferApiTarget(path)) === "realtime" ? REALTIME_API_BASE_URL : FAST_API_BASE_URL;
+};
+
+export const getRealtimeServerUrl = () => REALTIME_API_BASE_URL.replace(/\/api\/v\d+\/?$/, "");
+
+export const warmRealtimeBackend = (reason = "app"): Promise<boolean> => {
+  if (typeof window === "undefined" || REALTIME_API_BASE_URL === FAST_API_BASE_URL) {
+    return Promise.resolve(false);
+  }
+
+  const now = Date.now();
+  if (realtimeWarmupPromise) return realtimeWarmupPromise;
+  if (now - lastRealtimeWarmupAt < REALTIME_WAKEUP_COOLDOWN_MS) return Promise.resolve(false);
+
+  lastRealtimeWarmupAt = now;
+  realtimeWarmupPromise = (async () => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8_000);
+    try {
+      const url = `${REALTIME_API_BASE_URL}/health/warmup?reason=${encodeURIComponent(reason)}`;
+      const response = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+        signal: controller.signal,
+        headers: { "x-b4a-warmup": reason },
+      });
+      return response.ok;
+    } catch {
+      return false;
+    } finally {
+      window.clearTimeout(timeout);
+      realtimeWarmupPromise = null;
+    }
+  })();
+
+  return realtimeWarmupPromise;
+};
+
+export const scheduleRealtimeWarmup = (reason = "app") => {
+  if (typeof window === "undefined") return;
+  const run = () => {
+    void warmRealtimeBackend(reason);
+  };
+
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 1500 });
+  } else {
+    window.setTimeout(run, 750);
+  }
+};
 
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -200,23 +301,42 @@ const throwApiError = async (res: Response, path: string, method: string, fallba
   });
 };
 
-export async function apiFetch<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const url = path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
+const getDedupeKey = (url: string, method: string, options: RequestInit) => {
+  if (method.toUpperCase() !== "GET") return "";
+  if (options.body || options.signal) return "";
+  return `${method.toUpperCase()} ${url} ${getAccessToken() || "guest"}`;
+};
 
-  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
-  const method = options.method ?? "GET";
+const reportApiTiming = (path: string, method: string, durationMs: number, status?: number, deduped = false) => {
+  if (!API_PERF_LOGS && durationMs < API_SLOW_REQUEST_MS) return;
+  const level = durationMs >= API_SLOW_REQUEST_MS ? "warn" : "debug";
+  const message = `[api] ${method.toUpperCase()} ${path} ${Math.round(durationMs)}ms${deduped ? " deduped" : ""}`;
+  console[level](message, { status, source: "apiFetch" });
+};
+
+async function apiFetchInternal<T>(
+  path: string,
+  options: ApiFetchOptions = {}
+): Promise<T> {
+  const { apiTarget, skipRealtimeWarmup, ...requestOptions } = options;
+  const target = apiTarget || inferApiTarget(path);
+  const url = path.startsWith("http") ? path : `${getApiBaseUrlForPath(path, target)}${path}`;
+
+  if (target === "realtime" && !skipRealtimeWarmup) {
+    void warmRealtimeBackend(`api:${normalizeApiPath(path).split("?")[0]}`);
+  }
+
+  const isFormData = typeof FormData !== "undefined" && requestOptions.body instanceof FormData;
+  const method = requestOptions.method ?? "GET";
 
   const sendRequest = async () => {
-    const timeout = withTimeoutSignal(options.signal);
+    const timeout = withTimeoutSignal(requestOptions.signal);
     try {
       return await fetch(url, {
-      credentials: "include",
-      ...options,
-      signal: timeout.signal,
-      headers: buildHeaders(options, getAccessToken(), isFormData),
+        credentials: "include",
+        ...requestOptions,
+        signal: timeout.signal,
+        headers: buildHeaders(requestOptions, getAccessToken(), isFormData),
       });
     } finally {
       timeout.cleanup();
@@ -224,6 +344,7 @@ export async function apiFetch<T>(
   };
 
   let res: Response;
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
 
   try {
     res = await sendRequest();
@@ -260,7 +381,9 @@ export async function apiFetch<T>(
             await throwApiError(res, path, method, `Request failed: ${res.status} ${res.statusText}`);
           }
           if (res.status === 204) return undefined as T;
-          return (await parseJsonResponse(res)) as T;
+          const parsed = (await parseJsonResponse(res)) as T;
+          reportApiTiming(path, method, (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt, res.status);
+          return parsed;
         }
       }
 
@@ -280,5 +403,39 @@ export async function apiFetch<T>(
   // 204 No Content
   if (res.status === 204) return undefined as T;
 
-  return (await parseJsonResponse(res)) as T;
+  const parsed = (await parseJsonResponse(res)) as T;
+  reportApiTiming(path, method, (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt, res.status);
+  return parsed;
 }
+
+export async function apiFetch<T>(
+  path: string,
+  options: ApiFetchOptions = {}
+): Promise<T> {
+  const target = options.apiTarget || inferApiTarget(path);
+  const url = path.startsWith("http") ? path : `${getApiBaseUrlForPath(path, target)}${path}`;
+  const method = options.method ?? "GET";
+  const dedupeKey = getDedupeKey(url, method, options);
+
+  if (!dedupeKey) return apiFetchInternal<T>(path, options);
+
+  const existing = inFlightGetRequests.get(dedupeKey);
+  if (existing) {
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const result = await existing as T;
+    reportApiTiming(path, method, (typeof performance !== "undefined" ? performance.now() : Date.now()) - startedAt, undefined, true);
+    return result;
+  }
+
+  const request = apiFetchInternal<T>(path, options).finally(() => {
+    inFlightGetRequests.delete(dedupeKey);
+  });
+  inFlightGetRequests.set(dedupeKey, request);
+  return request;
+}
+
+export const fastApiFetch = <T>(path: string, options: ApiFetchOptions = {}) =>
+  apiFetch<T>(path, { ...options, apiTarget: "fast" });
+
+export const realtimeApiFetch = <T>(path: string, options: ApiFetchOptions = {}) =>
+  apiFetch<T>(path, { ...options, apiTarget: "realtime" });

@@ -1,5 +1,5 @@
 import { io, Socket } from "socket.io-client";
-import { API_BASE_URL } from "@/api/client";
+import { getRealtimeServerUrl, warmRealtimeBackend } from "@/api/client";
 import { getAccessToken } from "@/lib/auth-storage";
 import type { ChatAccess, ChatMessage, SendChatPayload } from "@/api/chat";
 
@@ -50,22 +50,27 @@ type ClientToServerEvents = {
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
 
-const getSocketUrl = () => API_BASE_URL.replace(/\/api\/v\d+\/?$/, "");
-
 export const getChatSocket = (): Socket<ServerToClientEvents, ClientToServerEvents> | null => {
   const token = getAccessToken();
   if (!token) return null;
+  void warmRealtimeBackend("chat-socket");
 
-  if (socket?.connected || socket?.active) return socket;
+  if (socket?.connected || socket?.active) {
+    socket.auth = { token };
+    return socket;
+  }
 
-  socket = io(getSocketUrl(), {
+  socket = io(getRealtimeServerUrl(), {
     auth: { token },
     transports: ["websocket", "polling"],
     withCredentials: true,
     autoConnect: true,
+    multiplex: true,
+    timeout: 8_000,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 700,
     reconnectionDelayMax: 4000,
+    randomizationFactor: 0.35,
   });
 
   return socket;

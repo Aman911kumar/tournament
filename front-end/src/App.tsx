@@ -1,6 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Outlet, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Analytics } from "@vercel/analytics/react";
@@ -11,7 +11,8 @@ import NetworkStatusBanner from "./components/NetworkStatusBanner";
 import OnboardingGate from "./components/OnboardingGate";
 import CapacitorUrlListener from "./components/CapacitorUrlListener";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
-import { ApiError } from "@/api/client";
+import { ApiError, scheduleRealtimeWarmup } from "@/api/client";
+import { recordFrontendEvent } from "@/lib/frontend-monitoring";
 
 const Index = lazy(() => import("./pages/Index.tsx"));
 const LandingPage = lazy(() => import("./pages/LandingPage.tsx"));
@@ -60,13 +61,18 @@ const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
-      gcTime: 5 * 60_000,
+      staleTime: 2 * 60_000,
+      gcTime: 15 * 60_000,
       refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
       retry: (failureCount, error) => {
         if (error instanceof ApiError && [401, 403, 404].includes(error.status)) return false;
         return failureCount < 1;
       },
+      retryDelay: (attempt) => Math.min(750 * 2 ** attempt, 4_000),
+    },
+    mutations: {
+      retry: false,
     },
   },
 });
@@ -92,6 +98,34 @@ const RouteLoader = () => (
   </div>
 );
 
+const RoutePerformanceMonitor = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    const startedAt = performance.now();
+    const frame = window.requestAnimationFrame(() => {
+      recordFrontendEvent({
+        type: "route-transition",
+        name: "route-mounted",
+        route: location.pathname,
+        value: Math.round(performance.now() - startedAt),
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.pathname]);
+
+  return null;
+};
+
+const RealtimeWarmup = () => {
+  useEffect(() => {
+    scheduleRealtimeWarmup("app-open");
+  }, []);
+
+  return null;
+};
+
 const App = () => (
   <AppErrorBoundary>
     <QueryClientProvider client={queryClient}>
@@ -101,6 +135,8 @@ const App = () => (
         <Analytics />
         <BrowserRouter>
           <CapacitorUrlListener />
+          <RoutePerformanceMonitor />
+          <RealtimeWarmup />
           <Suspense fallback={<RouteLoader />}>
             <Routes>
                 <Route path="/landing" element={<LandingPage />} />

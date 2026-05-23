@@ -2,13 +2,13 @@
   "name": "server",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
-    "dev": "nodemon server.js",
+    "dev": "nodemon src/server.js",
     "email:check": "node scripts/check-email-providers.js",
     "worker:email": "node email-worker.js",
     "test": "node --test",
-    "start": "node server.js"
+    "start": "node src/server.js"
   },
   "keywords": [],
   "author": "",

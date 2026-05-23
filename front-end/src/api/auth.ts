@@ -1,4 +1,4 @@
-import { apiFetch ,ApiResponse} from "./client";
+import { apiFetch, ApiResponse, scheduleRealtimeWarmup } from "./client";
 
 export interface LoginPayload { identifier: string; password: string }
 export interface SignupPayload { email: string; password: string; username: string; phone_number: string }
@@ -135,40 +135,48 @@ export interface OAuthCompletePayload {
 }
 
 export async function oauthComplete(payload: OAuthCompletePayload, options: RequestInit = {}): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>(ENDPOINTS.oauthComplete, {
+  const response = await apiFetch<AuthResponse>(ENDPOINTS.oauthComplete, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
     ...options,
   });
+  scheduleRealtimeWarmup("auth-success");
+  return response;
 }
 
 
 
 export async function google(payload: GoogleLoginPayload, options: RequestInit = {}): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>(ENDPOINTS.google, {
+  const response = await apiFetch<AuthResponse>(ENDPOINTS.google, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
     ...options,
   });
+  scheduleRealtimeWarmup("auth-success");
+  return response;
 }
 
 export async function facebook(payload: FacebookLoginPayload, options: RequestInit = {}): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>(ENDPOINTS.facebook, {
+  const response = await apiFetch<AuthResponse>(ENDPOINTS.facebook, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
     ...options,
   });
+  scheduleRealtimeWarmup("auth-success");
+  return response;
 }
 export async function login(payload: LoginPayload, options: RequestInit = {}): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>(ENDPOINTS.login, {
+  const response = await apiFetch<AuthResponse>(ENDPOINTS.login, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
     ...options,
   });
+  scheduleRealtimeWarmup("auth-success");
+  return response;
 }
 
 export async function logout(): Promise<ApiResponse> {
@@ -179,12 +187,14 @@ export async function logout(): Promise<ApiResponse> {
 }
 
 export async function signup(payload: SignupPayload, options: RequestInit = {}): Promise<AuthResponse> {
-  return apiFetch<AuthResponse>(ENDPOINTS.signup, {
+  const response = await apiFetch<AuthResponse>(ENDPOINTS.signup, {
     method: "POST",
     body: JSON.stringify(payload),
     credentials: "include",
     ...options,
   });
+  scheduleRealtimeWarmup("auth-success");
+  return response;
 }
 
 export async function changePassword(payload: ChangePasswordPayload):Promise<ApiResponse> {

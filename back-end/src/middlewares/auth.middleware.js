@@ -36,6 +36,48 @@ const hasAdminPermission = (user, ...requiredPermissions) => {
 };
 
 const authUserSelect = "_id username email emailVerified phone_number phoneVerified linkedProviders avatar role adminPermissions accountStatus suspendedUntil mutedUntil isActive creatorRequest preferences walletBalance socialProvider passwordLoginEnabled dateOfBirth gender onboarding legalAgreements lastLoginAt createdAt updatedAt";
+const AUTH_USER_CACHE_TTL_MS = Math.max(0, Number(process.env.AUTH_USER_CACHE_TTL_MS || 10_000));
+const AUTH_USER_CACHE_MAX = Math.max(100, Number(process.env.AUTH_USER_CACHE_MAX || 1000));
+const authUserCache = new Map();
+
+const cloneCachedUser = (user) => {
+    if (!user) return null;
+    return { ...user, role: Array.isArray(user.role) ? [...user.role] : user.role };
+};
+
+const trimAuthUserCache = () => {
+    if (authUserCache.size <= AUTH_USER_CACHE_MAX) return;
+    const now = Date.now();
+    for (const [key, value] of authUserCache.entries()) {
+        if (value.expiresAt <= now || authUserCache.size > AUTH_USER_CACHE_MAX) authUserCache.delete(key);
+        if (authUserCache.size <= AUTH_USER_CACHE_MAX) break;
+    }
+};
+
+const getAuthUser = async (userId) => {
+    const key = userId?.toString?.() || String(userId || "");
+    if (!key) return null;
+
+    if (AUTH_USER_CACHE_TTL_MS > 0) {
+        const cached = authUserCache.get(key);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cloneCachedUser(cached.user);
+        }
+        if (cached) authUserCache.delete(key);
+    }
+
+    const user = await User.findById(key).select(authUserSelect).lean();
+
+    if (user && AUTH_USER_CACHE_TTL_MS > 0) {
+        authUserCache.set(key, {
+            user,
+            expiresAt: Date.now() + AUTH_USER_CACHE_TTL_MS,
+        });
+        trimAuthUserCache();
+    }
+
+    return cloneCachedUser(user);
+};
 
 const assertUsableAccount = (user) => {
     if (!user) return;
@@ -66,7 +108,7 @@ const protect = asyncHandler(async (req, res, next) => {
         // const user = await User.findById(decodedToken?._id).select(
         //     "-password -refreshToken"
         // );
-        const user = await User.findById(decodedToken?._id).select(authUserSelect);
+        const user = await getAuthUser(decodedToken?._id);
 
         if (!user) {
             throw new ApiError(402, "Invalid access token");
@@ -93,7 +135,7 @@ const optionalProtect = asyncHandler(async (req, res, next) => {
 
     try {
         const decodedToken = jwt.verify(token, ACCESS_TOKEN_SECRET);
-        const user = await User.findById(decodedToken?._id).select(authUserSelect);
+        const user = await getAuthUser(decodedToken?._id);
 
         try {
             assertUsableAccount(user);

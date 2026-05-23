@@ -57,6 +57,10 @@ const sendMonitoringEvent = (payload: Record<string, unknown>) => {
   });
 };
 
+export const recordFrontendEvent = (payload: Record<string, unknown>) => {
+  sendMonitoringEvent(payload);
+};
+
 const reportPerformance = () => {
   const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
   const payload: PerformancePayload = {

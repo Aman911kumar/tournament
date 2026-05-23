@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { BrowserQRCodeReader, IScannerControls } from "@zxing/browser";
-import QRCode from "qrcode";
+import type { IScannerControls } from "@zxing/browser";
 import { ArrowLeft, AtSign, BadgeIndianRupee, Camera, CheckCircle2, FileText, KeyRound, QrCode, ScanLine, Send, Sparkles, X } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import { toast } from "@/components/ui/sonner";
@@ -124,16 +123,33 @@ const TransferMoneyScreen = () => {
     const payload = buildTransferQrPayload(profile);
     if (!payload) return;
 
-    QRCode.toDataURL(payload, {
-      width: 320,
-      margin: 2,
-      color: {
-        dark: "#0f172a",
-        light: "#dcfce7",
-      },
-    })
-      .then(setQrDataUrl)
-      .catch(() => setQrDataUrl(""));
+    let cancelled = false;
+    const buildQr = () => {
+      import("qrcode").then(({ default: QRCode }) => QRCode.toDataURL(payload, {
+        width: 320,
+        margin: 2,
+        color: {
+          dark: "#0f172a",
+          light: "#dcfce7",
+        },
+      }))
+        .then((value) => {
+          if (!cancelled) setQrDataUrl(value);
+        })
+        .catch(() => {
+          if (!cancelled) setQrDataUrl("");
+        });
+    };
+
+    const idleId = "requestIdleCallback" in window
+      ? window.requestIdleCallback(buildQr, { timeout: 1200 })
+      : window.setTimeout(buildQr, 250);
+
+    return () => {
+      cancelled = true;
+      if ("cancelIdleCallback" in window) window.cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
+    };
   }, [profile]);
 
   const stopScanner = () => {
@@ -150,8 +166,6 @@ const TransferMoneyScreen = () => {
     if (!scannerOpen || !videoRef.current) return;
 
     let cancelled = false;
-    const reader = new BrowserQRCodeReader();
-
     setScannerError("");
     scanHandledRef.current = false;
 
@@ -162,23 +176,27 @@ const TransferMoneyScreen = () => {
       };
     }
 
-    reader
-      .decodeFromVideoDevice(undefined, videoRef.current, (result) => {
-        if (!result || cancelled || scanHandledRef.current) return;
-        const scanned = parseTransferQrPayload(result.getText());
-        if (!scanned.recipient) return;
-        scanHandledRef.current = true;
-        cancelled = true;
-        stopScanner();
-        typeIntoField(scanned.recipient, setRecipient);
-        if (scanned.amount && Number(scanned.amount) > 0) typeIntoField(String(scanned.amount), setAmount);
-        if (scanned.note) typeIntoField(scanned.note, setNote, 8);
-        setScanFilled(true);
-        toast.success("QR scanned", { description: "Transfer details filled automatically." });
-        setScannerOpen(false);
+    import("@zxing/browser")
+      .then(({ BrowserQRCodeReader }) => {
+        if (cancelled || !videoRef.current) return null;
+        const scanner = new BrowserQRCodeReader();
+        return scanner.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
+          if (!result || cancelled || scanHandledRef.current) return;
+          const scanned = parseTransferQrPayload(result.getText());
+          if (!scanned.recipient) return;
+          scanHandledRef.current = true;
+          cancelled = true;
+          stopScanner();
+          typeIntoField(scanned.recipient, setRecipient);
+          if (scanned.amount && Number(scanned.amount) > 0) typeIntoField(String(scanned.amount), setAmount);
+          if (scanned.note) typeIntoField(scanned.note, setNote, 8);
+          setScanFilled(true);
+          toast.success("QR scanned", { description: "Transfer details filled automatically." });
+          setScannerOpen(false);
+        });
       })
       .then((controls) => {
-        scannerControlsRef.current = controls;
+        if (controls) scannerControlsRef.current = controls;
       })
       .catch((error) => {
         if (cancelled) return;

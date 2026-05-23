@@ -373,6 +373,7 @@ const TournamentCommentsScreen = () => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const typingTimerRef = useRef<number | null>(null);
   const readTimerRef = useRef<number | null>(null);
+  const lastTypingEmitRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [profile, setProfile] = useState<User | null>(null);
@@ -496,6 +497,9 @@ const TournamentCommentsScreen = () => {
       toast.error("Room chat closed", { description: payload.reason || "You no longer have access to this chat." });
       navigate(`/tournament/${id}`, { replace: true });
     };
+    const handleChatError = (payload: { message?: string }) => {
+      toast.error("Chat action failed", { description: payload.message });
+    };
 
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
@@ -509,7 +513,7 @@ const TournamentCommentsScreen = () => {
     socket.on("chat:typing", handleTyping);
     socket.on("chat:moderation", handleModeration);
     socket.on("chat:force-leave", handleForceLeave);
-    socket.on("chat:error", (payload) => toast.error("Chat action failed", { description: payload.message }));
+    socket.on("chat:error", handleChatError);
 
     if (socket.connected) handleConnect();
     else socket.connect();
@@ -528,6 +532,9 @@ const TournamentCommentsScreen = () => {
       socket.off("chat:typing", handleTyping);
       socket.off("chat:moderation", handleModeration);
       socket.off("chat:force-leave", handleForceLeave);
+      socket.off("chat:error", handleChatError);
+      if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
+      if (readTimerRef.current) window.clearTimeout(readTimerRef.current);
     };
   }, [currentUserId, id, navigate, scrollToBottom]);
 
@@ -570,6 +577,9 @@ const TournamentCommentsScreen = () => {
 
   const emitTyping = (isTyping: boolean) => {
     const socket = getChatSocket();
+    const now = Date.now();
+    if (isTyping && now - lastTypingEmitRef.current < 900) return;
+    if (isTyping) lastTypingEmitRef.current = now;
     if (socket?.connected && id) socket.emit("chat:typing", { tournamentId: id, isTyping });
   };
 

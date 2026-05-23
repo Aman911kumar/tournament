@@ -1,4 +1,4 @@
-import { apiFetch, API_BASE_URL, ApiResponse } from "./client";
+import { apiFetch, ApiResponse, getApiBaseUrlForPath } from "./client";
 import { getAccessToken } from "@/lib/auth-storage";
 
 export type ChatMessageType = "text" | "image" | "file" | "system" | "announcement" | "room_card";
@@ -106,7 +106,7 @@ const CHAT_ENDPOINTS = {
 
 const toAbsoluteApiUrl = (path: string) => {
   if (path.startsWith("http")) return path;
-  return `${API_BASE_URL}${path}`;
+  return `${getApiBaseUrlForPath(path, "realtime")}${path}`;
 };
 
 export async function getChatAccess(tournamentId: string) {

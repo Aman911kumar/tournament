@@ -250,7 +250,7 @@ const getResultRegistrationDetails = async (tournamentIds) => {
     const registrations = await Registration.find({
         tournament: { $in: tournamentIds },
         status: { $in: ["paid", "confirmed"] }
-    }).select("tournament user team paidAmount gameAccounts");
+    }).select("tournament user team paidAmount gameAccounts").lean();
 
     const details = new Map();
     registrations.forEach((registration) => {
@@ -317,6 +317,7 @@ const notifyJoinedUsersAboutRoom = async (tournament) => {
                 hasRoomPass: Boolean(room.roomPass),
                 roomJoinTime: room.roomJoinTime || null,
             },
+            channels: { inApp: true, push: true, email: true },
         }));
 
     await createNotifications(notifications).catch((error) => {
@@ -1516,7 +1517,8 @@ const getMyTournamentRegistrations = asyncHandler(async (req, res) => {
                 { path: "channel", select: "name handle avatar" }
             ]
         })
-        .sort({ createdAt: -1 });
+        .sort({ createdAt: -1 })
+        .lean();
 
     return res.status(200).json(
         new ApiResponse(200, registrations, "Registered tournaments fetched successfully")
