@@ -39,6 +39,7 @@ import {
   useCurrentProfile,
 } from "@/hooks/useCurrentProfile";
 import { compressImageFile } from "@/lib/image-utils";
+import { removeCacheByPrefix } from "@/lib/offline-cache";
 import { getErrorMessage, getErrorToast } from "@/lib/page-utils";
 
 interface ProfileForm {
@@ -264,6 +265,7 @@ const EditProfileScreen = () => {
       const res = kind === "avatar" ? await uploadAvatar(prepared) : await uploadBanner(prepared);
       applyProfile(res.data.user);
       setCurrentProfileCache(queryClient, res.data.user, res);
+      removeCacheByPrefix("creatorProfile.");
       toast.success(res.message);
     } catch (uploadError) {
       const errorToast = getErrorToast(uploadError, {
@@ -284,6 +286,7 @@ const EditProfileScreen = () => {
       const res = kind === "avatar" ? await removeAvatar() : await removeBanner();
       applyProfile(res.data.user);
       setCurrentProfileCache(queryClient, res.data.user, res);
+      removeCacheByPrefix("creatorProfile.");
       toast.success(res.message);
     } catch (removeError) {
       const errorToast = getErrorToast(removeError, {

@@ -2,6 +2,7 @@ import asyncHandler from '../utils/AsyncHandler.js'
 import ApiError from '../utils/ApiError.js'
 import ApiResponse from '../utils/ApiResponse.js'
 import { User } from '../models/user.model.js'
+import { Channel } from '../models/channel.model.js'
 import { WalletTransaction } from '../models/walletTransaction.model.js'
 import { Wallet } from '../models/wallet.model.js'
 import { Payment } from '../models/payment.model.js'
@@ -2249,6 +2250,42 @@ const deleteStoredProfileImage = async (image, { required = false } = {}) => {
     }
 };
 
+const toChannelMedia = (image = {}) => {
+    const url = String(image?.url || "").trim();
+    if (!url) return null;
+
+    return {
+        public_id: String(image.public_id || image.mediaId || "").trim(),
+        url,
+    };
+};
+
+const syncCreatorChannelImage = async (userId, kind, image) => {
+    const media = toChannelMedia(image);
+    if (!media) return;
+
+    await Channel.findOneAndUpdate(
+        { owner: userId },
+        { $set: { [kind]: media } },
+        { new: false }
+    );
+};
+
+const clearCreatorChannelImage = async (userId, kind, previousImage = {}) => {
+    const media = toChannelMedia(previousImage);
+    if (!media) return;
+
+    const matches = [{ [`${kind}.url`]: media.url }];
+    if (media.public_id) {
+        matches.push({ [`${kind}.public_id`]: media.public_id });
+    }
+
+    await Channel.updateOne(
+        { owner: userId, $or: matches },
+        { $unset: { [kind]: "" } }
+    );
+};
+
 const handleProfileImageUpload = async (req, res, kind) => {
     const config = getProfileImageConfig(kind);
     const user = await User.findById(req.user._id);
@@ -2297,6 +2334,7 @@ const handleProfileImageUpload = async (req, res, kind) => {
         updatedAt: new Date(),
     };
     await user.save({ validateBeforeSave: false });
+    await syncCreatorChannelImage(user._id, config.kind, user[config.kind]);
     await deleteStoredProfileImage(previousImage);
 
     const updatedUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
@@ -2312,6 +2350,7 @@ const removeProfileImage = async (req, res, kind) => {
     const previousImage = user[config.kind]?.toObject?.() || user[config.kind] || null;
 
     await deleteStoredProfileImage(previousImage, { required: true });
+    await clearCreatorChannelImage(user._id, config.kind, previousImage);
 
     user.set(config.kind, undefined);
     await user.save({ validateBeforeSave: false });

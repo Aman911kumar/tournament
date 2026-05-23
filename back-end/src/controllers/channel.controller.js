@@ -103,6 +103,26 @@ const getCreatorViewerState = async ({ creatorId, channelId, viewerId }) => {
     };
 };
 
+const toPlainChannel = (channel) => channel?.toObject?.() || channel;
+
+const hydrateChannelIdentity = (channel) => {
+    const plain = toPlainChannel(channel);
+    if (!plain) return plain;
+
+    const owner = plain.owner?.toObject?.() || plain.owner;
+    if (owner?.avatar?.url && !plain.avatar?.url) {
+        plain.avatar = owner.avatar;
+    }
+    if (owner?.banner?.url && !plain.banner?.url) {
+        plain.banner = owner.banner;
+    }
+    if (owner) {
+        plain.owner = owner;
+    }
+
+    return plain;
+};
+
 const createChannel = asyncHandler(async (req, res) => {
     const userId = req.user._id;
     const { name, handle, description = "", avatar, banner, socialLinks } = req.body;
@@ -163,7 +183,7 @@ const getMyChannel = asyncHandler(async (req, res) => {
     );
 
     return res.status(200).json(
-        new ApiResponse(200, { channel, tournamentCount }, "Channel fetched successfully")
+        new ApiResponse(200, { channel: hydrateChannelIdentity(channel), tournamentCount }, "Channel fetched successfully")
     );
 });
 
@@ -204,7 +224,8 @@ const listChannels = asyncHandler(async (req, res) => {
         tournamentCounts.map((item) => [item._id.toString(), item])
     );
 
-    const data = channels.map((channel) => {
+    const data = channels.map((rawChannel) => {
+        const channel = hydrateChannelIdentity(rawChannel);
         const ownerId = channel.owner?._id || channel.owner;
         const stats = countByOwner.get(ownerId.toString()) || {};
         const rating = Number(channel.owner?.stats?.rating || 0);
@@ -253,6 +274,8 @@ const listChannels = asyncHandler(async (req, res) => {
         name: user.username,
         handle: user.username,
         description: "Approved creator",
+        avatar: user.avatar,
+        banner: user.banner,
         memberCount: 0,
         isActive: true,
         tournamentCount: 0,
@@ -299,10 +322,12 @@ const getChannelByIdentifier = asyncHandler(async (req, res) => {
         })
     ]);
 
+    const responseChannel = hydrateChannelIdentity(channel);
+
     return res.status(200).json(
         new ApiResponse(
             200,
-            { channel, creator: channel.owner, tournaments, tournamentCount, totalPrize: Number(prizeTotals[0]?.totalPrize || 0), viewer },
+            { channel: responseChannel, creator: responseChannel.owner, tournaments, tournamentCount, totalPrize: Number(prizeTotals[0]?.totalPrize || 0), viewer },
             "Channel fetched successfully"
         )
     );
@@ -350,11 +375,13 @@ const getCreatorByUserId = asyncHandler(async (req, res) => {
         })
     ]);
 
+    const responseChannel = channel ? hydrateChannelIdentity(channel) : null;
+
     return res.status(200).json(
         new ApiResponse(
             200,
             {
-                channel,
+                channel: responseChannel,
                 creator: user,
                 tournaments,
                 tournamentCount,
@@ -411,7 +438,7 @@ const rateCreatorByUserId = asyncHandler(async (req, res) => {
             }
         },
         { new: true }
-    ).select("username avatar role stats");
+    ).select("username avatar banner role stats");
 
     return res.status(200).json(
         new ApiResponse(200, { creator: updatedCreator }, "Creator rating saved")
@@ -505,7 +532,7 @@ const joinChannel = asyncHandler(async (req, res) => {
     return res.status(created ? 201 : 200).json(
         new ApiResponse(
             created ? 201 : 200,
-            { channel, subscription, joined: true },
+            { channel: hydrateChannelIdentity(channel), subscription, joined: true },
             created ? "Channel joined successfully" : "You already joined this channel"
         )
     );
@@ -535,14 +562,14 @@ const getJoinedChannels = asyncHandler(async (req, res) => {
         .populate({
             path: "channel",
             match: { isActive: true },
-            populate: { path: "owner", select: "username avatar stats" }
+            populate: { path: "owner", select: "username avatar banner stats" }
         })
         .sort({ joinedAt: -1 });
 
     const channels = subscriptions
         .filter((subscription) => subscription.channel)
         .map((subscription) => ({
-            ...subscription.channel.toObject(),
+            ...hydrateChannelIdentity(subscription.channel),
             joinedAt: subscription.joinedAt,
             notificationsEnabled: subscription.notificationsEnabled
         }));
@@ -555,7 +582,7 @@ const getJoinedChannels = asyncHandler(async (req, res) => {
 const getJoinedChannelTournaments = asyncHandler(async (req, res) => {
     const { limit = 20, skip = 0, status } = req.query;
     const subscriptions = await ChannelSubscription.find({ user: req.user._id })
-        .populate("channel", "owner name handle avatar isActive");
+        .populate("channel", "owner name handle avatar banner isActive");
 
     const channels = subscriptions
         .map((subscription) => subscription.channel)
@@ -581,8 +608,8 @@ const getJoinedChannelTournaments = asyncHandler(async (req, res) => {
     }
 
     const tournaments = await Tournament.find(query)
-        .populate("organizer", "username avatar stats")
-        .populate("channel", "name handle avatar")
+        .populate("organizer", "username avatar banner stats")
+        .populate("channel", "name handle avatar banner")
         .select("-room_details.roomId -room_details.roomPass")
         .sort({ startAt: 1, createdAt: -1 })
         .skip(Number(skip))
@@ -608,8 +635,8 @@ const getChannelTournaments = asyncHandler(async (req, res) => {
 
     const query = buildChannelTournamentQuery(channel, extra);
     const tournaments = await Tournament.find(query)
-        .populate("organizer", "username avatar stats")
-        .populate("channel", "name handle avatar")
+        .populate("organizer", "username avatar banner stats")
+        .populate("channel", "name handle avatar banner")
         .select("-room_details.roomId -room_details.roomPass")
         .sort({ startAt: 1, createdAt: -1 })
         .skip(Number(skip))
@@ -619,7 +646,7 @@ const getChannelTournaments = asyncHandler(async (req, res) => {
     const total = await Tournament.countDocuments(query);
 
     return res.status(200).json(
-        new ApiResponse(200, { channel, tournaments, total }, "Channel tournaments fetched successfully")
+        new ApiResponse(200, { channel: hydrateChannelIdentity(channel), tournaments, total }, "Channel tournaments fetched successfully")
     );
 });
 

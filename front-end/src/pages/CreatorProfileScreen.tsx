@@ -194,8 +194,6 @@ const CreatorProfileScreen = () => {
   const displayName = channel?.name ?? creator?.username ?? "Creator";
   const handle = channel?.handle ? `@${channel.handle}` : creator?.username ? `@${creator.username}` : "";
   const description = channel?.description || "Tournament creator";
-  const creatorAvatarUrl = channel?.avatar?.url || creator?.avatar?.url;
-  const creatorBannerUrl = channel?.banner?.url || creator?.banner?.url;
   const rating = Number(creator?.stats?.rating || 0);
   const ratingCount = Number(creator?.stats?.ratingCount || 0);
   const totalPrize = Number(profile?.totalPrize || 0);
@@ -204,6 +202,10 @@ const CreatorProfileScreen = () => {
   const isVerifiedCreator = Boolean(creator?.role?.includes("creator") || channel?._id);
   const currentUserId = currentProfile?._id || null;
   const isOwnCreatorProfile = Boolean(currentUserId && creator?._id === currentUserId);
+  const ownProfileAvatarUrl = isOwnCreatorProfile ? currentProfile?.avatar?.url : undefined;
+  const ownProfileBannerUrl = isOwnCreatorProfile ? currentProfile?.banner?.url : undefined;
+  const creatorAvatarUrl = ownProfileAvatarUrl || channel?.avatar?.url || creator?.avatar?.url;
+  const creatorBannerUrl = ownProfileBannerUrl || channel?.banner?.url || creator?.banner?.url;
 
   const handleFollow = async () => {
     if (!channel?._id) {
