@@ -268,6 +268,13 @@ const normalizeAttachments = (attachments = []) =>
                 name: sanitizeText(attachment.name || "Attachment", 120),
                 mimeType: sanitizeText(attachment.mimeType || "", 120),
                 size: Math.max(0, Number(attachment.size || 0)),
+                storageProvider: sanitizeText(attachment.storageProvider || "", 40),
+                mediaId: sanitizeText(attachment.mediaId || "", 160),
+                apiUrl: sanitizeText(attachment.apiUrl || "", 500),
+                downloadUrl: sanitizeText(attachment.downloadUrl || "", 500),
+                thumbUrl: sanitizeText(attachment.thumbUrl || "", 500),
+                folderId: sanitizeText(attachment.folderId || "", 160),
+                folderName: sanitizeText(attachment.folderName || "", 300),
             };
         })
         .filter(Boolean);

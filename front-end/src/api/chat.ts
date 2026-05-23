@@ -17,6 +17,13 @@ export interface ChatAttachment {
   name: string;
   mimeType?: string;
   size?: number;
+  storageProvider?: string;
+  mediaId?: string;
+  apiUrl?: string;
+  downloadUrl?: string;
+  thumbUrl?: string;
+  folderId?: string;
+  folderName?: string;
 }
 
 export interface ChatMessage {

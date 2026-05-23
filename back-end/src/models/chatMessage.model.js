@@ -27,6 +27,41 @@ const attachmentSchema = new mongoose.Schema(
             min: 0,
             default: 0,
         },
+        storageProvider: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        mediaId: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        apiUrl: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        downloadUrl: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        thumbUrl: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        folderId: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        folderName: {
+            type: String,
+            trim: true,
+            default: "",
+        },
     },
     { _id: false }
 );

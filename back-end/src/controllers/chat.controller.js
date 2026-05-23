@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import asyncHandler from "../utils/AsyncHandler.js";
@@ -20,6 +19,11 @@ import {
     unpinChatMessage,
 } from "../services/chat.service.js";
 import { getSocketServer, getUserRoom } from "../services/socket.service.js";
+import {
+    buildChatFileName,
+    buildChatFolderPath,
+    uploadToTeleStore,
+} from "../services/storage/telestore.service.js";
 
 const MAX_UPLOAD_BYTES = Number(process.env.CHAT_UPLOAD_MAX_BYTES || 5 * 1024 * 1024);
 const UPLOAD_ROOT = path.resolve(process.env.UPLOAD_DIR || "uploads");
@@ -63,6 +67,28 @@ const getUploadPublicUrl = (req, relativePath) => {
     const configuredBase = String(process.env.PUBLIC_API_URL || process.env.CHAT_UPLOAD_PUBLIC_BASE_URL || "").replace(/\/$/, "");
     const origin = configuredBase || `${req.protocol}://${req.get("host")}`;
     return `${origin}/${relativePath.replace(/\\/g, "/").replace(/^\/+/, "")}`;
+};
+
+const getChatStorageProvider = () => String(process.env.CHAT_STORAGE_PROVIDER || "telestore").toLowerCase();
+const shouldFallbackToLocalStorage = () => String(process.env.CHAT_STORAGE_LOCAL_FALLBACK || "false").toLowerCase() === "true";
+
+const storeAttachmentLocally = async ({ req, buffer, mimeType, ext, originalName, fileName }) => {
+    const tournamentDir = path.join(CHAT_UPLOAD_DIR, req.params.tournamentId);
+    await fs.mkdir(tournamentDir, { recursive: true });
+
+    const absolutePath = path.join(tournamentDir, fileName);
+    await fs.writeFile(absolutePath, buffer, { flag: "wx" });
+
+    const relativePath = path.relative(UPLOAD_ROOT, absolutePath);
+    return {
+        type: mimeType.startsWith("image/") ? "image" : "file",
+        url: getUploadPublicUrl(req, path.join("uploads", relativePath)),
+        name: originalName,
+        mimeType,
+        size: buffer.length,
+        storageProvider: "local",
+        folderName: path.join("uploads", "chat", req.params.tournamentId).replace(/\\/g, "/"),
+    };
 };
 
 export const getChatAccess = asyncHandler(async (req, res) => {
@@ -229,21 +255,53 @@ export const uploadChatAttachment = asyncHandler(async (req, res) => {
         .trim()
         .slice(0, 120) || "Attachment";
 
-    const tournamentDir = path.join(CHAT_UPLOAD_DIR, req.params.tournamentId);
-    await fs.mkdir(tournamentDir, { recursive: true });
+    const fileName = buildChatFileName({ originalName, ext, user: req.user });
+    const provider = getChatStorageProvider();
+    let data;
 
-    const fileName = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
-    const absolutePath = path.join(tournamentDir, fileName);
-    await fs.writeFile(absolutePath, buffer, { flag: "wx" });
+    if (provider === "telestore") {
+        try {
+            const folderPath = buildChatFolderPath({ tournament: context.tournament });
+            const uploaded = await uploadToTeleStore({
+                buffer,
+                fileName,
+                originalName,
+                mimeType,
+                folderPath,
+                tags: ["battle4arena", "chat", "tournament", context.tournament.game].filter(Boolean),
+                metadata: {
+                    tournamentId: req.params.tournamentId,
+                    tournamentTitle: context.tournament.title,
+                    game: context.tournament.game,
+                    uploadedBy: req.user._id?.toString?.(),
+                },
+            });
 
-    const relativePath = path.relative(UPLOAD_ROOT, absolutePath);
-    const data = {
-        type: mimeType.startsWith("image/") ? "image" : "file",
-        url: getUploadPublicUrl(req, path.join("uploads", relativePath)),
-        name: originalName,
-        mimeType,
-        size: buffer.length,
-    };
+            data = {
+                type: mimeType.startsWith("image/") ? "image" : "file",
+                url: uploaded.publicUrl || uploaded.downloadUrl || uploaded.apiUrl,
+                name: originalName,
+                mimeType,
+                size: buffer.length,
+                storageProvider: uploaded.provider,
+                mediaId: uploaded.mediaId,
+                apiUrl: uploaded.apiUrl,
+                downloadUrl: uploaded.downloadUrl,
+                thumbUrl: uploaded.thumbUrl,
+                folderId: uploaded.folderId,
+                folderName: uploaded.folderName,
+            };
+        } catch (error) {
+            if (!shouldFallbackToLocalStorage()) throw error;
+            console.warn("TeleStore chat upload failed; falling back to local storage", {
+                tournamentId: req.params.tournamentId,
+                message: error?.message,
+            });
+            data = await storeAttachmentLocally({ req, buffer, mimeType, ext, originalName, fileName });
+        }
+    } else {
+        data = await storeAttachmentLocally({ req, buffer, mimeType, ext, originalName, fileName });
+    }
 
     return res.status(201).json(new ApiResponse(201, data, "Attachment uploaded"));
 });
