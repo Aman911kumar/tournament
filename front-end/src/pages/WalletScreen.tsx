@@ -163,21 +163,23 @@ const WalletStat = ({
   note: string;
   tone?: string;
 }) => (
-  <div className="wallet-tile min-w-0 rounded-xl p-2.5 sm:p-3">
-    <div className="mb-2 flex items-center gap-2">
+  <div className="wallet-tile wallet-stat min-w-0 rounded-lg p-2 sm:rounded-xl sm:p-3">
+    <div className="mb-1.5 flex items-center gap-1.5 sm:mb-2 sm:gap-2">
       <span
-        className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-white/10 bg-background/45 sm:h-8 sm:w-8 ${tone}`}
+        className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border border-white/10 bg-background/45 sm:h-8 sm:w-8 sm:rounded-lg ${tone}`}
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       </span>
-      <p className="min-w-0 truncate text-[11px] font-heading text-muted-foreground">
+      <p className="min-w-0 truncate text-[10px] font-heading text-muted-foreground sm:text-[11px]">
         {label}
       </p>
     </div>
-    <p className="truncate font-heading text-base font-black sm:text-lg">
+    <p className="truncate font-heading text-sm font-black sm:text-lg">
       {value}
     </p>
-    <p className="mt-1 truncate text-[10px] text-muted-foreground">{note}</p>
+    <p className="wallet-stat-note mt-0.5 truncate text-[10px] text-muted-foreground sm:mt-1">
+      {note}
+    </p>
   </div>
 );
 
@@ -209,22 +211,22 @@ const TransactionRow = ({
         ease: "easeOut",
       }}
       onClick={onClick}
-      className="arena-focus wallet-transaction group w-full rounded-xl p-2.5 text-left sm:p-3"
+      className="arena-focus wallet-transaction group w-full rounded-lg p-2 text-left sm:rounded-xl sm:p-3"
     >
-      <div className="wallet-transaction-grid grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[2.75rem_1fr_auto] sm:gap-3">
+      <div className="wallet-transaction-grid grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[2.75rem_1fr_auto] sm:gap-3">
         <span
-          className={`grid h-10 w-10 place-items-center rounded-xl border sm:h-11 sm:w-11 ${credit ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200" : "border-primary/25 bg-primary/10 text-primary"}`}
+          className={`grid h-8 w-8 place-items-center rounded-lg border sm:h-11 sm:w-11 sm:rounded-xl ${credit ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200" : "border-primary/25 bg-primary/10 text-primary"}`}
         >
-          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+          <Icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
         </span>
         <span className="min-w-0">
-          <span className="block truncate font-heading text-sm font-bold">
+          <span className="block truncate font-heading text-xs font-bold sm:text-sm">
             {transaction.label}
           </span>
-          <span className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+          <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1 text-[10px] text-muted-foreground sm:mt-1 sm:gap-1.5">
             <span className="truncate">{transaction.date}</span>
             <span
-              className={`rounded-full border px-1.5 py-0.5 font-heading ${style.bg} ${style.text}`}
+              className={`rounded-full border px-1.5 py-px font-heading sm:py-0.5 ${style.bg} ${style.text}`}
             >
               {formatTransactionStatus(transaction.status)}
             </span>
@@ -232,11 +234,11 @@ const TransactionRow = ({
         </span>
         <span className="wallet-transaction-amount text-right">
           <span
-            className={`block whitespace-nowrap font-heading text-sm font-black ${credit ? "text-emerald-200" : "text-foreground"}`}
+            className={`block whitespace-nowrap font-heading text-xs font-black sm:text-sm ${credit ? "text-emerald-200" : "text-foreground"}`}
           >
             {amountLabel}
           </span>
-          <span className="mt-1 block text-[10px] text-muted-foreground">
+          <span className="mt-0.5 block text-[10px] text-muted-foreground sm:mt-1">
             {transaction.kind === "PAYMENT" ? "Gateway" : "Wallet"}
           </span>
         </span>
@@ -431,10 +433,10 @@ const WalletScreen = () => {
       <style>{`
         .wallet-hero {
           background:
-            radial-gradient(circle at 86% 8%, hsl(var(--accent) / 0.2), transparent 28%),
-            radial-gradient(circle at 8% 0%, hsl(var(--primary) / 0.24), transparent 32%),
+            radial-gradient(circle at 86% 8%, hsl(var(--accent) / 0.16), transparent 26%),
+            radial-gradient(circle at 8% 0%, hsl(var(--primary) / 0.18), transparent 30%),
             linear-gradient(135deg, hsl(var(--card) / 0.94), hsl(var(--background) / 0.96));
-          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.055), 0 18px 42px rgb(0 0 0 / 0.22);
+          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.045), 0 12px 28px rgb(0 0 0 / 0.18);
         }
         .wallet-tile,
         .wallet-action-card,
@@ -469,18 +471,28 @@ const WalletScreen = () => {
         }
         @media (max-width: 420px) {
           .wallet-transaction-grid {
-            grid-template-columns: 2.5rem minmax(0, 1fr);
+            grid-template-columns: 2rem minmax(0, 1fr);
           }
           .wallet-transaction-amount {
             grid-column: 2;
             text-align: left;
           }
         }
+        @media (max-width: 480px) {
+          .wallet-hero,
+          .wallet-panel {
+            border-radius: 1rem;
+          }
+          .wallet-stat-note,
+          .wallet-action-desc {
+            display: none;
+          }
+        }
       `}</style>
 
       <header className="sticky top-0 z-20 border-b border-glass-border bg-background/92 backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-6xl items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3 lg:px-6">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/30 bg-primary/10 text-primary sm:h-10 sm:w-10">
+        <div className="mx-auto flex w-full max-w-6xl items-center gap-2 px-2.5 py-2 sm:gap-3 sm:px-5 sm:py-3 lg:px-6">
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-primary sm:h-10 sm:w-10 sm:rounded-xl">
             <Wallet className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
           <div className="min-w-0 flex-1">
@@ -495,7 +507,7 @@ const WalletScreen = () => {
             type="button"
             onClick={() => loadWallet(1)}
             disabled={loading || loadingMore}
-            className="arena-focus grid h-9 w-9 place-items-center rounded-xl border border-glass-border bg-card/70 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60 sm:h-10 sm:w-10"
+            className="arena-focus grid h-8 w-8 place-items-center rounded-lg border border-glass-border bg-card/70 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60 sm:h-10 sm:w-10 sm:rounded-xl"
             aria-label="Refresh wallet"
           >
             <RefreshCcw
@@ -505,29 +517,29 @@ const WalletScreen = () => {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl space-y-3 px-3 pt-3 sm:space-y-4 sm:px-5 sm:pt-4 lg:px-6">
-        <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-stretch">
+      <main className="mx-auto w-full max-w-6xl space-y-2.5 px-2.5 pt-2.5 sm:space-y-4 sm:px-5 sm:pt-4 lg:px-6">
+        <section className="grid gap-2.5 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-stretch">
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            className="wallet-hero relative overflow-hidden rounded-2xl border border-glass-border p-4 sm:p-6"
+            className="wallet-hero relative overflow-hidden rounded-2xl border border-glass-border p-3 sm:p-6"
           >
             <div className="absolute right-4 top-4 hidden h-24 w-24 rounded-full border border-white/10 bg-white/5 sm:block" />
             <div className="relative">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 sm:mb-5 sm:gap-3">
-                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 font-heading text-[11px] font-bold text-emerald-200">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-5 sm:gap-3">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 font-heading text-[10px] font-bold text-emerald-200 sm:gap-2 sm:px-3 sm:text-[11px]">
                   <span className="live-dot h-2 w-2 rounded-full bg-emerald-300" />
                   Realtime wallet
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-background/35 px-3 py-1 text-[11px] text-muted-foreground">
+                <span className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-background/35 px-3 py-1 text-[11px] text-muted-foreground min-[430px]:inline-flex">
                   <ShieldCheck className="h-3.5 w-3.5 text-accent" />
                   Protected by account security
                 </span>
               </div>
 
-              <p className="flex items-center gap-2 font-heading text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                <IndianRupee className="h-4 w-4 text-primary" />
+              <p className="flex items-center gap-1.5 font-heading text-[10px] uppercase tracking-[0.14em] text-muted-foreground sm:gap-2 sm:text-xs sm:tracking-[0.16em]">
+                <IndianRupee className="h-3.5 w-3.5 text-primary sm:h-4 sm:w-4" />
                 Available Balance
               </p>
               {loading ? (
@@ -552,7 +564,7 @@ const WalletScreen = () => {
                   key={balance}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mt-2 font-display text-[clamp(2.25rem,12vw,3rem)] font-black leading-tight neon-text-purple sm:text-5xl"
+                  className="mt-1.5 font-display text-[clamp(1.8rem,10vw,2.45rem)] font-black leading-tight neon-text-purple sm:mt-2 sm:text-5xl"
                 >
                   {formatCurrency(balance)}
                 </motion.p>
@@ -566,7 +578,7 @@ const WalletScreen = () => {
                 </p>
               )}
 
-              <div className="mt-5 grid gap-2 min-[390px]:grid-cols-2 min-[640px]:grid-cols-3 sm:mt-6">
+              <div className="mt-3 grid grid-cols-3 gap-1.5 sm:mt-6 sm:gap-2">
                 <WalletStat
                   icon={Trophy}
                   label="Player Winnings"
@@ -594,19 +606,19 @@ const WalletScreen = () => {
             </div>
           </motion.div>
 
-          <section className="wallet-panel rounded-2xl p-3 sm:p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
+          <section className="wallet-panel rounded-2xl p-2.5 sm:p-4">
+            <div className="mb-2 flex items-center justify-between gap-3 sm:mb-3">
               <div>
                 <h2 className="font-heading text-sm font-black">
                   Quick Actions
                 </h2>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="hidden text-[11px] text-muted-foreground min-[430px]:block">
                   Fast and secure wallet controls
                 </p>
               </div>
               <Zap className="h-4 w-4 text-primary" />
             </div>
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
+            <div className="grid grid-cols-4 gap-1.5 sm:gap-2 lg:grid-cols-1">
               {[
                 {
                   icon: Plus,
@@ -645,19 +657,19 @@ const WalletScreen = () => {
                   key={action.title}
                   type="button"
                   onClick={() => navigate(action.route)}
-                  className="arena-focus wallet-action-card rounded-xl p-2.5 text-left sm:p-3"
+                  className="arena-focus wallet-action-card rounded-lg p-2 text-center sm:rounded-xl sm:p-3 lg:text-left"
                 >
-                  <span className="flex items-center gap-3">
+                  <span className="flex flex-col items-center gap-1.5 lg:flex-row lg:gap-3">
                     <span
-                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border sm:h-10 sm:w-10 ${action.bg} ${action.tone}`}
+                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border sm:h-10 sm:w-10 sm:rounded-xl ${action.bg} ${action.tone}`}
                     >
                       <action.icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-heading text-xs font-bold sm:text-sm">
+                      <span className="block truncate font-heading text-[10px] font-bold sm:text-sm">
                         {action.title}
                       </span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
+                      <span className="wallet-action-desc block truncate text-[11px] text-muted-foreground">
                         {action.desc}
                       </span>
                     </span>
@@ -668,7 +680,7 @@ const WalletScreen = () => {
           </section>
         </section>
 
-        <section className="grid gap-2 min-[390px]:grid-cols-2 sm:gap-3 lg:grid-cols-4">
+        <section className="grid grid-cols-2 gap-1.5 sm:gap-3 lg:grid-cols-4">
           <WalletStat
             icon={Coins}
             label="Credits Tracked"
@@ -699,10 +711,10 @@ const WalletScreen = () => {
           />
         </section>
 
-        <section className="wallet-panel rounded-2xl p-3 sm:p-5">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <section className="wallet-panel rounded-2xl p-2.5 sm:p-5">
+          <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <div>
-              <h2 className="flex items-center gap-2 font-heading text-base font-black">
+              <h2 className="flex items-center gap-2 font-heading text-sm font-black sm:text-base">
                 {historyView === "wallet" ? (
                   <History className="h-4 w-4 text-primary" />
                 ) : (
@@ -712,7 +724,7 @@ const WalletScreen = () => {
                   ? "Wallet Ledger"
                   : "Payment Activity"}
               </h2>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground sm:mt-1 sm:text-xs">
                 Clear status, amount direction, and source for every money
                 movement.
               </p>
@@ -723,7 +735,7 @@ const WalletScreen = () => {
                   key={tab}
                   type="button"
                   onClick={() => setActiveTab(tab)}
-                  className={`arena-focus rounded-full px-3 py-1.5 font-heading text-[10px] font-bold capitalize transition-colors ${
+                  className={`arena-focus rounded-full px-2.5 py-1 font-heading text-[10px] font-bold capitalize transition-colors sm:px-3 sm:py-1.5 ${
                     activeTab === tab
                       ? "bg-primary text-primary-foreground"
                       : "border border-glass-border bg-card/60 text-muted-foreground"
@@ -732,11 +744,11 @@ const WalletScreen = () => {
                   {tab}
                 </button>
               ))}
-              <div className="grid grid-cols-2 rounded-full border border-glass-border bg-card/60 p-1">
+              <div className="grid grid-cols-2 rounded-full border border-glass-border bg-card/60 p-0.5 sm:p-1">
                 <button
                   type="button"
                   onClick={() => setHistoryView("wallet")}
-                  className={`rounded-full px-3 py-1 font-heading text-[10px] transition-colors ${
+                  className={`rounded-full px-2.5 py-1 font-heading text-[10px] transition-colors sm:px-3 ${
                     historyView === "wallet"
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground"
@@ -748,7 +760,7 @@ const WalletScreen = () => {
                   type="button"
                   onClick={() => setHistoryView("payments")}
                   disabled={activeTab === "creator"}
-                  className={`rounded-full px-3 py-1 font-heading text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  className={`rounded-full px-2.5 py-1 font-heading text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 ${
                     historyView === "payments"
                       ? "bg-secondary text-secondary-foreground"
                       : "text-muted-foreground"
@@ -775,7 +787,7 @@ const WalletScreen = () => {
             {historyView === "wallet" &&
               !loading &&
               walletTransactions.length === 0 && (
-                <GlassCard className="py-8 text-center">
+                <GlassCard className="py-6 text-center sm:py-8">
                   <Wallet className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
                   <p className="font-heading text-sm">
                     No wallet transactions found
@@ -803,7 +815,7 @@ const WalletScreen = () => {
             {historyView === "payments" &&
               !loading &&
               paymentTransactions.length === 0 && (
-                <GlassCard className="py-8 text-center">
+                <GlassCard className="py-6 text-center sm:py-8">
                   <CreditCard className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
                   <p className="font-heading text-sm">
                     No payment activity found
@@ -840,7 +852,7 @@ const WalletScreen = () => {
             </div>
           )}
 
-          <div className="mt-4 rounded-xl border border-accent/20 bg-accent/10 p-3">
+          <div className="mt-3 rounded-xl border border-accent/20 bg-accent/10 p-2.5 sm:mt-4 sm:p-3">
             <p className="flex items-center gap-2 font-heading text-xs font-bold text-accent">
               <CheckCircle2 className="h-4 w-4" />
               Secure wallet note

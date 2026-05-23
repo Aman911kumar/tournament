@@ -2,6 +2,8 @@ import { Home, Search, Trophy, Wallet, User } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { UserAvatar } from "@/components/identity";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 
 const tabs = [
   { path: "/", icon: Home, label: "Home" },
@@ -14,6 +16,7 @@ const tabs = [
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { profile } = useCurrentProfile();
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-glass-border bg-[linear-gradient(180deg,hsl(var(--card)/0.98)_0%,hsl(var(--background))_100%)] pb-[env(safe-area-inset-bottom)] shadow-[0_-14px_38px_hsl(var(--background)/0.62)]">
@@ -38,7 +41,15 @@ const BottomNav = () => {
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
               )}
-              <tab.icon className="h-5 w-5 transition-colors" />
+              {tab.path === "/profile" && profile ? (
+                <UserAvatar
+                  user={profile}
+                  size="xs"
+                  className="transition-transform"
+                />
+              ) : (
+                <tab.icon className="h-5 w-5 transition-colors" />
+              )}
               <span className="max-w-full truncate text-[9px] font-heading font-semibold transition-colors min-[380px]:text-[10px]">
                 {tab.label}
               </span>

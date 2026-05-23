@@ -18,12 +18,13 @@ import {
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { followCreator, getCreatorProfile, rateCreator, unfollowCreator, CreatorProfileData } from "@/api/creators";
-import { getMyProfile } from "@/api/profile";
 import { Tournament } from "@/api/tournaments";
 import { toast } from "@/components/ui/sonner";
 import { formatCurrency, formatPrizeSummary, getErrorMessage, getErrorToast } from "@/lib/page-utils";
 import { CACHE_KEYS, readCache, writeCache } from "@/lib/offline-cache";
 import { createReport } from "@/api/moderation";
+import { ProfileHero } from "@/components/identity";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 
 const gameLabels: Record<string, string> = {
   freefire: "Free Fire",
@@ -139,7 +140,7 @@ const CreatorProfileScreen = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const [profile, setProfile] = useState<CreatorProfileData | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const { profile: currentProfile } = useCurrentProfile();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -188,33 +189,20 @@ const CreatorProfileScreen = () => {
     loadProfile();
   }, [loadProfile]);
 
-  useEffect(() => {
-    let active = true;
-
-    getMyProfile()
-      .then((res) => {
-        if (active) setCurrentUserId(res.data.user._id);
-      })
-      .catch(() => {
-        if (active) setCurrentUserId(null);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
   const channel = profile?.channel;
   const creator = profile?.creator ?? channel?.owner;
   const displayName = channel?.name ?? creator?.username ?? "Creator";
   const handle = channel?.handle ? `@${channel.handle}` : creator?.username ? `@${creator.username}` : "";
   const description = channel?.description || "Tournament creator";
+  const creatorAvatarUrl = channel?.avatar?.url || creator?.avatar?.url;
+  const creatorBannerUrl = channel?.banner?.url || creator?.banner?.url;
   const rating = Number(creator?.stats?.rating || 0);
   const ratingCount = Number(creator?.stats?.ratingCount || 0);
   const totalPrize = Number(profile?.totalPrize || 0);
   const tournaments = useMemo(() => profile?.tournaments ?? [], [profile]);
   const canFollow = Boolean(channel?._id && !channel.virtual);
   const isVerifiedCreator = Boolean(creator?.role?.includes("creator") || channel?._id);
+  const currentUserId = currentProfile?._id || null;
   const isOwnCreatorProfile = Boolean(currentUserId && creator?._id === currentUserId);
 
   const handleFollow = async () => {
@@ -433,77 +421,39 @@ const CreatorProfileScreen = () => {
 
         {!loading && !error && profile && (
           <>
-            <div className="relative rounded-xl overflow-hidden">
-              {channel?.banner?.url ? (
-                <img src={channel.banner.url} alt="" className="h-28 w-full object-cover" />
-              ) : (
-                <div className="h-28 gradient-neon opacity-70" />
-              )}
-              <div className="absolute -bottom-8 left-4">
-                <div className="relative">
-                  {channel?.avatar?.url || creator?.avatar?.url ? (
-                    <img
-                      src={channel?.avatar?.url ?? creator?.avatar?.url}
-                      alt=""
-                      className="w-20 h-20 rounded-full object-cover border-4 border-background neon-glow-purple"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 rounded-full gradient-primary flex items-center justify-center border-4 border-background neon-glow-purple">
-                      <span className="font-display text-2xl font-bold text-primary-foreground">{displayName[0]}</span>
-                    </div>
+            <ProfileHero
+              user={{
+                _id: creator?._id,
+                username: displayName,
+                avatar: creatorAvatarUrl ? { url: creatorAvatarUrl } : undefined,
+                role: isVerifiedCreator ? ["creator"] : creator?.role,
+              }}
+              title={displayName}
+              subtitle={[handle, description].filter(Boolean).join(" - ")}
+              bannerUrl={creatorBannerUrl}
+              stats={[
+                { label: "Followers", value: (channel?.memberCount ?? 0).toLocaleString("en-IN") },
+                { label: "Events", value: String(profile.tournamentCount) },
+                { label: "Prize", value: formatCurrency(totalPrize) },
+              ]}
+              actions={
+                <div className="flex gap-2">
+                  <button onClick={() => setReportOpen(true)} className="arena-focus grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.04]" title="Report creator">
+                    <Flag className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                  <button className="arena-focus grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.04]" title="Message creator">
+                    <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                  {isVerifiedCreator && (
+                    <span className="grid h-9 w-9 place-items-center rounded-lg border border-accent/25 bg-accent/10">
+                      <Shield className="h-4 w-4 fill-accent text-accent" />
+                    </span>
                   )}
-                  <div className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full border-2 border-background bg-accent flex items-center justify-center">
-                    <Shield className="w-3 h-3 text-accent-foreground fill-accent-foreground" />
-                  </div>
                 </div>
-              </div>
-            </div>
+              }
+            />
 
-            <div className="mt-8">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <h2 className="font-heading text-lg font-bold truncate">{displayName}</h2>
-                    {isVerifiedCreator && (
-                      <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-heading font-semibold text-accent">
-                        Verified
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-primary font-heading">{handle}</p>
-                  <p className="text-xs text-muted-foreground font-body mt-1 max-w-md">{description}</p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={() => setReportOpen(true)} className="w-8 h-8 glass rounded-full flex items-center justify-center" title="Report creator">
-                    <Flag className="w-3.5 h-3.5 text-muted-foreground" />
-                  </button>
-                  <button className="w-8 h-8 glass rounded-full flex items-center justify-center" title="Message creator">
-                    <MessageCircle className="w-3.5 h-3.5 text-muted-foreground" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 gap-2 mt-4">
-                {[
-                  { label: "Followers", value: (channel?.memberCount ?? 0).toLocaleString("en-IN") },
-                  { label: "Events", value: String(profile.tournamentCount) },
-                  { label: "Prize", value: formatCurrency(totalPrize) },
-                  { label: "Rating", value: rating.toFixed(1) },
-                ].map((item, index) => (
-                  <motion.div
-                    key={item.label}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.06 }}
-                    className="glass rounded-lg p-2 text-center min-w-0"
-                  >
-                    <p className="text-xs font-heading font-bold text-foreground truncate">{item.value}</p>
-                    <p className="text-[9px] text-muted-foreground">{item.label}</p>
-                  </motion.div>
-                ))}
-              </div>
-
-              <div className="mt-4 space-y-3">
+            <div className="mt-4 space-y-3">
                 {canFollow ? (
                   <NeonButton
                     full
@@ -533,7 +483,6 @@ const CreatorProfileScreen = () => {
                   </div>
                 )}
                 {renderRatingCard()}
-              </div>
             </div>
 
             <div className="flex gap-2">

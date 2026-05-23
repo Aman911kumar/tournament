@@ -31,7 +31,9 @@ import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { cancelTournament, deleteTournament, getParticipants, getTournaments, notifyTournamentRoom, Tournament, TournamentRegistration, updateTournamentStatus, updateTournamentVisibility } from "@/api/tournaments";
 import { banTournamentPlayer, createReport, getTournamentBans, TournamentBan, unbanTournamentPlayer } from "@/api/moderation";
-import { getMyProfile, User as ProfileUser } from "@/api/profile";
+import { User as ProfileUser } from "@/api/profile";
+import { UserAvatar } from "@/components/identity";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import {
   Dialog,
   DialogContent,
@@ -154,6 +156,7 @@ const getRegistrationPlayers = (registration: TournamentRegistration): Moderatio
 
 const CreatorDashboardScreen = () => {
   const navigate = useNavigate();
+  const { profile: currentProfile } = useCurrentProfile();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [creatorProfile, setCreatorProfile] = useState<ProfileUser | null>(null);
   const [query, setQuery] = useState("");
@@ -178,12 +181,12 @@ const CreatorDashboardScreen = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!currentProfile?._id) return undefined;
     let active = true;
 
     const loadTournaments = async () => {
       try {
-        const profileRes = await getMyProfile();
-        const user = profileRes.data.user;
+        const user = currentProfile;
         const userId = user._id;
         if (active) setCreatorProfile(user);
         const cachedTournaments = readCache<Tournament[]>(CACHE_KEYS.creatorDashboard(userId));
@@ -208,7 +211,7 @@ const CreatorDashboardScreen = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [currentProfile]);
 
   useEffect(() => {
     setRoomDrafts((previous) => {
@@ -1208,13 +1211,10 @@ const CreatorDashboardScreen = () => {
                       <div key={player.id} className="rounded-lg border border-glass-border bg-card/40 p-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex min-w-0 items-center gap-3">
-                            {player.avatarUrl ? (
-                              <img src={player.avatarUrl} alt={player.name} className="h-10 w-10 rounded-full object-cover" referrerPolicy="no-referrer" />
-                            ) : (
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
-                                {player.name.slice(0, 1).toUpperCase()}
-                              </div>
-                            )}
+                            <UserAvatar
+                              user={{ _id: player.id, username: player.name, avatar: { url: player.avatarUrl } }}
+                              size="md"
+                            />
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="truncate font-heading text-sm font-bold">{player.name}</p>

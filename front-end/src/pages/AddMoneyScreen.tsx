@@ -277,8 +277,8 @@ const AddMoneyScreen = () => {
       icon={CreditCard}
       maxWidth="max-w-4xl"
     >
-      <form onSubmit={handleAdd} className="space-y-4">
-        <section className="wallet-flow-hero overflow-hidden rounded-2xl border border-glass-border p-4 sm:p-5">
+      <form onSubmit={handleAdd} className="space-y-2.5 sm:space-y-4">
+        <section className="wallet-flow-hero overflow-hidden rounded-2xl border border-glass-border p-3 sm:p-5">
           <div className="flex flex-col gap-3 min-[430px]:flex-row min-[430px]:items-start min-[430px]:justify-between sm:gap-4">
             <div className="min-w-0">
               <div className="mb-2 flex items-center gap-2">
@@ -287,7 +287,7 @@ const AddMoneyScreen = () => {
                   Current Balance
                 </span>
               </div>
-              <p className="truncate font-display text-[clamp(2rem,11vw,2.75rem)] font-black leading-tight neon-text-purple sm:text-4xl">
+              <p className="truncate font-display text-[clamp(1.65rem,9vw,2.25rem)] font-black leading-tight neon-text-purple sm:text-4xl">
                 {balance === null ? "Unavailable" : formatCurrency(balance)}
               </p>
               {balance === null && (
@@ -296,7 +296,7 @@ const AddMoneyScreen = () => {
                 </p>
               )}
             </div>
-            <div className="w-full rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-left min-[430px]:w-auto min-[430px]:text-right">
+            <div className="w-full rounded-lg border border-accent/30 bg-accent/10 px-2.5 py-1.5 text-left min-[430px]:w-auto min-[430px]:text-right sm:rounded-xl sm:px-3 sm:py-2">
               <p className="font-heading text-[10px] uppercase text-muted-foreground">
                 Gateway
               </p>
@@ -307,8 +307,8 @@ const AddMoneyScreen = () => {
           </div>
         </section>
 
-        <section className="wallet-flow-panel rounded-2xl p-3 sm:p-5">
-          <div className="mb-3 flex flex-col gap-1.5 min-[430px]:flex-row min-[430px]:items-center min-[430px]:justify-between min-[430px]:gap-3">
+        <section className="wallet-flow-panel rounded-2xl p-2.5 sm:p-5">
+          <div className="mb-2.5 flex flex-col gap-1 min-[430px]:flex-row min-[430px]:items-center min-[430px]:justify-between min-[430px]:gap-3 sm:mb-3">
             <label
               htmlFor="add-money-amount"
               className="block font-heading text-xs text-muted-foreground"
@@ -323,11 +323,11 @@ const AddMoneyScreen = () => {
           </div>
 
           <div
-            className={`wallet-flow-input flex items-center gap-3 rounded-xl px-3 py-3 ${
+            className={`wallet-flow-input flex items-center gap-2 rounded-xl px-2.5 py-2.5 sm:gap-3 sm:px-3 sm:py-3 ${
               amount && !isValidAmount ? "!border-destructive/70" : ""
             }`}
           >
-            <IndianRupee className="h-6 w-6 shrink-0 text-accent" />
+            <IndianRupee className="h-5 w-5 shrink-0 text-accent sm:h-6 sm:w-6" />
             <input
               id="add-money-amount"
               type="number"
@@ -339,11 +339,11 @@ const AddMoneyScreen = () => {
               onChange={(e) => setAmount(normalizeAmountInput(e.target.value))}
               placeholder="0"
               disabled={loading}
-              className="min-w-0 flex-1 bg-transparent font-display text-[clamp(2.25rem,13vw,3rem)] font-bold leading-none outline-none placeholder:text-muted-foreground/40 disabled:opacity-60 sm:text-4xl"
+              className="min-w-0 flex-1 bg-transparent font-display text-[clamp(1.9rem,10vw,2.5rem)] font-bold leading-none outline-none placeholder:text-muted-foreground/40 disabled:opacity-60 sm:text-4xl"
             />
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2 min-[380px]:grid-cols-3 sm:grid-cols-6">
+          <div className="mt-3 grid grid-cols-3 gap-1.5 sm:mt-4 sm:grid-cols-6 sm:gap-2">
             {quickAmounts.map((amt) => (
               <motion.button
                 key={amt}
@@ -351,7 +351,7 @@ const AddMoneyScreen = () => {
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setAmount(String(amt))}
                 disabled={loading}
-                className={`rounded-xl border py-2.5 text-xs font-heading font-semibold transition-all disabled:opacity-60 ${
+                className={`rounded-lg border py-2 text-[10px] font-heading font-semibold transition-all disabled:opacity-60 sm:rounded-xl sm:py-2.5 sm:text-xs ${
                   value === amt
                     ? "border-primary/60 bg-primary/15 text-primary"
                     : "wallet-flow-tile hover:border-primary/50"
@@ -363,7 +363,7 @@ const AddMoneyScreen = () => {
           </div>
         </section>
 
-        <section className="wallet-flow-panel space-y-3 rounded-2xl p-3 sm:p-4">
+        <section className="wallet-flow-panel space-y-2.5 rounded-2xl p-2.5 sm:space-y-3 sm:p-4">
           <div className="flex items-center justify-between gap-3 text-xs">
             <span className="font-heading text-muted-foreground">
               Backend verified payment
@@ -393,7 +393,7 @@ const AddMoneyScreen = () => {
           full
           type="submit"
           disabled={loading || !isValidAmount}
-          className="flex min-h-[50px] items-center justify-center gap-2"
+          className="flex min-h-[44px] items-center justify-center gap-2 sm:min-h-[50px]"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           {buttonLabel}

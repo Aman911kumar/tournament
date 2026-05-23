@@ -19,9 +19,10 @@ import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { ApiError } from "@/api/client";
 import { ChannelSetupPayload, createChannel, CreatorChannel, getMyChannel, updateChannel } from "@/api/creators";
-import { getMyProfile, User } from "@/api/profile";
+import { User } from "@/api/profile";
 import { toast } from "@/components/ui/sonner";
 import { getErrorToast } from "@/lib/page-utils";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 
 interface FormState {
   name: string;
@@ -88,6 +89,7 @@ const toPayload = (form: FormState): ChannelSetupPayload => ({
 
 const ChannelSetupScreen = () => {
   const navigate = useNavigate();
+  const { profile: currentProfile } = useCurrentProfile();
   const [form, setForm] = useState<FormState>(emptyForm);
   const [profile, setProfile] = useState<User | null>(null);
   const [channel, setChannel] = useState<CreatorChannel | null>(null);
@@ -95,14 +97,14 @@ const ChannelSetupScreen = () => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (!currentProfile) return undefined;
     let active = true;
 
     const load = async () => {
       try {
-        const profileRes = await getMyProfile();
+        const user = currentProfile;
         if (!active) return;
-
-        const user = profileRes.data.user;
+        if (!user) return;
         setProfile(user);
 
         if (!user.role?.includes("creator") && !user.role?.includes("admin")) {
@@ -138,7 +140,7 @@ const ChannelSetupScreen = () => {
     return () => {
       active = false;
     };
-  }, [navigate]);
+  }, [currentProfile, navigate]);
 
   const handleValid = useMemo(() => /^[a-z0-9][a-z0-9_-]{2,29}$/.test(makeHandle(form.handle)), [form.handle]);
   const canSave = Boolean(form.name.trim() && handleValid && !saving);

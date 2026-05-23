@@ -17,12 +17,13 @@ import {
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { getTransferPinStatus, transferMoney } from "@/api/wallet";
-import { getMyProfile, User as ProfileUser } from "@/api/profile";
+import { User as ProfileUser } from "@/api/profile";
 import { formatCurrency, getErrorToast } from "@/lib/page-utils";
 import {
   WalletSecurityNote,
   WalletShell,
 } from "@/components/wallet/WalletShell";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 
 const inputClass =
   "wallet-flow-input w-full rounded-lg px-3 py-2.5 text-sm font-heading placeholder:text-muted-foreground/50 outline-none";
@@ -118,7 +119,7 @@ const TransferMoneyScreen = () => {
   const [transferPin, setTransferPin] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [hasTransferPin, setHasTransferPin] = useState<boolean | null>(null);
-  const [profile, setProfile] = useState<ProfileUser | null>(null);
+  const { profile } = useCurrentProfile();
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState("");
@@ -140,19 +141,6 @@ const TransferMoneyScreen = () => {
     hasTransferPin === true &&
     contactVerified &&
     !submitting;
-
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        const res = await getMyProfile();
-        setProfile(res.data.user);
-      } catch {
-        setProfile(null);
-      }
-    };
-
-    loadProfile();
-  }, []);
 
   useEffect(() => {
     getTransferPinStatus()

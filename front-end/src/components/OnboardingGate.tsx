@@ -1,21 +1,15 @@
 import { useMemo } from "react";
 import { Navigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { getMyProfile } from "@/api/profile";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 
 const isMissing = (value?: string | null) => !String(value || "").trim();
 const isProviderPhonePlaceholder = (value?: string | null) => /^(google|facebook):/i.test(String(value || "").trim());
 
 export default function OnboardingGate() {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["me"],
-    queryFn: () => getMyProfile(),
-    staleTime: 60_000,
-    retry: 1,
-  });
+  const { profile, isLoading, isError } = useCurrentProfile();
 
   const needsOnboarding = useMemo(() => {
-    const user = data?.data?.user;
+    const user = profile;
     if (!user) return false;
     if (!user.socialProvider) return false;
 
@@ -27,7 +21,7 @@ export default function OnboardingGate() {
     const legalMissing = !user.legalAgreements?.acceptedAt;
 
     return phoneMissing || dobMissing || legalMissing;
-  }, [data?.data?.user]);
+  }, [profile]);
 
   if (isLoading) return null;
   if (isError) return null;

@@ -12,6 +12,7 @@ import {
     toggleReaction,
     unpinChatMessage,
 } from "../services/chat.service.js";
+import { User } from "../models/user.model.js";
 
 const presenceByRoom = new Map();
 const voiceByRoom = new Map();
@@ -152,11 +153,40 @@ const updateVoiceParticipant = (socket, tournamentId, patch = {}) => {
     if (!participant) return null;
     const next = {
         ...participant,
+        username: patch.username || participant.username,
+        avatar: patch.avatar || participant.avatar,
+        role: patch.role || participant.role,
         muted: typeof patch.muted === "boolean" ? patch.muted : participant.muted,
         speaking: typeof patch.speaking === "boolean" ? patch.speaking : participant.speaking,
     };
     roomVoice.set(socket.userId, next);
     return serializeVoiceParticipant(next);
+};
+
+const refreshSocketProfile = async (io, socket) => {
+    const user = await User.findById(socket.userId).select("username avatar role isActive accountStatus").lean();
+    if (!user?.isActive || user.accountStatus === "banned" || user.role?.includes("banned")) {
+        socket.disconnect(true);
+        return;
+    }
+
+    socket.userRoles = Array.isArray(user.role) ? user.role : [];
+    socket.userProfile = {
+        _id: socket.userId,
+        username: user.username || "Player",
+        avatar: user.avatar || {},
+        role: socket.userRoles,
+    };
+
+    getJoinedVoiceRooms(socket).forEach((tournamentId) => {
+        const participant = updateVoiceParticipant(socket, tournamentId, {
+            username: socket.userProfile.username,
+            avatar: socket.userProfile.avatar,
+            role: socket.userRoles,
+        });
+        if (!participant) return;
+        io.to(getVoiceRoomName(tournamentId)).emit("voice:state", { tournamentId, participant });
+    });
 };
 
 const removeVoiceParticipant = (socket, tournamentId) => {
@@ -225,6 +255,10 @@ const runSocketAction = (socket, callback, action) => {
 };
 
 export const registerChatSocketHandlers = (io, socket) => {
+    socket.on("profile:refresh", () => {
+        refreshSocketProfile(io, socket).catch(() => undefined);
+    });
+
     socket.on("chat:join", (payload = {}, callback) => {
         runSocketAction(socket, callback, async () => {
             const tournamentId = payload.tournamentId;

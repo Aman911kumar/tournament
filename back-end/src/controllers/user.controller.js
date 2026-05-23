@@ -29,6 +29,12 @@ import { expireStaleRazorpayPayments } from '../services/paymentExpiry.service.j
 import { sendEmailVerification, sendPasswordResetEmail, sendPhoneVerificationEmail } from '../services/auth.service.js'
 import { getPushPublicKey } from '../services/notification.service.js'
 import { OAuthLoginCode } from "../models/oauthLoginCode.model.js";
+import {
+    deleteFromTeleStore,
+    sanitizeFileBaseName,
+    sanitizeFolderName,
+    uploadToTeleStore,
+} from "../services/storage/telestore.service.js";
 
 const generateAccessTokenAndRefreshToken = async (userId) => {
     try {
@@ -2178,9 +2184,149 @@ const leaveCreator = asyncHandler(async (req, res) => {
         new ApiResponse(200, { user: updatedUser }, "Creator mode disabled")
     );
 });
-const uploadAvatar = asyncHandler(async (req, res) => {
 
-})
+const PROFILE_IMAGE_TYPES = new Map([
+    ["image/jpeg", "jpg"],
+    ["image/jpg", "jpg"],
+    ["image/png", "png"],
+    ["image/webp", "webp"],
+]);
+
+const getProfileImageConfig = (kind) => {
+    const normalizedKind = kind === "banner" ? "banner" : "avatar";
+    return {
+        kind: normalizedKind,
+        label: normalizedKind === "banner" ? "Profile banner" : "Profile avatar",
+        maxBytes:
+            normalizedKind === "banner"
+                ? Number(process.env.PROFILE_BANNER_MAX_BYTES || 4 * 1024 * 1024)
+                : Number(process.env.PROFILE_AVATAR_MAX_BYTES || 2 * 1024 * 1024),
+        minBytes: 64,
+    };
+};
+
+const decodeUploadFileName = (value, fallback) => {
+    const encodedName = String(value || fallback);
+    const decodedName = (() => {
+        try {
+            return decodeURIComponent(encodedName);
+        } catch {
+            return encodedName;
+        }
+    })();
+
+    return decodedName.replace(/[^\w.\-()\s]/g, "").trim().slice(0, 120) || fallback;
+};
+
+const buildProfileFolderPath = (user) => {
+    const root = sanitizeFolderName(process.env.TELESTORE_PROFILE_ROOT_FOLDER_NAME || "Battle4Arena Profiles");
+    const userFolder = sanitizeFolderName(
+        `${user?.username || "player"}-${String(user?._id || "unknown").slice(-8)}`,
+        "player-profile"
+    );
+    return [root, userFolder];
+};
+
+const getTeleStoreProfileMediaId = (image = {}) => {
+    if (!image) return "";
+    if (image.provider === "telestore") return String(image.mediaId || image.public_id || "").trim();
+    return String(image.mediaId || "").trim();
+};
+
+const deleteStoredProfileImage = async (image, { required = false } = {}) => {
+    const mediaId = getTeleStoreProfileMediaId(image);
+    if (!mediaId) return { skipped: true };
+
+    try {
+        return await deleteFromTeleStore(mediaId);
+    } catch (error) {
+        if (required) throw error;
+        console.warn("TeleStore profile image delete failed", {
+            mediaId,
+            message: error?.message,
+        });
+        return { success: false, mediaId, message: error?.message };
+    }
+};
+
+const handleProfileImageUpload = async (req, res, kind) => {
+    const config = getProfileImageConfig(kind);
+    const user = await User.findById(req.user._id);
+    if (!user) throw new ApiError(404, "User not found");
+    const previousImage = user[config.kind]?.toObject?.() || user[config.kind] || null;
+
+    const buffer = Buffer.isBuffer(req.body) ? req.body : null;
+    if (!buffer?.length || buffer.length < config.minBytes) {
+        throw new ApiError(400, `${config.label} file is required`);
+    }
+    if (buffer.length > config.maxBytes) {
+        throw new ApiError(413, `${config.label} is too large`);
+    }
+
+    const mimeType = String(req.headers["content-type"] || "application/octet-stream").split(";")[0].toLowerCase();
+    const ext = PROFILE_IMAGE_TYPES.get(mimeType);
+    if (!ext) {
+        throw new ApiError(400, "Upload a JPG, PNG, or WebP image");
+    }
+
+    const originalName = decodeUploadFileName(req.header("x-file-name"), `${config.kind}.${ext}`);
+    const userLabel = sanitizeFileBaseName(user.username || String(user._id).slice(-8), "player");
+    const fileBase = sanitizeFileBaseName(originalName, config.kind);
+    const fileName = `${config.kind}-${userLabel}-${Date.now()}-${fileBase}.${ext}`;
+
+    const uploaded = await uploadToTeleStore({
+        buffer,
+        fileName,
+        originalName,
+        mimeType,
+        folderPath: buildProfileFolderPath(user),
+        tags: ["battle4arena", "profile", config.kind, ...(user.role || [])].filter(Boolean),
+        metadata: {
+            userId: user._id?.toString?.(),
+            username: user.username,
+            kind: config.kind,
+        },
+    });
+
+    user[config.kind] = {
+        public_id: uploaded.mediaId,
+        mediaId: uploaded.mediaId,
+        provider: uploaded.provider,
+        url: uploaded.publicUrl || uploaded.downloadUrl || uploaded.apiUrl,
+        thumbUrl: uploaded.thumbUrl,
+        updatedAt: new Date(),
+    };
+    await user.save({ validateBeforeSave: false });
+    await deleteStoredProfileImage(previousImage);
+
+    const updatedUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
+    return res.status(200).json(
+        new ApiResponse(200, { user: await buildUserProfileResponse(updatedUser) }, `${config.label} updated successfully`)
+    );
+};
+
+const removeProfileImage = async (req, res, kind) => {
+    const config = getProfileImageConfig(kind);
+    const user = await User.findById(req.user._id);
+    if (!user) throw new ApiError(404, "User not found");
+    const previousImage = user[config.kind]?.toObject?.() || user[config.kind] || null;
+
+    await deleteStoredProfileImage(previousImage, { required: true });
+
+    user.set(config.kind, undefined);
+    await user.save({ validateBeforeSave: false });
+
+    const updatedUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
+    return res.status(200).json(
+        new ApiResponse(200, { user: await buildUserProfileResponse(updatedUser) }, `${config.label} removed successfully`)
+    );
+};
+
+const uploadAvatar = asyncHandler(async (req, res) => handleProfileImageUpload(req, res, "avatar"));
+const removeAvatar = asyncHandler(async (req, res) => removeProfileImage(req, res, "avatar"));
+const uploadBanner = asyncHandler(async (req, res) => handleProfileImageUpload(req, res, "banner"));
+const removeBanner = asyncHandler(async (req, res) => removeProfileImage(req, res, "banner"));
+
 const deleteUser = asyncHandler(async (req, res) => {
     const user = req.user;
     const { password } = req.body;
@@ -2736,6 +2882,9 @@ export {
     becomeCreator,
     leaveCreator,
     uploadAvatar,
+    removeAvatar,
+    uploadBanner,
+    removeBanner,
     deleteUser,
     updateUser,
     getWalletBalance,

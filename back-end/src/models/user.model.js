@@ -85,7 +85,19 @@ const userSchema = new mongoose.Schema({
     },
     avatar: {
         public_id: { type: String, trim: true },
-        url: { type: String, trim: true }
+        mediaId: { type: String, trim: true },
+        provider: { type: String, trim: true },
+        url: { type: String, trim: true },
+        thumbUrl: { type: String, trim: true },
+        updatedAt: { type: Date }
+    },
+    banner: {
+        public_id: { type: String, trim: true },
+        mediaId: { type: String, trim: true },
+        provider: { type: String, trim: true },
+        url: { type: String, trim: true },
+        thumbUrl: { type: String, trim: true },
+        updatedAt: { type: Date }
     },
     walletBalance: {
         type: Number,

@@ -8,6 +8,7 @@ import { CreatorChannel, followCreator, getCreators, getJoinedChannels, unfollow
 import { CACHE_KEYS, readCache, writeCache } from "@/lib/offline-cache";
 import { toast } from "@/components/ui/sonner";
 import { getErrorToast } from "@/lib/page-utils";
+import { UserAvatar } from "@/components/identity";
 
 const SubscriptionsScreen = () => {
   const navigate = useNavigate();
@@ -137,13 +138,15 @@ const SubscriptionsScreen = () => {
             <GlassCard key={creator._id} neon delay={index * 0.08}>
               <div className="flex items-center gap-3">
                 <button onClick={() => navigate(`/creator/${creator._id}`)} className="relative shrink-0">
-                  {creator.avatar?.url || creator.owner?.avatar?.url ? (
-                    <img src={creator.avatar?.url ?? creator.owner?.avatar?.url} alt="" className="w-12 h-12 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full gradient-primary flex items-center justify-center">
-                      <span className="font-display text-sm font-bold text-primary-foreground">{creator.name[0]}</span>
-                    </div>
-                  )}
+                  <UserAvatar
+                    user={{
+                      _id: creator.owner?._id,
+                      username: creator.name || creator.owner?.username,
+                      avatar: { url: creator.avatar?.url ?? creator.owner?.avatar?.url },
+                      role: ["creator"],
+                    }}
+                    size="lg"
+                  />
                   <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-secondary flex items-center justify-center">
                     <Shield className="w-2.5 h-2.5 text-secondary-foreground fill-secondary-foreground" />
                   </div>

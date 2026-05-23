@@ -7,6 +7,7 @@ import { ChatRoomState } from "../models/chatRoomState.model.js";
 import { ChatReadState } from "../models/chatReadState.model.js";
 import { ChatModerationLog } from "../models/chatModerationLog.model.js";
 import { User } from "../models/user.model.js";
+import { deleteFromTeleStore } from "./storage/telestore.service.js";
 
 const MODERATOR_ROLES = ["admin", "moderator", "super_admin", "support", "tournament_manager"];
 const ACTIVE_REGISTRATION_STATUSES = ["paid", "confirmed"];
@@ -279,6 +280,20 @@ const normalizeAttachments = (attachments = []) =>
         })
         .filter(Boolean);
 
+const deleteMessageTeleStoreAttachments = async (attachments = []) => {
+    const mediaIds = [
+        ...new Set(
+            (attachments || [])
+                .filter((attachment) => String(attachment?.storageProvider || "").toLowerCase() === "telestore")
+                .map((attachment) => String(attachment?.mediaId || "").trim())
+                .filter(Boolean)
+        ),
+    ];
+
+    if (!mediaIds.length) return;
+    await Promise.all(mediaIds.map((mediaId) => deleteFromTeleStore(mediaId)));
+};
+
 const normalizeMentions = (mentions = []) =>
     [...new Set((mentions || []).map(asId).filter((id) => mongoose.Types.ObjectId.isValid(id)))].slice(0, 12);
 
@@ -427,6 +442,8 @@ export const deleteChatMessage = async ({ user, messageId }) => {
     if (!isSender && !context.permissions.canDeleteAny) {
         throw new ApiError(403, "You cannot delete this message");
     }
+
+    await deleteMessageTeleStoreAttachments(message.attachments);
 
     message.status = "deleted";
     message.body = "";

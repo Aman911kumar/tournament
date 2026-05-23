@@ -1,18 +1,19 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ArrowLeft, Lock, Eye, EyeOff, ShieldCheck, KeyRound, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { toast } from "@/components/ui/sonner";
 import { changePassword } from "@/api/auth";
-import { getMyProfile } from "@/api/profile";
 import { getErrorToast } from "@/lib/page-utils";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 
 type FieldKey = "current" | "next" | "confirm";
 
 const ChangePasswordScreen = () => {
   const navigate = useNavigate();
+  const { profile } = useCurrentProfile();
   const [values, setValues] = useState({ current: "", next: "", confirm: "" });
   const [show, setShow] = useState<Record<FieldKey, boolean>>({ current: false, next: false, confirm: false });
   const [loading, setLoading] = useState(false);
@@ -20,25 +21,13 @@ const ChangePasswordScreen = () => {
   const [isSetPasswordMode, setIsSetPasswordMode] = useState(false);
   const [hasPhoneNumber, setHasPhoneNumber] = useState(true);
 
-  const loadProfile = useCallback(async () => {
-    try {
-      setProfileLoading(true);
-      const res = await getMyProfile();
-      const user = res.data.user;
-      const phoneNumber = String(user.phone_number || "").trim();
-      setIsSetPasswordMode(Boolean(user.socialProvider) && user.passwordLoginEnabled !== true);
-      setHasPhoneNumber(Boolean(phoneNumber) && !/^(google|facebook):/i.test(phoneNumber));
-    } catch {
-      setIsSetPasswordMode(false);
-      setHasPhoneNumber(true);
-    } finally {
-      setProfileLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+    if (!profile) return;
+    const phoneNumber = String(profile.phone_number || "").trim();
+    setIsSetPasswordMode(Boolean(profile.socialProvider) && profile.passwordLoginEnabled !== true);
+    setHasPhoneNumber(Boolean(phoneNumber) && !/^(google|facebook):/i.test(phoneNumber));
+    setProfileLoading(false);
+  }, [profile]);
 
   const strength = useMemo(() => {
     const p = values.next;

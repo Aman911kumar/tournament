@@ -42,6 +42,7 @@ import { formatCurrency, getErrorMessage } from "@/lib/page-utils";
 import { CACHE_KEYS, readCache, writeAuthenticatedCache, writeCache } from "@/lib/offline-cache";
 import { createReport, ReportCategory } from "@/api/moderation";
 import { toast } from "@/components/ui/sonner";
+import { UserAvatar, UserIdentity } from "@/components/identity";
 import gameFreefire from "@/assets/game-freefire.jpg";
 import gameBgmi from "@/assets/game-bgmi.jpg";
 import gameValorant from "@/assets/game-valorant.jpg";
@@ -130,8 +131,6 @@ const getStatusMeta = (status?: Tournament["status"]) => {
 
 const getPlayerName = (registration: TournamentRegistration) =>
   registration.user?.username || registration.gameAccount?.inGameName || registration.gameAccounts?.[0]?.inGameName || "Player";
-
-const getPlayerAvatar = (registration: TournamentRegistration) => registration.user?.avatar?.url || "";
 
 const TournamentDetailScreen = () => {
   const navigate = useNavigate();
@@ -510,13 +509,15 @@ const TournamentDetailScreen = () => {
                       onClick={() => creator.id && navigate(`/creator/${creator.id}`)}
                       className="arena-focus inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-black/32 px-2.5 py-2 text-left"
                     >
-                      {creator.avatarUrl ? (
-                        <img src={creator.avatarUrl} alt={creator.name} className="h-8 w-8 rounded-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        <span className="grid h-8 w-8 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                          {creator.name[0]}
-                        </span>
-                      )}
+                      <UserAvatar
+                        user={{
+                          _id: creator.id,
+                          username: creator.name,
+                          avatar: { url: creator.avatarUrl },
+                          role: ["creator"],
+                        }}
+                        size="sm"
+                      />
                       <span className="min-w-0">
                         <span className="block truncate text-xs font-heading font-bold text-white">{creator.name}</span>
                         <span className="flex items-center gap-1 text-[10px] text-white/60">
@@ -628,17 +629,17 @@ const TournamentDetailScreen = () => {
 
                 <section className="tournament-section rounded-xl p-4">
                   <div className="flex items-center gap-3">
-                    {creator.avatarUrl ? (
-                      <img src={creator.avatarUrl} alt={creator.name} className="h-11 w-11 rounded-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      <span className="grid h-11 w-11 place-items-center rounded-full bg-primary font-heading text-sm font-bold text-primary-foreground">
-                        {creator.name[0]}
-                      </span>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-heading text-sm font-bold">{creator.name}</p>
-                      <p className="text-[11px] text-muted-foreground">Organizer</p>
-                    </div>
+                    <UserIdentity
+                      user={{
+                        _id: creator.id,
+                        username: creator.name,
+                        avatar: { url: creator.avatarUrl },
+                        role: ["creator"],
+                      }}
+                      subtitle="Organizer"
+                      avatarSize="md"
+                      className="min-w-0 flex-1"
+                    />
                     {creator.verified && <Shield className="h-4 w-4 fill-accent text-accent" />}
                   </div>
                 </section>
@@ -806,19 +807,17 @@ const TournamentDetailScreen = () => {
                   {participantPreview.length > 0 ? (
                     <div className="grid gap-2 sm:grid-cols-2">
                       {participantPreview.map((registration) => {
-                        const avatar = getPlayerAvatar(registration);
+                        const playerName = getPlayerName(registration);
                         return (
                           <div key={registration._id} className="detail-tile rounded-lg p-3">
                             <div className="flex items-center gap-3">
-                              {avatar ? (
-                                <img src={avatar} alt={getPlayerName(registration)} className="h-10 w-10 rounded-full object-cover" referrerPolicy="no-referrer" />
-                              ) : (
-                                <span className="grid h-10 w-10 place-items-center rounded-full bg-muted font-heading text-xs font-bold">
-                                  {getPlayerName(registration).slice(0, 1).toUpperCase()}
-                                </span>
-                              )}
+                              <UserAvatar
+                                user={registration.user}
+                                name={playerName}
+                                size="md"
+                              />
                               <div className="min-w-0 flex-1">
-                                <p className="truncate font-heading text-sm font-bold">{getPlayerName(registration)}</p>
+                                <p className="truncate font-heading text-sm font-bold">{playerName}</p>
                                 <p className="truncate text-[11px] text-muted-foreground">
                                   {registration.gameAccount?.gameId || registration.gameAccounts?.[0]?.gameId || "Game ID pending"}
                                 </p>

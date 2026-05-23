@@ -52,9 +52,11 @@ import {
   unpinChatMessage,
   uploadChatAttachment,
 } from "@/api/chat";
-import { getMyProfile, User } from "@/api/profile";
+import { User } from "@/api/profile";
+import { UserAvatar } from "@/components/identity";
 import { getChatSocket, ChatPresencePayload } from "@/lib/chat-socket";
 import { useTournamentVoiceRoom } from "@/hooks/useTournamentVoiceRoom";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { getErrorMessage } from "@/lib/page-utils";
 import { toast } from "@/components/ui/sonner";
 
@@ -420,9 +422,12 @@ const MessageBubble = memo(
           className={`flex max-w-[94%] gap-2 sm:max-w-[86%] ${own ? "flex-row-reverse" : "flex-row"}`}
         >
           {!grouped && (
-            <div className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/10 bg-muted text-xs font-heading font-bold">
-              {(message.sender?.username || "S").slice(0, 1).toUpperCase()}
-            </div>
+            <UserAvatar
+              user={message.sender}
+              size="sm"
+              className="mt-1"
+              name={message.sender?.username || "System"}
+            />
           )}
           {grouped && <div className="w-8 shrink-0" />}
 
@@ -636,17 +641,23 @@ const VoiceDock = ({
       {voice.joined && (
         <div className="hidden max-w-[180px] items-center -space-x-2 overflow-hidden min-[760px]:flex">
           {visibleParticipants.map((participant) => (
-            <span
+            <UserAvatar
               key={participant.userId}
+              user={{
+                _id: participant.userId,
+                username: participant.username,
+                avatar: participant.avatar,
+                role: participant.role,
+              }}
+              size="xs"
+              status={participant.speaking ? "speaking" : "online"}
               className={`voice-avatar ${participant.speaking ? "voice-avatar-speaking" : ""}`}
               title={
                 participant.userId === currentUserId
                   ? "You"
                   : participant.username || "Player"
               }
-            >
-              {(participant.username || "P").slice(0, 1).toUpperCase()}
-            </span>
+            />
           ))}
           {voice.participants.length > visibleParticipants.length && (
             <span className="voice-count">
@@ -734,7 +745,7 @@ const TournamentCommentsScreen = () => {
   const isAtBottomRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [profile, setProfile] = useState<User | null>(null);
+  const { profile } = useCurrentProfile();
   const [access, setAccess] = useState<ChatAccess | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -839,12 +850,10 @@ const TournamentCommentsScreen = () => {
     setLoading(true);
     setLoadError("");
     try {
-      const [profileRes, accessRes, page] = await Promise.all([
-        getMyProfile().catch(() => null),
+      const [accessRes, page] = await Promise.all([
         getChatAccess(id),
         getChatMessages(id, { limit: MESSAGE_PAGE_LIMIT }),
       ]);
-      setProfile(profileRes?.data?.user || null);
       setAccess(accessRes);
       setSlowModeSeconds(Number(accessRes.slowModeSeconds || 0));
       setAnnouncement(accessRes.announcement?.body || "");

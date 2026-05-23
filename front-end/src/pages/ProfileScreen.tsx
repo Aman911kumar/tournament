@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   BarChart3,
@@ -11,13 +12,10 @@ import {
   HelpCircle,
   Lock,
   LogOut,
-  Mail,
-  Phone,
   RefreshCcw,
   Settings,
   ShieldCheck,
   Trophy,
-  User,
   UserMinus,
   UserPlus,
   Users,
@@ -25,7 +23,8 @@ import {
 import GlassCard from "@/components/GlassCard";
 import { toast } from "@/components/ui/sonner";
 import { logout } from "@/api/auth";
-import { becomeCreator, getMyProfile, leaveCreator, User as ProfileUser } from "@/api/profile";
+import { becomeCreator, leaveCreator } from "@/api/profile";
+import { ProfileHero } from "@/components/identity";
 import {
   Dialog,
   DialogContent,
@@ -35,13 +34,14 @@ import {
 } from "@/components/ui/dialog";
 import {
   CACHE_KEYS,
-  getSavedDataLabel,
-  getSavedDataNotice,
-  readCache,
   removeCache,
-  writeAuthenticatedCache,
 } from "@/lib/offline-cache";
 import { formatCurrency, getErrorMessage, getErrorToast } from "@/lib/page-utils";
+import {
+  PROFILE_QUERY_KEY,
+  setCurrentProfileCache,
+  useCurrentProfile,
+} from "@/hooks/useCurrentProfile";
 
 const menuItems = [
   { icon: Edit, label: "Edit Profile", route: "/edit-profile" },
@@ -85,10 +85,14 @@ const ProfileSkeleton = () => (
 
 const ProfileScreen = () => {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<ProfileUser | null>(null);
-  const [cacheNotice, setCacheNotice] = useState<string | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [profileError, setProfileError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const {
+    profile,
+    isLoading: profileLoading,
+    error: profileLoadError,
+    refetch: refetchProfile,
+    cacheNotice,
+  } = useCurrentProfile();
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [creatorLoading, setCreatorLoading] = useState(false);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
@@ -100,44 +104,7 @@ const ProfileScreen = () => {
     { label: "Won", value: formatCurrency(profile?.stats?.amount_won ?? profile?.playerEarnings ?? 0) },
     { label: "Tournaments", value: profile?.stats?.tournamentsPlayed ?? profile?.stats?.matchesPlayed ?? 0 },
   ];
-
-  const fetchProfile = useCallback(async () => {
-    const cachedProfile = readCache<ProfileUser>(CACHE_KEYS.profile);
-
-    try {
-      setProfileLoading(true);
-      setProfileError(null);
-      if (cachedProfile) {
-        setProfile(cachedProfile.data);
-        setCacheNotice(getSavedDataLabel(cachedProfile.savedAt));
-      }
-
-      const res = await getMyProfile();
-      const user = res.data.user;
-      setProfile(user);
-      setCacheNotice(null);
-      writeAuthenticatedCache(CACHE_KEYS.profile, user, res);
-    } catch (error) {
-      const message = getErrorMessage(error, "Failed to load profile.");
-      if (cachedProfile) {
-        setProfile(cachedProfile.data);
-        setProfileError(null);
-        const notice = getSavedDataNotice(cachedProfile.savedAt, error);
-        setCacheNotice(notice);
-        toast.info("Showing saved profile data.", { description: notice });
-      } else {
-        setProfileError(message);
-        const errorToast = getErrorToast(error, { action: "Load profile", fallback: "Failed to load profile." });
-        toast.error(errorToast.title, { description: errorToast.description });
-      }
-    } finally {
-      setProfileLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
+  const profileError = profile ? null : profileLoadError ? getErrorMessage(profileLoadError, "Failed to load profile.") : null;
 
   const handleLogout = async () => {
     try {
@@ -153,6 +120,7 @@ const ProfileScreen = () => {
       removeCache(CACHE_KEYS.profile);
       removeCache(CACHE_KEYS.gameAccounts);
       removeCache(CACHE_KEYS.walletSummary);
+      queryClient.removeQueries({ queryKey: PROFILE_QUERY_KEY });
       setLogoutLoading(false);
       navigate("/login");
     }
@@ -177,8 +145,7 @@ const ProfileScreen = () => {
     try {
       setCreatorLoading(true);
       const res = await becomeCreator();
-      setProfile(res.data.user);
-      writeAuthenticatedCache(CACHE_KEYS.profile, res.data.user, res);
+      setCurrentProfileCache(queryClient, res.data.user, res);
       toast.success(res.message);
     } catch (error) {
       const errorToast = getErrorToast(error, {
@@ -207,8 +174,7 @@ const ProfileScreen = () => {
     try {
       setCreatorLoading(true);
       const res = await leaveCreator();
-      setProfile(res.data.user);
-      writeAuthenticatedCache(CACHE_KEYS.profile, res.data.user, res);
+      setCurrentProfileCache(queryClient, res.data.user, res);
       toast.success(res.message);
       setLeaveDialogOpen(false);
       resetLeaveDialog();
@@ -243,7 +209,7 @@ const ProfileScreen = () => {
             <p className="text-xs text-muted-foreground mt-1 break-words">{profileError}</p>
             <button
               type="button"
-              onClick={fetchProfile}
+              onClick={() => refetchProfile()}
               className="mt-4 inline-flex items-center gap-2 text-xs font-heading text-primary"
             >
               <RefreshCcw className="w-3.5 h-3.5" />
@@ -251,50 +217,18 @@ const ProfileScreen = () => {
             </button>
           </GlassCard>
         ) : profile ? (
-          <GlassCard neon className="flex flex-col items-center text-center relative overflow-hidden">
-            <div className="absolute -top-10 -left-10 w-28 h-28 bg-primary/10 rounded-full blur-xl" />
-            {cacheNotice && (
-              <span className="relative z-10 mb-4 max-w-full rounded-full bg-secondary/10 px-3 py-1.5 text-center text-[10px] font-heading leading-snug text-secondary sm:max-w-[90%]" title={cacheNotice}>
-                {cacheNotice}
-              </span>
-            )}
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="relative z-10 w-20 h-20 rounded-full gradient-primary flex items-center justify-center mb-3 neon-glow-purple overflow-hidden"
-            >
-              {profile.avatar?.url ? (
-                <img
-                  src={profile.avatar.url}
-                  alt={profile.username}
-                  className="h-full w-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <User className="w-8 h-8 text-primary-foreground" />
-              )}
-            </motion.div>
-            <h2 className="font-heading text-lg font-bold max-w-full truncate">{profile.username}</h2>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1 max-w-full">
-              <Mail className="w-3 h-3 shrink-0" />
-              <span className="truncate">{profile.email}</span>
-            </div>
-            {getDisplayPhoneNumber(profile.phone_number) && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground mb-4 max-w-full">
-                <Phone className="w-3 h-3 shrink-0" />
-                <span className="truncate">{getDisplayPhoneNumber(profile.phone_number)}</span>
-              </div>
-            )}
-
-            <div className="grid grid-cols-3 gap-3 w-full">
-              {stats.map((s) => (
-                <div key={s.label} className="glass rounded-lg py-2 px-1 min-w-0">
-                  <p className="font-display text-xs sm:text-sm font-bold text-primary truncate">{s.value}</p>
-                  <p className="text-[10px] text-muted-foreground font-heading">{s.label}</p>
-                </div>
-              ))}
-            </div>
-          </GlassCard>
+          <ProfileHero
+            user={profile}
+            title={profile.username}
+            subtitle={[
+              profile.email,
+              getDisplayPhoneNumber(profile.phone_number),
+            ].filter(Boolean).join(" • ")}
+            bannerUrl={profile.banner?.url}
+            stats={stats}
+            cacheNotice={cacheNotice}
+            onEditImages={() => navigate("/edit-profile")}
+          />
         ) : (
           <GlassCard className="text-center py-8">
             <AlertCircle className="w-10 h-10 mx-auto text-muted-foreground mb-2" />

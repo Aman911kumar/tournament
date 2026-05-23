@@ -257,13 +257,13 @@ const WithdrawScreen = () => {
       icon={ArrowUpRight}
       maxWidth="max-w-4xl"
     >
-      <section className="wallet-flow-hero rounded-2xl border border-glass-border p-4 sm:p-5">
+      <section className="wallet-flow-hero rounded-2xl border border-glass-border p-3 sm:p-5">
         <div className="flex flex-col gap-3 min-[430px]:flex-row min-[430px]:items-end min-[430px]:justify-between sm:gap-4">
           <div className="min-w-0">
             <p className="font-heading text-xs text-muted-foreground">
               Available Balance
             </p>
-            <p className="mt-1 truncate font-display text-[clamp(2rem,11vw,2.75rem)] font-black leading-tight neon-text-purple sm:text-4xl">
+            <p className="mt-1 truncate font-display text-[clamp(1.65rem,9vw,2.25rem)] font-black leading-tight neon-text-purple sm:text-4xl">
               {balance === null
                 ? "Balance unavailable"
                 : formatCurrency(balance)}
@@ -274,18 +274,18 @@ const WithdrawScreen = () => {
               </p>
             )}
           </div>
-          <span className="w-full rounded-xl border border-secondary/25 bg-secondary/10 px-3 py-2 font-heading text-xs font-bold text-secondary min-[430px]:w-auto">
+          <span className="w-full rounded-lg border border-secondary/25 bg-secondary/10 px-2.5 py-1.5 font-heading text-[11px] font-bold text-secondary min-[430px]:w-auto sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs">
             Min withdrawal {formatCurrency(100)}
           </span>
         </div>
       </section>
 
-      <section className="wallet-flow-panel rounded-2xl p-3 sm:p-5">
+      <section className="wallet-flow-panel rounded-2xl p-2.5 sm:p-5">
         <label className="mb-2 block font-heading text-xs text-muted-foreground">
           Withdraw Amount
         </label>
-        <div className="wallet-flow-input flex items-center gap-3 rounded-xl px-3 py-3">
-          <span className="font-display text-2xl font-bold text-foreground">
+        <div className="wallet-flow-input flex items-center gap-2 rounded-xl px-2.5 py-2.5 sm:gap-3 sm:px-3 sm:py-3">
+          <span className="font-display text-xl font-bold text-foreground sm:text-2xl">
             Rs.
           </span>
           <input
@@ -294,11 +294,11 @@ const WithdrawScreen = () => {
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0"
             disabled={loading}
-            className="min-w-0 flex-1 bg-transparent font-display text-[clamp(2.25rem,13vw,3rem)] font-bold leading-none outline-none placeholder:text-muted-foreground/40 disabled:opacity-60 sm:text-4xl"
+            className="min-w-0 flex-1 bg-transparent font-display text-[clamp(1.9rem,10vw,2.5rem)] font-bold leading-none outline-none placeholder:text-muted-foreground/40 disabled:opacity-60 sm:text-4xl"
           />
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-1.5 sm:mt-4 sm:grid-cols-4 sm:gap-2">
           {quickAmounts.map((amt) => (
             <motion.button
               key={amt}
@@ -306,7 +306,7 @@ const WithdrawScreen = () => {
               whileTap={{ scale: 0.95 }}
               onClick={() => setAmount(String(amt))}
               disabled={loading}
-              className="wallet-flow-tile rounded-xl py-2.5 text-[10px] font-heading font-semibold transition-all hover:border-primary/50 disabled:opacity-60"
+              className="wallet-flow-tile rounded-lg py-2 text-[10px] font-heading font-semibold transition-all hover:border-primary/50 disabled:opacity-60 sm:rounded-xl sm:py-2.5"
             >
               {amt === balance ? "Max" : formatCurrency(amt)}
             </motion.button>
@@ -314,7 +314,7 @@ const WithdrawScreen = () => {
         </div>
       </section>
 
-      <section className="wallet-flow-panel rounded-2xl p-3 sm:p-5">
+      <section className="wallet-flow-panel rounded-2xl p-2.5 sm:p-5">
         <p className="mb-3 font-heading text-xs text-muted-foreground">
           Withdraw To
         </p>
@@ -331,7 +331,7 @@ const WithdrawScreen = () => {
                 setShowNewMethod(true);
               }}
               disabled={loading}
-              className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all disabled:opacity-60 ${
+              className={`flex w-full items-center gap-2 rounded-lg border p-2.5 text-left transition-all disabled:opacity-60 sm:gap-3 sm:rounded-xl sm:p-3 ${
                 method === m.id
                   ? "border-secondary/50 bg-secondary/10"
                   : "wallet-flow-tile"
@@ -356,7 +356,7 @@ const WithdrawScreen = () => {
         </div>
       </section>
 
-      <section className="wallet-flow-panel rounded-2xl p-3 sm:p-5">
+      <section className="wallet-flow-panel rounded-2xl p-2.5 sm:p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <p className="font-heading text-xs text-muted-foreground">
             Saved Payout Details
@@ -387,7 +387,7 @@ const WithdrawScreen = () => {
                   setDestination(item.display || "");
                   setShowNewMethod(false);
                 }}
-                className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+                className={`flex w-full items-center gap-2 rounded-lg border p-2.5 text-left transition-colors sm:gap-3 sm:rounded-xl sm:p-3 ${
                   selectedPayoutMethodId === item._id
                     ? "border-accent/40 bg-accent/10"
                     : "wallet-flow-tile"
@@ -431,7 +431,7 @@ const WithdrawScreen = () => {
         )}
 
         {showNewMethod && (
-          <div className="mb-4 space-y-3 rounded-xl border border-glass-border bg-background/30 p-3">
+          <div className="mb-3 space-y-2.5 rounded-xl border border-glass-border bg-background/30 p-2.5 sm:mb-4 sm:space-y-3 sm:p-3">
             <input
               value={methodForm.label}
               onChange={(e) =>

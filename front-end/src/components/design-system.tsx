@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/identity";
 import { cn } from "@/lib/utils";
 
 type Tone = "primary" | "secondary" | "accent" | "danger" | "muted" | "pink";
@@ -359,18 +360,10 @@ export const CreatorCard = ({
     className="arena-focus min-w-[132px] shrink-0 rounded-xl border border-glass-border bg-card/82 p-3 text-left transition-colors hover:border-primary/45 hover:bg-card"
   >
     <div className="flex items-center gap-3">
-      {avatarUrl ? (
-        <img
-          src={avatarUrl}
-          alt={name}
-          className="h-12 w-12 rounded-xl object-cover"
-          referrerPolicy="no-referrer"
-        />
-      ) : (
-        <span className="grid h-12 w-12 place-items-center rounded-xl gradient-primary font-display text-lg font-bold text-primary-foreground">
-          {name.slice(0, 1)}
-        </span>
-      )}
+      <UserAvatar
+        user={{ username: name, avatar: { url: avatarUrl }, role: ["creator"] }}
+        size="lg"
+      />
       <div className="min-w-0">
         <p className="truncate font-heading text-sm font-bold">{name}</p>
         <p className="mt-0.5 text-[10px] text-muted-foreground">

@@ -80,6 +80,7 @@ type ClientToServerEvents = {
     sdp?: RTCSessionDescriptionInit;
     candidate?: RTCIceCandidateInit;
   }) => void;
+  "profile:refresh": () => void;
 };
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
@@ -113,4 +114,9 @@ export const getChatSocket = (): Socket<ServerToClientEvents, ClientToServerEven
 export const closeChatSocket = () => {
   socket?.disconnect();
   socket = null;
+};
+
+export const refreshChatSocketProfile = () => {
+  if (!socket?.connected) return;
+  socket.emit("profile:refresh");
 };

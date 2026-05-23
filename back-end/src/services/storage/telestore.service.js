@@ -297,3 +297,34 @@ export const uploadToTeleStore = async ({
         raw: file,
     };
 };
+
+export const deleteFromTeleStore = async (mediaId) => {
+    const id = String(mediaId || "").trim();
+    if (!id) return { skipped: true };
+
+    const config = getConfig();
+    if (!isTeleStoreConfigured()) {
+        throw new ApiError(500, "TeleStore is not configured. Set TELESTORE_API_BASE_URL, TELESTORE_API_KEY, and TELESTORE_API_SECRET.");
+    }
+
+    const response = await withTimeout(
+        (signal) =>
+            fetch(`${config.apiBaseUrl}/media/${encodeURIComponent(id)}`, {
+                method: "DELETE",
+                headers: authHeaders(config),
+                signal,
+            }),
+        config.requestTimeoutMs
+    );
+
+    if (response.status === 404) {
+        return { success: true, alreadyDeleted: true, mediaId: id };
+    }
+
+    const json = await parseJsonResponse(response);
+    return {
+        success: json?.success !== false,
+        mediaId: id,
+        raw: json,
+    };
+};

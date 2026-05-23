@@ -5,6 +5,7 @@ export interface CreatorUser {
   _id: string;
   username: string;
   avatar?: { url?: string };
+  banner?: { url?: string };
   role?: string[];
   stats?: { rating?: number; ratingCount?: number };
 }

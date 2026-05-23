@@ -1,31 +1,44 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   ArrowLeft,
   Calendar,
   Camera,
   CheckCircle2,
+  Image as ImageIcon,
   KeyRound,
+  Loader2,
   Mail,
   Phone,
   RefreshCcw,
   ShieldCheck,
+  Trash2,
   User,
   Users,
 } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { toast } from "@/components/ui/sonner";
-import { getMyProfile, ProfileUpdatePayload, updateProfile, User as ProfileUser, verifyEmail, verifyPhone } from "@/api/profile";
 import {
-  CACHE_KEYS,
-  getSavedDataLabel,
-  getSavedDataNotice,
-  readCache,
-  writeAuthenticatedCache,
-} from "@/lib/offline-cache";
+  ProfileUpdatePayload,
+  removeAvatar,
+  removeBanner,
+  updateProfile,
+  uploadAvatar,
+  uploadBanner,
+  User as ProfileUser,
+  verifyEmail,
+  verifyPhone,
+} from "@/api/profile";
+import { ProfileHero } from "@/components/identity";
+import {
+  setCurrentProfileCache,
+  useCurrentProfile,
+} from "@/hooks/useCurrentProfile";
+import { compressImageFile } from "@/lib/image-utils";
 import { getErrorMessage, getErrorToast } from "@/lib/page-utils";
 
 interface ProfileForm {
@@ -107,14 +120,22 @@ const VerificationBadge = ({ verified }: { verified?: boolean }) => (
 
 const EditProfileScreen = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const {
+    profile: cachedProfile,
+    isLoading: profileLoading,
+    error: profileLoadError,
+    refetch: refetchProfile,
+    cacheNotice,
+  } = useCurrentProfile();
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const bannerInputRef = useRef<HTMLInputElement | null>(null);
   const [initialForm, setInitialForm] = useState<ProfileForm>(emptyForm);
   const [form, setForm] = useState<ProfileForm>(emptyForm);
   const [profile, setProfile] = useState<ProfileUser | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState<"email" | "phone" | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [cacheNotice, setCacheNotice] = useState<string | null>(null);
+  const [imageBusy, setImageBusy] = useState<"avatar" | "banner" | "remove-avatar" | "remove-banner" | null>(null);
 
   const hasChanges = useMemo(
     () =>
@@ -132,52 +153,25 @@ const EditProfileScreen = () => {
   const avatarUrl = profile?.avatar?.url ?? "";
   const emailVerified = isEmailVerified(profile);
   const phoneVerified = isPhoneVerified(profile);
+  const loading = profileLoading && !profile;
+  const error = !profile && profileLoadError ? getErrorMessage(profileLoadError, "Failed to load profile.") : null;
 
   const update = (field: keyof ProfileForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const applyProfile = (user: ProfileUser, cacheLabel: string | null = null) => {
+  const applyProfile = (user: ProfileUser) => {
     const nextForm = toForm(user);
     setProfile(user);
     setInitialForm(nextForm);
     setForm(nextForm);
-    setCacheNotice(cacheLabel);
   };
 
-  const fetchProfile = useCallback(async () => {
-    const cachedProfile = readCache<ProfileUser>(CACHE_KEYS.profile);
-
-    try {
-      setLoading(true);
-      setError(null);
-      if (cachedProfile && hasVerificationFields(cachedProfile.data)) {
-        applyProfile(cachedProfile.data, getSavedDataLabel(cachedProfile.savedAt));
-      }
-
-      const res = await getMyProfile();
-      applyProfile(res.data.user, null);
-      writeAuthenticatedCache(CACHE_KEYS.profile, res.data.user, res);
-    } catch (loadError) {
-      const message = getErrorMessage(loadError, "Failed to load profile.");
-      if (cachedProfile && hasVerificationFields(cachedProfile.data)) {
-        setError(null);
-        const notice = getSavedDataNotice(cachedProfile.savedAt, loadError);
-        setCacheNotice(notice);
-        toast.info("Showing saved profile data.", { description: notice });
-      } else {
-        setError(message);
-        const errorToast = getErrorToast(loadError, { action: "Load profile", fallback: "Failed to load profile." });
-        toast.error(errorToast.title, { description: errorToast.description });
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
+    if (cachedProfile && hasVerificationFields(cachedProfile)) {
+      applyProfile(cachedProfile);
+    }
+  }, [cachedProfile]);
 
   const handleSave = async () => {
     if (!hasChanges) {
@@ -210,8 +204,8 @@ const EditProfileScreen = () => {
       if (form.gender !== initialForm.gender) payload.gender = form.gender;
 
       const res = await updateProfile(payload);
-      applyProfile(res.data.user, null);
-      writeAuthenticatedCache(CACHE_KEYS.profile, res.data.user, res);
+      applyProfile(res.data.user);
+      setCurrentProfileCache(queryClient, res.data.user, res);
       toast.success(res.message);
     } catch (saveError) {
       const errorToast = getErrorToast(saveError, { action: "Update profile", fallback: "Failed to update profile." });
@@ -234,14 +228,71 @@ const EditProfileScreen = () => {
     try {
       setVerifying(type);
       const res = type === "email" ? await verifyEmail() : await verifyPhone();
-      applyProfile(res.data.user, null);
-      writeAuthenticatedCache(CACHE_KEYS.profile, res.data.user, res);
+      applyProfile(res.data.user);
+      setCurrentProfileCache(queryClient, res.data.user, res);
       toast.success(res.message);
     } catch (verifyError) {
       const errorToast = getErrorToast(verifyError, { action: type === "email" ? "Verify email" : "Verify phone", fallback: "Verification failed." });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
       setVerifying(null);
+    }
+  };
+
+  const handleImageFile = async (kind: "avatar" | "banner", file?: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Upload an image file.");
+      return;
+    }
+
+    const limitMb = kind === "avatar" ? 6 : 10;
+    if (file.size > limitMb * 1024 * 1024) {
+      toast.error(`${kind === "avatar" ? "Avatar" : "Banner"} is too large.`, {
+        description: `Choose an image under ${limitMb} MB.`,
+      });
+      return;
+    }
+
+    try {
+      setImageBusy(kind);
+      const prepared = await compressImageFile(file, {
+        maxWidth: kind === "avatar" ? 640 : 1800,
+        maxHeight: kind === "avatar" ? 640 : 720,
+        quality: kind === "avatar" ? 0.82 : 0.78,
+      });
+      const res = kind === "avatar" ? await uploadAvatar(prepared) : await uploadBanner(prepared);
+      applyProfile(res.data.user);
+      setCurrentProfileCache(queryClient, res.data.user, res);
+      toast.success(res.message);
+    } catch (uploadError) {
+      const errorToast = getErrorToast(uploadError, {
+        action: kind === "avatar" ? "Upload avatar" : "Upload banner",
+        fallback: "Could not update profile image.",
+      });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setImageBusy(null);
+      if (kind === "avatar" && avatarInputRef.current) avatarInputRef.current.value = "";
+      if (kind === "banner" && bannerInputRef.current) bannerInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveImage = async (kind: "avatar" | "banner") => {
+    try {
+      setImageBusy(kind === "avatar" ? "remove-avatar" : "remove-banner");
+      const res = kind === "avatar" ? await removeAvatar() : await removeBanner();
+      applyProfile(res.data.user);
+      setCurrentProfileCache(queryClient, res.data.user, res);
+      toast.success(res.message);
+    } catch (removeError) {
+      const errorToast = getErrorToast(removeError, {
+        action: kind === "avatar" ? "Remove avatar" : "Remove banner",
+        fallback: "Could not remove profile image.",
+      });
+      toast.error(errorToast.title, { description: errorToast.description });
+    } finally {
+      setImageBusy(null);
     }
   };
 
@@ -268,28 +319,75 @@ const EditProfileScreen = () => {
       </div>
 
       <div className="mx-auto w-full max-w-4xl space-y-4 px-4 sm:px-5">
-        <GlassCard neon className="flex items-center gap-4">
-          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full gradient-primary">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt={form.username || "Profile avatar"} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-            ) : (
-              <div className="grid h-full w-full place-items-center">
-                <User className="h-8 w-8 text-primary-foreground" />
+        <input
+          ref={avatarInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={(event) => handleImageFile("avatar", event.target.files?.[0])}
+        />
+        <input
+          ref={bannerInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={(event) => handleImageFile("banner", event.target.files?.[0])}
+        />
+
+        {profile && (
+          <ProfileHero
+            user={profile}
+            title={form.username || profile.username}
+            subtitle={form.email || form.phone_number || "Build your Battle4Arena identity"}
+            bannerUrl={profile.banner?.url}
+            cacheNotice={cacheNotice}
+            compact
+            actions={
+              <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={Boolean(imageBusy)}
+                  className="arena-focus inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-3 text-[10px] font-heading font-bold text-primary transition-colors hover:bg-primary/15 disabled:opacity-50"
+                >
+                  {imageBusy === "avatar" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+                  Change avatar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => bannerInputRef.current?.click()}
+                  disabled={Boolean(imageBusy)}
+                  className="arena-focus inline-flex h-8 items-center justify-center gap-1.5 rounded-full border border-secondary/25 bg-secondary/10 px-3 text-[10px] font-heading font-bold text-secondary transition-colors hover:bg-secondary/15 disabled:opacity-50"
+                >
+                  {imageBusy === "banner" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
+                  Change banner
+                </button>
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveImage("avatar")}
+                    disabled={Boolean(imageBusy)}
+                    className="arena-focus inline-flex h-8 items-center justify-center gap-1.5 rounded-full px-2.5 text-[10px] font-heading font-bold text-destructive/85 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {imageBusy === "remove-avatar" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    Remove avatar
+                  </button>
+                )}
+                {profile.banner?.url && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveImage("banner")}
+                    disabled={Boolean(imageBusy)}
+                    className="arena-focus inline-flex h-8 items-center justify-center gap-1.5 rounded-full px-2.5 text-[10px] font-heading font-bold text-destructive/85 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {imageBusy === "remove-banner" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    Remove banner
+                  </button>
+                )}
               </div>
-            )}
-            <div className="absolute bottom-0 right-0 grid h-7 w-7 place-items-center rounded-full bg-accent">
-              <Camera className="h-3.5 w-3.5 text-accent-foreground" />
-            </div>
-          </div>
-          <div className="min-w-0">
-            <p className="truncate font-heading text-base font-bold">{form.username || "Player"}</p>
-            <p className="truncate text-xs text-muted-foreground">{form.email || form.phone_number || "Add contact details"}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <VerificationBadge verified={emailVerified} />
-              <VerificationBadge verified={phoneVerified} />
-            </div>
-          </div>
-        </GlassCard>
+            }
+          />
+        )}
 
         {loading && (
           <div className="space-y-4">
@@ -307,7 +405,7 @@ const EditProfileScreen = () => {
             <AlertCircle className="mx-auto mb-2 h-10 w-10 text-destructive" />
             <p className="text-sm font-heading">Could not load profile</p>
             <p className="mt-1 break-words text-xs text-muted-foreground">{error}</p>
-            <button type="button" onClick={fetchProfile} className="mt-4 inline-flex items-center gap-2 text-xs font-heading text-primary">
+            <button type="button" onClick={() => refetchProfile()} className="mt-4 inline-flex items-center gap-2 text-xs font-heading text-primary">
               <RefreshCcw className="h-3.5 w-3.5" />
               Retry
             </button>
@@ -316,12 +414,6 @@ const EditProfileScreen = () => {
 
         {!loading && !error && (
           <>
-            {cacheNotice && (
-              <p className="truncate rounded-full bg-secondary/10 px-3 py-2 text-[10px] font-heading text-secondary" title={cacheNotice}>
-                {cacheNotice}
-              </p>
-            )}
-
             <GlassCard>
               <div className="mb-4 flex items-center gap-2">
                 <User className="h-4 w-4 text-primary" />

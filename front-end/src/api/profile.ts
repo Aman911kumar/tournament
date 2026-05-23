@@ -5,6 +5,8 @@ export const ENDPOINTS = {
   me: "/user/profile",
   update: "/user/profile",
   onboarding: "/user/profile/onboarding",
+  avatar: "/user/profile/avatar",
+  banner: "/user/profile/banner",
   stats: "/profile/stats",
   becomeCreator: "/user/creator",
   leaveCreator: "/user/creator",
@@ -23,6 +25,16 @@ export interface ProfileUpdatePayload {
   password?: string;
   bio?: string;
   avatarUrl?: string;
+  bannerUrl?: string;
+}
+
+export interface ProfileImage {
+  public_id?: string;
+  mediaId?: string;
+  provider?: string;
+  url?: string;
+  thumbUrl?: string;
+  updatedAt?: string;
 }
 
 export interface User {
@@ -41,7 +53,8 @@ export interface User {
   }>;
   socialProvider?: "google" | "facebook";
   passwordLoginEnabled?: boolean;
-  avatar?: { public_id?: string; url?: string };
+  avatar?: ProfileImage;
+  banner?: ProfileImage;
   dateOfBirth: string | null;
   gender: string | null;
   onboarding?: { completedAt?: string | null; source?: string } | null;
@@ -96,10 +109,36 @@ export async function getMyProfile(): Promise<ApiResponse<{ user: User }>> {
   // return null;
 }
 
-export async function updateProfile(payload: ProfileUpdatePayload):Promise<ApiResponse> {
+export async function updateProfile(payload: ProfileUpdatePayload):Promise<ApiResponse<{ user: User }>> {
   return apiFetch(ENDPOINTS.update, { method: "PATCH", body: JSON.stringify(payload) , credentials:"include"});
   // return { success: true };
 }
+
+const uploadProfileImage = (
+  endpoint: string,
+  file: File,
+): Promise<ApiResponse<{ user: User }>> =>
+  apiFetch(endpoint, {
+    method: "POST",
+    body: file,
+    credentials: "include",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      "X-File-Name": encodeURIComponent(file.name),
+    },
+  });
+
+export const uploadAvatar = (file: File): Promise<ApiResponse<{ user: User }>> =>
+  uploadProfileImage(ENDPOINTS.avatar, file);
+
+export const removeAvatar = (): Promise<ApiResponse<{ user: User }>> =>
+  apiFetch(ENDPOINTS.avatar, { method: "DELETE", credentials: "include" });
+
+export const uploadBanner = (file: File): Promise<ApiResponse<{ user: User }>> =>
+  uploadProfileImage(ENDPOINTS.banner, file);
+
+export const removeBanner = (): Promise<ApiResponse<{ user: User }>> =>
+  apiFetch(ENDPOINTS.banner, { method: "DELETE", credentials: "include" });
 
 export async function completeOnboarding(
   payload: CompleteOnboardingPayload,

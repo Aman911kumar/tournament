@@ -7,9 +7,9 @@ import NeonButton from "@/components/NeonButton";
 import { getParticipants, joinTournament } from "@/api/tournaments";
 import { listGameAccounts } from "@/api/gameAccounts";
 import { getBalance } from "@/api/wallet";
-import { getMyProfile } from "@/api/profile";
 import { toast } from "@/components/ui/sonner";
 import { getErrorMessage, getErrorToast } from "@/lib/page-utils";
+import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 
 type TournamentType = "solo" | "duo" | "squad" | "team";
 
@@ -36,6 +36,7 @@ interface SlotInfo {
 
 const SlotSelectionScreen = () => {
   const navigate = useNavigate();
+  const { profile } = useCurrentProfile();
   const { id } = useParams();
   const [params] = useSearchParams();
 
@@ -119,8 +120,13 @@ const SlotSelectionScreen = () => {
   const handleConfirm = async () => {
     try {
       setConfirming(true);
-      const profile = await getMyProfile();
-      if (!profile.data.user.emailVerified || !profile.data.user.phoneVerified) {
+      if (!profile) {
+        toast.error("Profile still loading", {
+          description: "Wait a moment and try joining again.",
+        });
+        return;
+      }
+      if (!profile?.emailVerified || !profile?.phoneVerified) {
         toast.error("Verification required", {
           description: "Verify both email and phone before joining tournaments.",
         });
@@ -128,7 +134,7 @@ const SlotSelectionScreen = () => {
         return;
       }
 
-      if (!hasRealPhoneNumber(profile.data.user.phone_number)) {
+      if (!hasRealPhoneNumber(profile.phone_number)) {
         toast.error("Phone number required", {
           description: "Add your phone number before joining any tournament.",
         });

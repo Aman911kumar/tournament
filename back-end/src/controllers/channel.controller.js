@@ -57,7 +57,7 @@ const resolveChannel = async (identifier, includeInactive = false) => {
         query.isActive = true;
     }
 
-    const channel = await Channel.findOne(query).populate("owner", "username avatar stats");
+    const channel = await Channel.findOne(query).populate("owner", "username avatar banner stats");
 
     if (!channel) {
         throw new ApiError(404, "Channel not found");
@@ -152,7 +152,7 @@ const createChannel = asyncHandler(async (req, res) => {
 });
 
 const getMyChannel = asyncHandler(async (req, res) => {
-    const channel = await Channel.findOne({ owner: req.user._id }).populate("owner", "username avatar stats");
+    const channel = await Channel.findOne({ owner: req.user._id }).populate("owner", "username avatar banner stats");
 
     if (!channel) {
         throw new ApiError(404, "Channel not found");
@@ -179,7 +179,7 @@ const listChannels = asyncHandler(async (req, res) => {
     }
 
     const channels = await Channel.find(query)
-        .populate("owner", "username avatar stats")
+        .populate("owner", "username avatar banner stats")
         .sort({ memberCount: -1, createdAt: -1 })
         .skip(Number(skip))
         .limit(Number(limit))
@@ -245,7 +245,7 @@ const listChannels = asyncHandler(async (req, res) => {
     const creatorFallbackUsers = await User.find(fallbackUserQuery)
             .sort({ createdAt: -1 })
             .limit(Math.max(Number(limit) - data.length, 0))
-            .select("username avatar stats role")
+            .select("username avatar banner stats role")
             .lean();
     const fallbackChannels = creatorFallbackUsers.map((user) => ({
         _id: user._id,
@@ -278,8 +278,8 @@ const getChannelByIdentifier = asyncHandler(async (req, res) => {
 
     const tournamentQuery = buildChannelTournamentQuery(channel, extra);
     const tournaments = await Tournament.find(tournamentQuery)
-        .populate("organizer", "username avatar stats")
-        .populate("channel", "name handle avatar")
+        .populate("organizer", "username avatar banner stats")
+        .populate("channel", "name handle avatar banner")
         .select("-room_details.roomId -room_details.roomPass")
         .sort({ startAt: 1, createdAt: -1 })
         .limit(Number(tournamentLimit))
@@ -316,12 +316,12 @@ const getCreatorByUserId = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid creator user ID");
     }
 
-    const user = await User.findById(userId).select("username avatar role stats createdAt").lean();
+    const user = await User.findById(userId).select("username avatar banner role stats createdAt").lean();
     if (!user || !user.role?.includes("creator")) {
         throw new ApiError(404, "Creator not found");
     }
 
-    const channel = await Channel.findOne({ owner: userId, isActive: true }).populate("owner", "username avatar stats");
+    const channel = await Channel.findOne({ owner: userId, isActive: true }).populate("owner", "username avatar banner stats");
     const extra = {};
     if (status) extra.status = status;
 
@@ -330,8 +330,8 @@ const getCreatorByUserId = asyncHandler(async (req, res) => {
         : { organizer: userId, ...extra };
 
     const tournaments = await Tournament.find(tournamentQuery)
-        .populate("organizer", "username avatar stats")
-        .populate("channel", "name handle avatar")
+        .populate("organizer", "username avatar banner stats")
+        .populate("channel", "name handle avatar banner")
         .select("-room_details.roomId -room_details.roomPass")
         .sort({ startAt: 1, createdAt: -1 })
         .limit(Number(tournamentLimit))
