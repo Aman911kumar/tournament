@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
-  AtSign,
   Ban,
   CheckCheck,
   Clipboard,
@@ -17,7 +16,11 @@ import {
   Lock,
   Megaphone,
   MessageCircle,
+  Mic,
+  MicOff,
   Paperclip,
+  PhoneCall,
+  PhoneOff,
   Pin,
   PinOff,
   Reply,
@@ -50,10 +53,11 @@ import {
 } from "@/api/chat";
 import { getMyProfile, User } from "@/api/profile";
 import { getChatSocket, ChatPresencePayload } from "@/lib/chat-socket";
+import { useTournamentVoiceRoom } from "@/hooks/useTournamentVoiceRoom";
 import { getErrorMessage } from "@/lib/page-utils";
 import { toast } from "@/components/ui/sonner";
 
-const EMOJI_REACTIONS = ["👍", "❤️", "😂", "🔥", "😮", "👏", "🏆", "🎯"];
+const CHAT_REACTIONS = ["\u{1F44D}", "\u2764\uFE0F", "\u{1F602}", "\u{1F525}", "\u{1F62E}", "\u{1F44F}", "\u{1F3C6}", "\u{1F3AF}"];
 const MESSAGE_PAGE_LIMIT = 30;
 
 const getUserId = (value?: { _id?: string } | string | null) =>
@@ -112,22 +116,22 @@ const copyText = async (label: string, value?: string | null) => {
 
 const SocketStatus = ({ connected }: { connected: boolean }) => (
   <span
-    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-heading ${
+    className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-full border px-2 text-[10px] font-heading ${
       connected
         ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
         : "border-amber-400/30 bg-amber-400/10 text-amber-300"
     }`}
   >
     {connected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-    {connected ? "Live" : "Reconnecting"}
+    <span className="hidden sm:inline">{connected ? "Live" : "Reconnecting"}</span>
   </span>
 );
 
 const AttachmentPreview = ({ attachment }: { attachment: ChatAttachment }) => {
   if (attachment.type === "image") {
     return (
-      <a href={attachment.url} target="_blank" rel="noreferrer" className="mt-2 block overflow-hidden rounded-lg border border-white/10">
-        <img src={attachment.url} alt={attachment.name} loading="lazy" className="max-h-72 w-full object-cover" />
+      <a href={attachment.url} target="_blank" rel="noreferrer" className="mt-2 block overflow-hidden rounded-lg border border-white/10 bg-background/35">
+        <img src={attachment.url} alt={attachment.name} loading="lazy" decoding="async" className="max-h-64 w-full object-cover sm:max-h-72" />
       </a>
     );
   }
@@ -190,7 +194,7 @@ const RoomCard = ({ message }: { message: ChatMessage }) => {
   );
 };
 
-const MessageBubble = ({
+const MessageBubble = memo(({
   message,
   previous,
   currentUserId,
@@ -240,7 +244,7 @@ const MessageBubble = ({
 
   return (
     <div className={`flex ${own ? "justify-end" : "justify-start"} ${grouped ? "mt-1" : "mt-3"}`}>
-      <div className={`flex max-w-[86%] gap-2 ${own ? "flex-row-reverse" : "flex-row"}`}>
+      <div className={`flex max-w-[94%] gap-2 sm:max-w-[86%] ${own ? "flex-row-reverse" : "flex-row"}`}>
         {!grouped && (
           <div className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/10 bg-muted text-xs font-heading font-bold">
             {(message.sender?.username || "S").slice(0, 1).toUpperCase()}
@@ -256,7 +260,7 @@ const MessageBubble = ({
             </div>
           )}
           <div
-            className={`group relative rounded-2xl border px-3 py-2 shadow-[0_12px_28px_rgba(0,0,0,0.18)] ${
+            className={`chat-bubble group relative rounded-2xl border px-3 py-2 ${
               own
                 ? "rounded-br-md border-primary/30 bg-primary/20"
                 : "rounded-bl-md border-white/10 bg-card/90"
@@ -311,7 +315,7 @@ const MessageBubble = ({
               <button type="button" onClick={() => onReply(message)} className="chat-action">
                 <Reply className="h-3.5 w-3.5" />
               </button>
-              {EMOJI_REACTIONS.slice(0, 4).map((emoji) => (
+              {CHAT_REACTIONS.slice(0, 4).map((emoji) => (
                 <button key={emoji} type="button" onClick={() => onReact(message, emoji)} className="chat-action">
                   {emoji}
                 </button>
@@ -355,7 +359,8 @@ const MessageBubble = ({
       </div>
     </div>
   );
-};
+});
+MessageBubble.displayName = "MessageBubble";
 
 const SkeletonMessages = () => (
   <div className="space-y-3 px-4 py-4">
@@ -367,13 +372,94 @@ const SkeletonMessages = () => (
   </div>
 );
 
+const VoiceDock = ({
+  voice,
+  currentUserId,
+  connected,
+  canJoin,
+}: {
+  voice: ReturnType<typeof useTournamentVoiceRoom>;
+  currentUserId: string;
+  connected: boolean;
+  canJoin: boolean;
+}) => {
+  const active = voice.joined || voice.participants.length > 0;
+  const visibleParticipants = voice.participants.slice(0, 3);
+  const self = voice.participants.find((participant) => participant.userId === currentUserId);
+
+  return (
+    <div className="flex shrink-0 items-center gap-1.5" title={voice.error || undefined}>
+      {voice.joined && (
+        <div className="hidden max-w-[180px] items-center -space-x-2 overflow-hidden min-[760px]:flex">
+          {visibleParticipants.map((participant) => (
+            <span
+              key={participant.userId}
+              className={`voice-avatar ${participant.speaking ? "voice-avatar-speaking" : ""}`}
+              title={participant.userId === currentUserId ? "You" : participant.username || "Player"}
+            >
+              {(participant.username || "P").slice(0, 1).toUpperCase()}
+            </span>
+          ))}
+          {voice.participants.length > visibleParticipants.length && (
+            <span className="voice-count">+{voice.participants.length - visibleParticipants.length}</span>
+          )}
+        </div>
+      )}
+
+      {!voice.joined ? (
+        <button
+          type="button"
+          disabled={!canJoin || !connected || voice.status === "joining"}
+          onClick={voice.joinVoice}
+          className={`arena-focus inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border px-3 font-heading text-xs font-bold transition-colors disabled:opacity-50 ${
+            active
+              ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-200 hover:bg-emerald-400/20"
+              : "border-cyan-400/25 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/20"
+          }`}
+          aria-label="Join voice call"
+        >
+          {voice.status === "joining" ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />}
+          <span className="hidden md:inline">{voice.participants.length ? `${voice.participants.length} in voice` : "Join voice"}</span>
+        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={voice.toggleMute}
+            className={`arena-focus grid h-10 w-10 shrink-0 place-items-center rounded-lg border transition-colors ${
+              voice.muted
+                ? "border-amber-400/35 bg-amber-400/10 text-amber-200"
+                : self?.speaking
+                  ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-200"
+                  : "border-cyan-400/30 bg-cyan-400/10 text-cyan-200"
+            }`}
+            aria-label={voice.muted ? "Unmute microphone" : "Mute microphone"}
+          >
+            {voice.muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={voice.leaveVoice}
+            className="arena-focus grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-red-400/35 bg-red-500/10 text-red-200 transition-colors hover:bg-red-500/20"
+            aria-label="Leave voice call"
+          >
+            <PhoneOff className="h-4 w-4" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+
 const TournamentCommentsScreen = () => {
   const navigate = useNavigate();
   const { id = "" } = useParams();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const typingTimerRef = useRef<number | null>(null);
+  const typingTimeoutsRef = useRef<Map<string, number>>(new Map());
   const readTimerRef = useRef<number | null>(null);
   const lastTypingEmitRef = useRef(0);
+  const isAtBottomRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [profile, setProfile] = useState<User | null>(null);
@@ -397,11 +483,17 @@ const TournamentCommentsScreen = () => {
   const [moderationOpen, setModerationOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const [slowModeSeconds, setSlowModeSeconds] = useState(0);
+  const [newMessageCount, setNewMessageCount] = useState(0);
 
   const currentUserId = profile?._id || "";
   const lastMessage = messages[messages.length - 1];
   const canSend = Boolean(access?.permissions.canSend);
   const canModerate = Boolean(access?.permissions.canModerate);
+  const voice = useTournamentVoiceRoom({
+    tournamentId: id,
+    currentUserId,
+    enabled: Boolean(access && !loadError),
+  });
 
   const typingLabel = useMemo(() => {
     const active = typingUsers.filter((userId) => userId !== currentUserId);
@@ -415,6 +507,8 @@ const TournamentCommentsScreen = () => {
       const el = scrollRef.current;
       if (!el) return;
       el.scrollTo({ top: el.scrollHeight, behavior });
+      isAtBottomRef.current = true;
+      setNewMessageCount(0);
     });
   }, []);
 
@@ -467,10 +561,16 @@ const TournamentCommentsScreen = () => {
     };
     const handleDisconnect = () => setConnected(false);
     const handleMessage = (message: ChatMessage) => {
+      if (String(message.tournament) !== id) return;
+      const own = getUserId(message.sender) === currentUserId;
       setMessages((current) => mergeMessage(current, message));
       const el = scrollRef.current;
       const nearBottom = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 180;
-      if (nearBottom) setTimeout(() => scrollToBottom(), 0);
+      if (nearBottom || own) {
+        setTimeout(() => scrollToBottom(), 0);
+      } else {
+        setNewMessageCount((count) => Math.min(count + 1, 99));
+      }
     };
     const handlePresence = (payload: ChatPresencePayload) => {
       if (payload.tournamentId === id) setPresence(payload);
@@ -481,9 +581,13 @@ const TournamentCommentsScreen = () => {
         const next = current.filter((userId) => userId !== payload.userId);
         return payload.isTyping ? [...next, payload.userId] : next;
       });
-      window.setTimeout(() => {
+      const previousTimer = typingTimeoutsRef.current.get(payload.userId);
+      if (previousTimer) window.clearTimeout(previousTimer);
+      const timer = window.setTimeout(() => {
         setTypingUsers((current) => current.filter((userId) => userId !== payload.userId));
+        typingTimeoutsRef.current.delete(payload.userId);
       }, 2500);
+      typingTimeoutsRef.current.set(payload.userId, timer);
     };
     const handleUpdated = (message: ChatMessage) => setMessages((current) => mergeMessage(current, message));
     const handlePinned = (message: ChatMessage) => setAccess((current) => current ? { ...current, pinnedMessage: message } : current);
@@ -535,6 +639,8 @@ const TournamentCommentsScreen = () => {
       socket.off("chat:error", handleChatError);
       if (typingTimerRef.current) window.clearTimeout(typingTimerRef.current);
       if (readTimerRef.current) window.clearTimeout(readTimerRef.current);
+      typingTimeoutsRef.current.forEach((timer) => window.clearTimeout(timer));
+      typingTimeoutsRef.current.clear();
     };
   }, [currentUserId, id, navigate, scrollToBottom]);
 
@@ -571,8 +677,11 @@ const TournamentCommentsScreen = () => {
 
   const handleScroll = () => {
     const el = scrollRef.current;
-    if (!el || el.scrollTop > 80) return;
-    loadOlder();
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isAtBottomRef.current = distanceFromBottom < 140;
+    if (isAtBottomRef.current) setNewMessageCount(0);
+    if (el.scrollTop <= 80) loadOlder();
   };
 
   const emitTyping = (isTyping: boolean) => {
@@ -763,26 +872,91 @@ const TournamentCommentsScreen = () => {
   };
 
   return (
-    <div className="arena-shell min-h-screen flex flex-col bg-background">
+    <div className="arena-shell flex h-[100dvh] min-h-[100dvh] flex-col overflow-hidden bg-background">
       <style>{`
         .chat-action {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          min-width: 28px;
-          height: 28px;
+          min-width: 32px;
+          height: 32px;
           border-radius: 999px;
           border: 1px solid hsl(var(--border) / 0.55);
           background: hsl(var(--card) / 0.6);
           color: hsl(var(--muted-foreground));
-          font-size: 11px;
+          font-size: 12px;
           transition: transform 140ms ease, border-color 140ms ease, color 140ms ease;
         }
         .chat-action:active { transform: scale(0.94); }
         .chat-action:hover { color: hsl(var(--foreground)); border-color: hsl(var(--primary) / 0.45); }
+        .chat-scroll {
+          overscroll-behavior: contain;
+          scroll-padding-bottom: 5.75rem;
+          contain: layout paint;
+        }
+        .chat-bubble {
+          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.045), 0 8px 18px rgb(0 0 0 / 0.18);
+        }
+        .voice-avatar,
+        .voice-count {
+          display: grid;
+          height: 2rem;
+          min-width: 2rem;
+          place-items: center;
+          border-radius: 999px;
+          border: 1px solid hsl(var(--border) / 0.75);
+          background: hsl(var(--card) / 0.92);
+          color: hsl(var(--foreground));
+          font-family: var(--font-heading, inherit);
+          font-size: 0.7rem;
+          font-weight: 800;
+          box-shadow: 0 6px 16px rgb(0 0 0 / 0.22);
+          transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
+        }
+        .voice-avatar-speaking {
+          border-color: hsl(var(--accent) / 0.65);
+          background: hsl(var(--accent) / 0.16);
+          color: hsl(var(--accent));
+          transform: translateY(-1px);
+        }
+        .voice-count {
+          padding-inline: 0.45rem;
+          color: hsl(var(--muted-foreground));
+        }
+        .chat-composer {
+          background:
+            linear-gradient(135deg, hsl(var(--card) / 0.9), hsl(var(--background) / 0.96)),
+            radial-gradient(circle at 100% 0%, hsl(var(--primary) / 0.11), transparent 34%);
+          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.05), 0 -8px 24px rgb(0 0 0 / 0.16);
+        }
+        .chat-composer-action {
+          display: grid;
+          height: 2.25rem;
+          width: 2.25rem;
+          flex-shrink: 0;
+          place-items: center;
+          border-radius: 0.65rem;
+          color: hsl(var(--muted-foreground));
+          transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
+        }
+        .chat-composer-action:hover {
+          background: hsl(var(--primary) / 0.1);
+          color: hsl(var(--foreground));
+        }
+        .chat-composer-action:active {
+          transform: scale(0.94);
+        }
+        @media (max-width: 640px) {
+          .chat-bubble {
+            box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.035);
+          }
+          .chat-scroll {
+            scroll-padding-bottom: 5.25rem;
+          }
+        }
       `}</style>
 
-      <header className="sticky top-0 z-20 border-b border-glass-border bg-background/90 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 shrink-0 border-b border-glass-border bg-background/95 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3 sm:px-5">
           <motion.button
             whileTap={{ scale: 0.9 }}
@@ -800,9 +974,10 @@ const TournamentCommentsScreen = () => {
               </h1>
             </div>
             <p className="truncate text-[11px] text-muted-foreground">
-              {presence?.onlineCount || 0} online · {access?.participantCount || 0} members
+              {presence?.onlineCount || 0} online {" | "} {access?.participantCount || 0} members
             </p>
           </div>
+          <VoiceDock voice={voice} currentUserId={currentUserId} connected={connected} canJoin={Boolean(access && currentUserId)} />
           <SocketStatus connected={connected} />
           {canModerate && (
             <button
@@ -818,7 +993,7 @@ const TournamentCommentsScreen = () => {
       </header>
 
       {moderationOpen && canModerate && (
-        <div className="border-b border-glass-border bg-card/80 px-4 py-3 backdrop-blur-xl">
+        <div className="shrink-0 border-b border-glass-border bg-card/90 px-4 py-3 backdrop-blur-md">
           <div className="mx-auto grid w-full max-w-5xl gap-2 sm:grid-cols-[160px_1fr_auto_auto]">
             <select
               value={slowModeSeconds}
@@ -889,7 +1064,7 @@ const TournamentCommentsScreen = () => {
         </button>
       )}
 
-      <main ref={scrollRef} onScroll={handleScroll} className="mx-auto w-full max-w-5xl flex-1 overflow-y-auto px-4 sm:px-5">
+      <main ref={scrollRef} onScroll={handleScroll} className="chat-scroll arena-scrollbar mx-auto min-h-0 w-full max-w-5xl flex-1 overflow-y-auto px-4 sm:px-5">
         {loading ? (
           <SkeletonMessages />
         ) : loadError ? (
@@ -946,17 +1121,32 @@ const TournamentCommentsScreen = () => {
         )}
       </main>
 
-      <footer className="sticky bottom-0 z-20 border-t border-glass-border bg-background/95 px-4 py-3 backdrop-blur-xl sm:px-5">
-        <div className="mx-auto w-full max-w-5xl">
-          {typingLabel && <p className="mb-2 text-[11px] text-primary">{typingLabel}...</p>}
+      {newMessageCount > 0 && (
+        <button
+          type="button"
+          onClick={() => scrollToBottom()}
+          className="arena-focus fixed bottom-[5.3rem] left-1/2 z-30 -translate-x-1/2 rounded-full border border-cyan-400/30 bg-cyan-400/15 px-4 py-2 font-heading text-xs font-bold text-cyan-100 shadow-[0_10px_28px_rgb(0_0_0/0.25)]"
+        >
+          {newMessageCount} new message{newMessageCount > 1 ? "s" : ""}
+        </button>
+      )}
+
+      <footer className="sticky bottom-0 z-20 shrink-0 border-t border-glass-border bg-background/95 px-3 py-2 backdrop-blur-sm sm:px-5">
+        <div className="mx-auto w-full max-w-5xl pb-[env(safe-area-inset-bottom)]">
+          {typingLabel && (
+            <p className="mb-1.5 flex items-center gap-1.5 text-[11px] text-primary">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+              {typingLabel}...
+            </p>
+          )}
           {!loadError && !canSend && (
-            <div className="mb-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+            <div className="mb-1.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
               {access?.permissions.mutedUntil ? "You are muted in this room." : "Chat is read-only for your account."}
             </div>
           )}
 
           {!loadError && (replyTo || editing || attachments.length > 0) && (
-            <div className="mb-2 rounded-lg border border-glass-border bg-card/80 p-2">
+            <div className="mb-1.5 rounded-lg border border-glass-border bg-card/80 p-2">
               {replyTo && (
                 <div className="flex items-center gap-2">
                   <Reply className="h-4 w-4 text-primary" />
@@ -994,13 +1184,13 @@ const TournamentCommentsScreen = () => {
           )}
 
           {!loadError && emojiOpen && (
-            <div className="mb-2 flex flex-wrap gap-2 rounded-lg border border-glass-border bg-card/90 p-2">
-              {EMOJI_REACTIONS.map((emoji) => (
+            <div className="mb-1.5 flex flex-wrap gap-1.5 rounded-lg border border-glass-border bg-card/90 p-2">
+              {CHAT_REACTIONS.map((emoji) => (
                 <button
                   key={emoji}
                   type="button"
                   onClick={() => setInput((value) => `${value}${emoji}`)}
-                  className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-background/50 text-lg"
+                  className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-background/50 text-lg transition-colors hover:bg-primary/10"
                 >
                   {emoji}
                 </button>
@@ -1008,7 +1198,7 @@ const TournamentCommentsScreen = () => {
             </div>
           )}
 
-          <div className="flex items-end gap-2">
+          <div className="chat-composer flex min-h-12 items-end gap-1.5 rounded-xl border border-glass-border p-1.5 focus-within:border-primary/70">
             <input
               ref={fileInputRef}
               type="file"
@@ -1021,51 +1211,49 @@ const TournamentCommentsScreen = () => {
               type="button"
               disabled={Boolean(loadError) || !canSend || uploading}
               onClick={() => fileInputRef.current?.click()}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-glass-border bg-card text-muted-foreground disabled:opacity-50"
+              className="chat-composer-action disabled:opacity-50"
               aria-label="Attach file"
             >
-              {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
             </button>
             <button
               type="button"
               disabled={Boolean(loadError) || !canSend}
               onClick={() => setEmojiOpen((value) => !value)}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-glass-border bg-card text-muted-foreground disabled:opacity-50"
+              className="chat-composer-action disabled:opacity-50"
               aria-label="Emoji picker"
             >
-              <Smile className="h-5 w-5" />
+              <Smile className="h-4 w-4" />
             </button>
-            <div className="min-w-0 flex-1 rounded-lg border border-glass-border bg-card/90 px-3 py-2 focus-within:border-primary">
-              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                <AtSign className="h-3 w-3" />
-                <span className="truncate">Use @username to tag players</span>
-                {slowModeSeconds > 0 && <span className="ml-auto rounded-full bg-primary/10 px-2 py-0.5 text-primary">{slowModeSeconds}s slow</span>}
-              </div>
-              <textarea
-                value={input}
-                onChange={(event) => handleInputChange(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    handleSend();
-                  }
-                }}
-                disabled={Boolean(loadError) || !canSend || sending}
-                rows={1}
-                maxLength={2000}
-                placeholder={canSend ? "Message room..." : "You cannot send messages"}
-                className="mt-1 max-h-28 min-h-7 w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
-              />
-            </div>
+            <textarea
+              value={input}
+              onChange={(event) => handleInputChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  handleSend();
+                }
+              }}
+              disabled={Boolean(loadError) || !canSend || sending}
+              rows={1}
+              maxLength={2000}
+              placeholder={canSend ? "Message room... use @username" : "You cannot send messages"}
+              className="max-h-24 min-h-9 min-w-0 flex-1 resize-none bg-transparent px-1.5 py-2 text-sm leading-5 outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
+            />
+            {slowModeSeconds > 0 && (
+              <span className="mb-1 hidden shrink-0 rounded-full border border-primary/25 bg-primary/10 px-2 py-1 font-heading text-[10px] text-primary min-[520px]:inline-flex">
+                {slowModeSeconds}s
+              </span>
+            )}
             <motion.button
               whileTap={{ scale: 0.94 }}
               type="button"
               disabled={Boolean(loadError) || !canSend || sending || uploading || (!input.trim() && attachments.length === 0)}
               onClick={handleSend}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground shadow-[0_0_22px_hsl(var(--primary)/0.35)] disabled:opacity-50"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground shadow-[0_0_18px_hsl(var(--primary)/0.28)] transition-colors hover:bg-primary/90 disabled:opacity-50"
               aria-label="Send message"
             >
-              {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : editing ? <CheckCheck className="h-5 w-5" /> : <Send className="h-5 w-5" />}
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? <CheckCheck className="h-4 w-4" /> : <Send className="h-4 w-4" />}
             </motion.button>
           </div>
         </div>

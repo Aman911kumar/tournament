@@ -1,6 +1,13 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, ChevronRight, Search, ShieldCheck, Trophy, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  Search,
+  ShieldCheck,
+  Trophy,
+  Users,
+} from "lucide-react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,8 +43,19 @@ export const PageShell = ({
   wide?: boolean;
   bottomNavPadding?: boolean;
 }) => (
-  <div className={cn("arena-shell", bottomNavPadding ? "pb-24" : "pb-10", className)}>
-    <div className={cn(wide ? "arena-container-wide" : "arena-container", contentClassName)}>
+  <div
+    className={cn(
+      "arena-shell",
+      bottomNavPadding ? "arena-page" : "arena-page-no-nav",
+      className,
+    )}
+  >
+    <div
+      className={cn(
+        wide ? "arena-container-wide" : "arena-container",
+        contentClassName,
+      )}
+    >
       {children}
     </div>
   </div>
@@ -58,26 +76,31 @@ export const PageHeader = ({
   onBack?: () => void;
   className?: string;
 }) => (
-  <header className={cn("flex items-center justify-between gap-3 pb-4 pt-6", className)}>
+  <header
+    className={cn(
+      "flex items-center justify-between gap-2 pb-3 pt-4 sm:gap-3 sm:pb-4 sm:pt-6",
+      className,
+    )}
+  >
     <div className="flex min-w-0 items-center gap-3">
       {onBack && (
         <button
           type="button"
           onClick={onBack}
-          className="arena-focus grid h-10 w-10 shrink-0 place-items-center rounded-full border border-glass-border bg-card/85 text-foreground transition-colors hover:border-primary/45 hover:text-primary"
+          className="arena-icon-button"
           aria-label="Go back"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
       )}
       {Icon && (
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
-          <Icon className="h-5 w-5" />
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary sm:h-10 sm:w-10">
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
         </span>
       )}
       <div className="min-w-0">
-        <h1 className="truncate font-heading text-xl font-bold leading-tight sm:text-2xl">{title}</h1>
-        {subtitle && <p className="mt-1 truncate text-xs text-muted-foreground">{subtitle}</p>}
+        <h1 className="arena-title">{title}</h1>
+        {subtitle && <p className="arena-subtitle mt-1">{subtitle}</p>}
       </div>
     </div>
     {action && <div className="shrink-0">{action}</div>}
@@ -106,9 +129,10 @@ export const Surface = ({
       if (event.key === "Enter" || event.key === " ") onClick();
     }}
     className={cn(
-      "rounded-lg border border-glass-border bg-card/82 p-4 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.045)]",
+      "min-w-0 rounded-xl border border-glass-border bg-card/82 p-3 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.045)] sm:p-4",
       neon && "neon-border",
-      (interactive || onClick) && "arena-focus transition-colors hover:border-primary/45 hover:bg-card",
+      (interactive || onClick) &&
+        "arena-focus transition-colors hover:border-primary/45 hover:bg-card",
       className,
     )}
   >
@@ -131,22 +155,51 @@ export const MetricCard = ({
   tone?: Tone;
   onClick?: () => void;
 }) => (
-  <Surface onClick={onClick} interactive={Boolean(onClick)} className="min-h-[104px]">
+  <Surface
+    onClick={onClick}
+    interactive={Boolean(onClick)}
+    className="min-h-[96px] sm:min-h-[104px]"
+  >
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <p className="font-heading text-[10px] uppercase text-muted-foreground">{label}</p>
-        <p className="mt-2 truncate font-heading text-2xl font-bold leading-tight">{value}</p>
+        <p className="font-heading text-[10px] uppercase text-muted-foreground">
+          {label}
+        </p>
+        <p className="mt-2 truncate font-heading text-xl font-bold leading-tight sm:text-2xl">
+          {value}
+        </p>
       </div>
-      <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-lg border", toneClasses[tone])}>
-        <Icon className="h-5 w-5" />
+      <span
+        className={cn(
+          "grid h-9 w-9 shrink-0 place-items-center rounded-xl border sm:h-10 sm:w-10",
+          toneClasses[tone],
+        )}
+      >
+        <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
       </span>
     </div>
-    {note && <p className="mt-3 truncate text-xs text-muted-foreground">{note}</p>}
+    {note && (
+      <p className="mt-3 truncate text-xs text-muted-foreground">{note}</p>
+    )}
   </Surface>
 );
 
-export const StatusPill = ({ children, tone = "muted", className }: { children: ReactNode; tone?: Tone; className?: string }) => (
-  <span className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-heading text-[10px] font-bold", toneClasses[tone], className)}>
+export const StatusPill = ({
+  children,
+  tone = "muted",
+  className,
+}: {
+  children: ReactNode;
+  tone?: Tone;
+  className?: string;
+}) => (
+  <span
+    className={cn(
+      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-heading text-[10px] font-bold",
+      toneClasses[tone],
+      className,
+    )}
+  >
     {children}
   </span>
 );
@@ -162,10 +215,14 @@ export const EmptyState = ({
   description?: ReactNode;
   action?: ReactNode;
 }) => (
-  <Surface className="py-10 text-center">
+  <Surface className="py-8 text-center sm:py-10">
     <Icon className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
     <p className="font-heading text-sm font-bold">{title}</p>
-    {description && <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">{description}</p>}
+    {description && (
+      <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
+        {description}
+      </p>
+    )}
     {action && <div className="mt-4">{action}</div>}
   </Surface>
 );
@@ -193,7 +250,9 @@ export const FormField = ({
       {label}
     </span>
     {children}
-    {hint && <span className="block text-[11px] text-muted-foreground">{hint}</span>}
+    {hint && (
+      <span className="block text-[11px] text-muted-foreground">{hint}</span>
+    )}
   </label>
 );
 
@@ -208,7 +267,13 @@ export const SegmentedControl = <T extends string>({
   onChange: (value: T) => void;
   className?: string;
 }) => (
-  <div className={cn("flex gap-1 overflow-x-auto rounded-lg border border-glass-border bg-card/70 p-1 scrollbar-hide", className)} role="tablist">
+  <div
+    className={cn(
+      "flex gap-1 overflow-x-auto rounded-xl border border-glass-border bg-card/70 p-1 scrollbar-hide",
+      className,
+    )}
+    role="tablist"
+  >
     {options.map((option) => {
       const Icon = option.icon;
       const active = option.value === value;
@@ -218,8 +283,10 @@ export const SegmentedControl = <T extends string>({
           type="button"
           onClick={() => onChange(option.value)}
           className={cn(
-            "arena-focus inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 font-heading text-xs font-bold transition-colors",
-            active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/65 hover:text-foreground",
+            "arena-focus inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 font-heading text-xs font-bold transition-colors",
+            active
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted/65 hover:text-foreground",
           )}
           role="tab"
           aria-selected={active}
@@ -232,8 +299,16 @@ export const SegmentedControl = <T extends string>({
   </div>
 );
 
-export const ActionButton = ({ className, variant = "soft", ...props }: ButtonProps) => (
-  <Button variant={variant} className={cn("min-h-10", className)} {...props} />
+export const ActionButton = ({
+  className,
+  variant = "soft",
+  ...props
+}: ButtonProps) => (
+  <Button
+    variant={variant}
+    className={cn("min-h-11 rounded-xl sm:min-h-10", className)}
+    {...props}
+  />
 );
 
 export const SearchBox = ({
@@ -247,7 +322,12 @@ export const SearchBox = ({
   placeholder: string;
   className?: string;
 }) => (
-  <div className={cn("flex min-h-10 items-center gap-2 rounded-lg border border-glass-border bg-card/70 px-3 transition-colors focus-within:border-primary/50", className)}>
+  <div
+    className={cn(
+      "flex min-h-11 items-center gap-2 rounded-xl border border-glass-border bg-card/70 px-3 transition-colors focus-within:border-primary/50 sm:min-h-10",
+      className,
+    )}
+  >
     <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
     <input
       value={value}
@@ -276,24 +356,35 @@ export const CreatorCard = ({
   <button
     type="button"
     onClick={onClick}
-    className="arena-focus min-w-[132px] shrink-0 rounded-lg border border-glass-border bg-card/82 p-3 text-left transition-colors hover:border-primary/45 hover:bg-card"
+    className="arena-focus min-w-[132px] shrink-0 rounded-xl border border-glass-border bg-card/82 p-3 text-left transition-colors hover:border-primary/45 hover:bg-card"
   >
     <div className="flex items-center gap-3">
       {avatarUrl ? (
-        <img src={avatarUrl} alt={name} className="h-12 w-12 rounded-lg object-cover" referrerPolicy="no-referrer" />
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="h-12 w-12 rounded-xl object-cover"
+          referrerPolicy="no-referrer"
+        />
       ) : (
-        <span className="grid h-12 w-12 place-items-center rounded-lg gradient-primary font-display text-lg font-bold text-primary-foreground">
+        <span className="grid h-12 w-12 place-items-center rounded-xl gradient-primary font-display text-lg font-bold text-primary-foreground">
           {name.slice(0, 1)}
         </span>
       )}
       <div className="min-w-0">
         <p className="truncate font-heading text-sm font-bold">{name}</p>
-        <p className="mt-0.5 text-[10px] text-muted-foreground">{Number(followers || 0).toLocaleString("en-IN")} followers</p>
+        <p className="mt-0.5 text-[10px] text-muted-foreground">
+          {Number(followers || 0).toLocaleString("en-IN")} followers
+        </p>
       </div>
     </div>
     <div className="mt-3 flex items-center justify-between gap-2">
-      <StatusPill tone={active ? "accent" : "muted"}>{active ? "Active" : "Creator"}</StatusPill>
-      <span className="font-heading text-[10px] font-bold text-accent">{Number(rating || 0).toFixed(1)}</span>
+      <StatusPill tone={active ? "accent" : "muted"}>
+        {active ? "Active" : "Creator"}
+      </StatusPill>
+      <span className="font-heading text-[10px] font-bold text-accent">
+        {Number(rating || 0).toFixed(1)}
+      </span>
     </div>
   </button>
 );
@@ -323,7 +414,7 @@ export const TournamentCard = ({
   onClick?: () => void;
   onCreatorClick?: () => void;
 }) => (
-  <Surface interactive onClick={onClick} neon className="p-0">
+  <Surface interactive onClick={onClick} neon className="overflow-hidden p-0">
     <div className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -343,14 +434,18 @@ export const TournamentCard = ({
         <ShieldCheck className="h-3.5 w-3.5" />
         {creator}
       </button>
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className="mt-4 grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
         <div className="rounded-lg bg-background/45 p-2">
           <p className="text-[10px] text-muted-foreground">Prize</p>
-          <p className="truncate font-heading text-xs font-bold text-accent">{prize}</p>
+          <p className="truncate font-heading text-xs font-bold text-accent">
+            {prize}
+          </p>
         </div>
         <div className="rounded-lg bg-background/45 p-2">
           <p className="text-[10px] text-muted-foreground">Slots</p>
-          <p className="font-heading text-xs font-bold">{slots}/{maxSlots}</p>
+          <p className="font-heading text-xs font-bold">
+            {slots}/{maxSlots}
+          </p>
         </div>
         <div className="rounded-lg bg-background/45 p-2">
           <p className="text-[10px] text-muted-foreground">Entry</p>
@@ -371,8 +466,19 @@ export const TournamentCard = ({
   </Surface>
 );
 
-export const ResponsiveTable = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <div className={cn("arena-scrollbar overflow-x-auto rounded-lg border border-glass-border bg-card/45", className)}>
+export const ResponsiveTable = ({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) => (
+  <div
+    className={cn(
+      "arena-scrollbar overflow-x-auto rounded-xl border border-glass-border bg-card/45",
+      className,
+    )}
+  >
     {children}
   </div>
 );
@@ -426,10 +532,20 @@ export const ActionNoteDialog = ({
         />
       </label>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => onOpenChange(false)}
+          disabled={loading}
+        >
           Cancel
         </Button>
-        <Button type="button" variant={destructive ? "destructive" : "default"} onClick={onSubmit} disabled={loading}>
+        <Button
+          type="button"
+          variant={destructive ? "destructive" : "default"}
+          onClick={onSubmit}
+          disabled={loading}
+        >
           {loading ? "Working..." : confirmLabel}
         </Button>
       </div>

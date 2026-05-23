@@ -2,15 +2,30 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import type { IScannerControls } from "@zxing/browser";
-import { ArrowLeft, AtSign, BadgeIndianRupee, Camera, CheckCircle2, FileText, KeyRound, QrCode, ScanLine, Send, Sparkles, X } from "lucide-react";
-import GlassCard from "@/components/GlassCard";
+import {
+  AtSign,
+  BadgeIndianRupee,
+  Camera,
+  CheckCircle2,
+  FileText,
+  KeyRound,
+  QrCode,
+  ScanLine,
+  Send,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { getTransferPinStatus, transferMoney } from "@/api/wallet";
 import { getMyProfile, User as ProfileUser } from "@/api/profile";
 import { formatCurrency, getErrorToast } from "@/lib/page-utils";
+import {
+  WalletSecurityNote,
+  WalletShell,
+} from "@/components/wallet/WalletShell";
 
 const inputClass =
-  "w-full bg-background/50 border border-glass-border rounded-lg px-3 py-2.5 text-sm font-heading placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary transition-colors";
+  "wallet-flow-input w-full rounded-lg px-3 py-2.5 text-sm font-heading placeholder:text-muted-foreground/50 outline-none";
 
 type ScannedTransferDetails = {
   recipient: string;
@@ -19,7 +34,12 @@ type ScannedTransferDetails = {
 };
 
 const buildTransferQrPayload = (profile: ProfileUser | null) => {
-  const recipient = profile?.username || profile?.email || profile?.phone_number || profile?._id || "";
+  const recipient =
+    profile?.username ||
+    profile?.email ||
+    profile?.phone_number ||
+    profile?._id ||
+    "";
   return JSON.stringify({
     app: "BattleArena",
     action: "transfer",
@@ -46,7 +66,13 @@ const parseTransferQrPayload = (value: string): ScannedTransferDetails => {
     };
     if (parsed.action === "transfer" || parsed.app === "BattleArena") {
       return {
-        recipient: String(parsed.recipient || parsed.username || parsed.email || parsed.phone_number || "").trim(),
+        recipient: String(
+          parsed.recipient ||
+            parsed.username ||
+            parsed.email ||
+            parsed.phone_number ||
+            "",
+        ).trim(),
         amount: parsed.amount ? String(parsed.amount) : undefined,
         note: parsed.note ? String(parsed.note) : undefined,
       };
@@ -58,7 +84,10 @@ const parseTransferQrPayload = (value: string): ScannedTransferDetails => {
   try {
     const url = new URL(text);
     return {
-      recipient: url.searchParams.get("recipient") || url.searchParams.get("username") || text,
+      recipient:
+        url.searchParams.get("recipient") ||
+        url.searchParams.get("username") ||
+        text,
       amount: url.searchParams.get("amount") || undefined,
       note: url.searchParams.get("note") || undefined,
     };
@@ -67,7 +96,11 @@ const parseTransferQrPayload = (value: string): ScannedTransferDetails => {
   }
 };
 
-const typeIntoField = (value: string, setter: (value: string) => void, delay = 12) => {
+const typeIntoField = (
+  value: string,
+  setter: (value: string) => void,
+  delay = 12,
+) => {
   setter("");
   let index = 0;
   const timer = window.setInterval(() => {
@@ -97,8 +130,16 @@ const TransferMoneyScreen = () => {
   const amountValue = Number(amount || 0);
   const fee = useMemo(() => Math.round(amountValue * 2) / 100, [amountValue]);
   const receiverGets = Math.max(amountValue - fee, 0);
-  const contactVerified = Boolean(profile?.emailVerified && profile?.phoneVerified);
-  const canSubmit = recipient.trim() !== "" && amountValue > 0 && /^\d{6}$/.test(transferPin) && hasTransferPin === true && contactVerified && !submitting;
+  const contactVerified = Boolean(
+    profile?.emailVerified && profile?.phoneVerified,
+  );
+  const canSubmit =
+    recipient.trim() !== "" &&
+    amountValue > 0 &&
+    /^\d{6}$/.test(transferPin) &&
+    hasTransferPin === true &&
+    contactVerified &&
+    !submitting;
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -125,14 +166,17 @@ const TransferMoneyScreen = () => {
 
     let cancelled = false;
     const buildQr = () => {
-      import("qrcode").then(({ default: QRCode }) => QRCode.toDataURL(payload, {
-        width: 320,
-        margin: 2,
-        color: {
-          dark: "#0f172a",
-          light: "#dcfce7",
-        },
-      }))
+      import("qrcode")
+        .then(({ default: QRCode }) =>
+          QRCode.toDataURL(payload, {
+            width: 320,
+            margin: 2,
+            color: {
+              dark: "#0f172a",
+              light: "#dcfce7",
+            },
+          }),
+        )
         .then((value) => {
           if (!cancelled) setQrDataUrl(value);
         })
@@ -141,9 +185,10 @@ const TransferMoneyScreen = () => {
         });
     };
 
-    const idleId = "requestIdleCallback" in window
-      ? window.requestIdleCallback(buildQr, { timeout: 1200 })
-      : window.setTimeout(buildQr, 250);
+    const idleId =
+      "requestIdleCallback" in window
+        ? window.requestIdleCallback(buildQr, { timeout: 1200 })
+        : window.setTimeout(buildQr, 250);
 
     return () => {
       cancelled = true;
@@ -169,8 +214,13 @@ const TransferMoneyScreen = () => {
     setScannerError("");
     scanHandledRef.current = false;
 
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      setScannerError("Camera scanning is not available here. Open the app on localhost or HTTPS, then allow camera access.");
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      setScannerError(
+        "Camera scanning is not available here. Open the app on localhost or HTTPS, then allow camera access.",
+      );
       return () => {
         cancelled = true;
       };
@@ -180,27 +230,38 @@ const TransferMoneyScreen = () => {
       .then(({ BrowserQRCodeReader }) => {
         if (cancelled || !videoRef.current) return null;
         const scanner = new BrowserQRCodeReader();
-        return scanner.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
-          if (!result || cancelled || scanHandledRef.current) return;
-          const scanned = parseTransferQrPayload(result.getText());
-          if (!scanned.recipient) return;
-          scanHandledRef.current = true;
-          cancelled = true;
-          stopScanner();
-          typeIntoField(scanned.recipient, setRecipient);
-          if (scanned.amount && Number(scanned.amount) > 0) typeIntoField(String(scanned.amount), setAmount);
-          if (scanned.note) typeIntoField(scanned.note, setNote, 8);
-          setScanFilled(true);
-          toast.success("QR scanned", { description: "Transfer details filled automatically." });
-          setScannerOpen(false);
-        });
+        return scanner.decodeFromVideoDevice(
+          undefined,
+          videoRef.current,
+          (result) => {
+            if (!result || cancelled || scanHandledRef.current) return;
+            const scanned = parseTransferQrPayload(result.getText());
+            if (!scanned.recipient) return;
+            scanHandledRef.current = true;
+            cancelled = true;
+            stopScanner();
+            typeIntoField(scanned.recipient, setRecipient);
+            if (scanned.amount && Number(scanned.amount) > 0)
+              typeIntoField(String(scanned.amount), setAmount);
+            if (scanned.note) typeIntoField(scanned.note, setNote, 8);
+            setScanFilled(true);
+            toast.success("QR scanned", {
+              description: "Transfer details filled automatically.",
+            });
+            setScannerOpen(false);
+          },
+        );
       })
       .then((controls) => {
         if (controls) scannerControlsRef.current = controls;
       })
       .catch((error) => {
         if (cancelled) return;
-        setScannerError(error instanceof Error ? error.message : "Camera scanner could not start.");
+        setScannerError(
+          error instanceof Error
+            ? error.message
+            : "Camera scanner could not start.",
+        );
       });
 
     return () => {
@@ -211,7 +272,9 @@ const TransferMoneyScreen = () => {
 
   const handleSubmit = async () => {
     if (!canSubmit) {
-      toast.error("Missing details", { description: "Enter recipient, amount, and your 6 digit transfer PIN." });
+      toast.error("Missing details", {
+        description: "Enter recipient, amount, and your 6 digit transfer PIN.",
+      });
       return;
     }
 
@@ -228,7 +291,10 @@ const TransferMoneyScreen = () => {
       });
       navigate("/wallet");
     } catch (error) {
-      const errorToast = getErrorToast(error, { action: "Transfer money", fallback: "Transfer failed." });
+      const errorToast = getErrorToast(error, {
+        action: "Transfer money",
+        fallback: "Transfer failed.",
+      });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
       setSubmitting(false);
@@ -236,32 +302,25 @@ const TransferMoneyScreen = () => {
   };
 
   return (
-    <div className="arena-shell min-h-screen pb-20">
-      <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 pb-4 pt-6 sm:px-5">
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={() => navigate(-1)}
-          className="arena-focus grid h-10 w-10 place-items-center rounded-full border border-glass-border bg-card/85 transition-colors hover:border-primary/45"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </motion.button>
-        <div className="min-w-0">
-          <h1 className="font-heading text-xl font-bold">Transfer Money</h1>
-          <p className="truncate text-xs text-muted-foreground font-heading">Fast wallet transfers with QR receive and scan</p>
-        </div>
-      </div>
-
-      <div className="mx-auto grid w-full max-w-5xl gap-4 px-4 sm:px-5 lg:grid-cols-[1fr_320px]">
-        <GlassCard neon className="space-y-5">
+    <WalletShell
+      title="Transfer Money"
+      subtitle="Fast wallet transfers with QR receive and scan"
+      icon={Send}
+      maxWidth="max-w-5xl"
+    >
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-[1fr_320px]">
+        <section className="wallet-flow-hero space-y-4 rounded-2xl border border-glass-border p-3 sm:space-y-5 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="font-heading text-lg font-bold">Send Balance</p>
-              <p className="mt-1 text-xs text-muted-foreground">Enter recipient, amount, and confirm transfer.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Enter recipient, amount, and confirm transfer.
+              </p>
             </div>
             <button
               type="button"
               onClick={() => setScannerOpen(true)}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 text-xs font-heading font-semibold text-primary"
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 text-xs font-heading font-semibold text-primary min-[430px]:h-9 min-[430px]:w-auto"
             >
               <ScanLine className="h-4 w-4" />
               Scan QR
@@ -276,15 +335,19 @@ const TransferMoneyScreen = () => {
           )}
 
           {hasTransferPin === false && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-secondary/30 bg-secondary/10 px-3 py-3">
-              <div>
-                <p className="font-heading text-sm font-bold text-secondary">Transfer PIN required</p>
-                <p className="mt-1 text-xs text-muted-foreground">Set a 6 digit PIN before sending wallet balance.</p>
+            <div className="flex flex-col gap-3 rounded-xl border border-secondary/30 bg-secondary/10 px-3 py-3 min-[430px]:flex-row min-[430px]:items-center min-[430px]:justify-between">
+              <div className="min-w-0">
+                <p className="font-heading text-sm font-bold text-secondary">
+                  Transfer PIN required
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Set a 6 digit PIN before sending wallet balance.
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => navigate("/wallet/transfer-pin")}
-                className="rounded-lg border border-secondary/40 px-3 py-2 text-xs font-heading font-semibold text-secondary"
+                className="min-h-10 rounded-lg border border-secondary/40 px-3 py-2 text-xs font-heading font-semibold text-secondary"
               >
                 Set PIN
               </button>
@@ -292,15 +355,19 @@ const TransferMoneyScreen = () => {
           )}
 
           {profile && !contactVerified && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/10 px-3 py-3">
-              <div>
-                <p className="font-heading text-sm font-bold text-primary">Verify email and phone</p>
-                <p className="mt-1 text-xs text-muted-foreground">Required for secure wallet transfers and withdrawals.</p>
+            <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/10 px-3 py-3 min-[430px]:flex-row min-[430px]:items-center min-[430px]:justify-between">
+              <div className="min-w-0">
+                <p className="font-heading text-sm font-bold text-primary">
+                  Verify email and phone
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Required for secure wallet transfers and withdrawals.
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => navigate("/edit-profile")}
-                className="rounded-lg border border-primary/40 px-3 py-2 text-xs font-heading font-semibold text-primary"
+                className="min-h-10 rounded-lg border border-primary/40 px-3 py-2 text-xs font-heading font-semibold text-primary"
               >
                 Verify now
               </button>
@@ -311,8 +378,12 @@ const TransferMoneyScreen = () => {
             <div className="rounded-xl border border-primary/25 bg-primary/5 p-3">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className="font-heading text-sm font-bold">Scan Recipient QR</p>
-                  <p className="text-xs text-muted-foreground">Point camera at a BattleArena receive QR.</p>
+                  <p className="font-heading text-sm font-bold">
+                    Scan Recipient QR
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Point camera at a BattleArena receive QR.
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -323,13 +394,20 @@ const TransferMoneyScreen = () => {
                 </button>
               </div>
               <div className="overflow-hidden rounded-xl border border-glass-border bg-black">
-                <video ref={videoRef} className="aspect-video w-full object-cover" muted playsInline />
+                <video
+                  ref={videoRef}
+                  className="aspect-video w-full object-cover"
+                  muted
+                  playsInline
+                />
               </div>
-              {scannerError && <p className="mt-2 text-xs text-destructive">{scannerError}</p>}
+              {scannerError && (
+                <p className="mt-2 text-xs text-destructive">{scannerError}</p>
+              )}
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
             <div>
               <label className="mb-1.5 flex items-center gap-1.5 text-xs font-heading text-muted-foreground">
                 <AtSign className="h-3.5 w-3.5" /> Recipient
@@ -386,25 +464,41 @@ const TransferMoneyScreen = () => {
               inputMode="numeric"
               maxLength={6}
               value={transferPin}
-              onChange={(event) => setTransferPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              onChange={(event) =>
+                setTransferPin(
+                  event.target.value.replace(/\D/g, "").slice(0, 6),
+                )
+              }
               placeholder="Enter 6 digit PIN"
-              className={`${inputClass} text-center font-display text-xl tracking-[0.35em]`}
+              className={`${inputClass} text-center font-display text-lg tracking-[0.28em] sm:text-xl sm:tracking-[0.35em]`}
             />
           </div>
 
           <div className="rounded-xl border border-glass-border bg-background/35 p-3">
-            <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="grid gap-2 text-center min-[430px]:grid-cols-3">
               <div className="min-w-0 rounded-lg bg-background/55 p-3">
-                <p className="text-[10px] text-muted-foreground font-heading">Amount</p>
-                <p className="truncate text-sm font-heading font-bold">{formatCurrency(amountValue || 0)}</p>
+                <p className="text-[10px] text-muted-foreground font-heading">
+                  Amount
+                </p>
+                <p className="truncate font-heading text-sm font-bold">
+                  {formatCurrency(amountValue || 0)}
+                </p>
               </div>
               <div className="min-w-0 rounded-lg bg-background/55 p-3">
-                <p className="text-[10px] text-muted-foreground font-heading">Fee 2%</p>
-                <p className="truncate text-sm font-heading font-bold text-destructive">{formatCurrency(fee || 0)}</p>
+                <p className="text-[10px] text-muted-foreground font-heading">
+                  Fee 2%
+                </p>
+                <p className="truncate text-sm font-heading font-bold text-destructive">
+                  {formatCurrency(fee || 0)}
+                </p>
               </div>
               <div className="min-w-0 rounded-lg border border-accent/30 bg-accent/10 p-3">
-                <p className="text-[10px] text-muted-foreground font-heading">Receiver</p>
-                <p className="truncate text-sm font-heading font-bold text-accent">{formatCurrency(receiverGets || 0)}</p>
+                <p className="text-[10px] text-muted-foreground font-heading">
+                  Receiver
+                </p>
+                <p className="truncate text-sm font-heading font-bold text-accent">
+                  {formatCurrency(receiverGets || 0)}
+                </p>
               </div>
             </div>
           </div>
@@ -414,7 +508,7 @@ const TransferMoneyScreen = () => {
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="group relative h-14 w-full overflow-hidden rounded-xl border border-accent/50 bg-accent text-accent-foreground shadow-[0_0_24px_hsl(var(--accent)/0.28)] transition-all hover:shadow-[0_0_34px_hsl(var(--accent)/0.42)] disabled:cursor-not-allowed disabled:border-muted disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+            className="group relative h-12 w-full overflow-hidden rounded-xl border border-accent/50 bg-accent text-accent-foreground shadow-[0_0_24px_hsl(var(--accent)/0.28)] transition-all hover:shadow-[0_0_34px_hsl(var(--accent)/0.42)] disabled:cursor-not-allowed disabled:border-muted disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:h-14"
           >
             <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
             <span className="relative flex items-center justify-center gap-2 font-heading text-sm font-black tracking-wide">
@@ -431,22 +525,28 @@ const TransferMoneyScreen = () => {
               )}
             </span>
           </motion.button>
-        </GlassCard>
+        </section>
 
-        <GlassCard className="h-fit overflow-hidden">
+        <section className="wallet-flow-panel h-fit overflow-hidden rounded-2xl p-3 sm:p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="font-heading text-sm font-bold">Receive QR</p>
-              <p className="mt-1 text-xs text-muted-foreground">Let others scan this to send you money.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Let others scan this to send you money.
+              </p>
             </div>
             <QrCode className="h-5 w-5 text-accent" />
           </div>
 
-          <div className="mx-auto mt-5 w-full max-w-[300px] rounded-lg bg-gradient-to-br from-primary via-secondary to-accent p-[2px] shadow-[0_0_24px_hsl(var(--accent)/0.18)]">
+          <div className="mx-auto mt-4 w-full max-w-[240px] rounded-lg bg-gradient-to-br from-primary via-secondary to-accent p-[2px] shadow-[0_0_24px_hsl(var(--accent)/0.18)] sm:mt-5 sm:max-w-[300px]">
             <div className="grid aspect-square place-items-center rounded-lg bg-background p-4">
               <div className="grid h-full w-full place-items-center rounded-lg bg-gradient-to-br from-accent/20 via-primary/10 to-secondary/20 p-3">
                 {qrDataUrl ? (
-                  <img src={qrDataUrl} alt="Receive money QR code" className="h-full w-full rounded-xl bg-white p-1" />
+                  <img
+                    src={qrDataUrl}
+                    alt="Receive money QR code"
+                    className="h-full w-full rounded-xl bg-white p-1"
+                  />
                 ) : (
                   <QrCode className="h-16 w-16 text-accent" />
                 )}
@@ -455,9 +555,14 @@ const TransferMoneyScreen = () => {
           </div>
 
           <div className="mt-4 rounded-xl border border-glass-border bg-background/35 p-3 text-center">
-            <p className="text-[10px] font-heading text-muted-foreground">Receiving as</p>
+            <p className="text-[10px] font-heading text-muted-foreground">
+              Receiving as
+            </p>
             <p className="mt-1 truncate font-heading text-sm font-bold text-accent">
-              {profile?.username || profile?.email || profile?.phone_number || "Your account"}
+              {profile?.username ||
+                profile?.email ||
+                profile?.phone_number ||
+                "Your account"}
             </p>
           </div>
 
@@ -469,9 +574,15 @@ const TransferMoneyScreen = () => {
             <Camera className="h-4 w-4" />
             Scan QR
           </button>
-        </GlassCard>
+          <div className="mt-3">
+            <WalletSecurityNote>
+              Transfers require a verified contact profile and your 6 digit
+              transfer PIN before money leaves your wallet.
+            </WalletSecurityNote>
+          </div>
+        </section>
       </div>
-    </div>
+    </WalletShell>
   );
 };
 

@@ -14,16 +14,26 @@ import {
 } from "../services/chat.service.js";
 
 const presenceByRoom = new Map();
+const voiceByRoom = new Map();
 const socketRooms = new WeakMap();
+const voiceSocketRooms = new WeakMap();
 const sendBuckets = new WeakMap();
 const EVENT_RATE_WINDOW_MS = 10_000;
 const EVENT_RATE_MAX = 12;
 
 const asId = (value) => value?._id?.toString?.() || value?.toString?.() || "";
 const getUserRoomName = (userId) => `user:${userId}`;
+const getVoiceRoomName = (tournamentId) => `voice:tournament:${tournamentId}`;
 
 const getSocketUser = (socket) => ({
     _id: socket.userId,
+    role: socket.userRoles || [],
+});
+
+const getSocketUserSummary = (socket) => ({
+    userId: socket.userId,
+    username: socket.userProfile?.username || "Player",
+    avatar: socket.userProfile?.avatar || {},
     role: socket.userRoles || [],
 });
 
@@ -52,6 +62,15 @@ const getJoinedRooms = (socket) => {
     if (!rooms) {
         rooms = new Set();
         socketRooms.set(socket, rooms);
+    }
+    return rooms;
+};
+
+const getJoinedVoiceRooms = (socket) => {
+    let rooms = voiceSocketRooms.get(socket);
+    if (!rooms) {
+        rooms = new Set();
+        voiceSocketRooms.set(socket, rooms);
     }
     return rooms;
 };
@@ -89,6 +108,76 @@ const decreasePresence = (socket, tournamentId) => {
     getJoinedRooms(socket).delete(asId(tournamentId));
 };
 
+const serializeVoiceParticipant = (participant) => ({
+    userId: participant.userId,
+    username: participant.username,
+    avatar: participant.avatar,
+    role: participant.role || [],
+    muted: Boolean(participant.muted),
+    speaking: Boolean(participant.speaking),
+    joinedAt: participant.joinedAt,
+});
+
+const getVoiceParticipants = (tournamentId) => {
+    const roomName = getVoiceRoomName(tournamentId);
+    return [...(voiceByRoom.get(roomName) || new Map()).values()]
+        .map(serializeVoiceParticipant)
+        .sort((a, b) => new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime());
+};
+
+const upsertVoiceParticipant = (socket, tournamentId, muted = false) => {
+    const roomName = getVoiceRoomName(tournamentId);
+    const userId = socket.userId;
+    const roomVoice = voiceByRoom.get(roomName) || new Map();
+    const existing = roomVoice.get(userId);
+    const socketIds = existing?.socketIds instanceof Set ? existing.socketIds : new Set();
+    socketIds.add(socket.id);
+    const summary = getSocketUserSummary(socket);
+
+    roomVoice.set(userId, {
+        ...summary,
+        socketIds,
+        muted: Boolean(existing?.muted ?? muted),
+        speaking: Boolean(existing?.speaking),
+        joinedAt: existing?.joinedAt || new Date().toISOString(),
+    });
+    voiceByRoom.set(roomName, roomVoice);
+    getJoinedVoiceRooms(socket).add(asId(tournamentId));
+};
+
+const updateVoiceParticipant = (socket, tournamentId, patch = {}) => {
+    const roomName = getVoiceRoomName(tournamentId);
+    const roomVoice = voiceByRoom.get(roomName);
+    const participant = roomVoice?.get(socket.userId);
+    if (!participant) return null;
+    const next = {
+        ...participant,
+        muted: typeof patch.muted === "boolean" ? patch.muted : participant.muted,
+        speaking: typeof patch.speaking === "boolean" ? patch.speaking : participant.speaking,
+    };
+    roomVoice.set(socket.userId, next);
+    return serializeVoiceParticipant(next);
+};
+
+const removeVoiceParticipant = (socket, tournamentId) => {
+    const roomName = getVoiceRoomName(tournamentId);
+    const roomVoice = voiceByRoom.get(roomName);
+    if (!roomVoice) return null;
+    const participant = roomVoice.get(socket.userId);
+    if (!participant) return null;
+
+    participant.socketIds?.delete?.(socket.id);
+    if (participant.socketIds?.size > 0) {
+        roomVoice.set(socket.userId, participant);
+        return null;
+    }
+
+    roomVoice.delete(socket.userId);
+    if (roomVoice.size === 0) voiceByRoom.delete(roomName);
+    getJoinedVoiceRooms(socket).delete(asId(tournamentId));
+    return serializeVoiceParticipant(participant);
+};
+
 const leaveAllChatRooms = (io, socket) => {
     const joined = [...getJoinedRooms(socket)];
     joined.forEach((tournamentId) => {
@@ -96,6 +185,22 @@ const leaveAllChatRooms = (io, socket) => {
         decreasePresence(socket, tournamentId);
         socket.leave(roomName);
         io.to(roomName).emit("chat:presence", getPresencePayload(tournamentId));
+    });
+};
+
+const leaveAllVoiceRooms = (io, socket) => {
+    const joined = [...getJoinedVoiceRooms(socket)];
+    joined.forEach((tournamentId) => {
+        const roomName = getVoiceRoomName(tournamentId);
+        const removed = removeVoiceParticipant(socket, tournamentId);
+        socket.leave(roomName);
+        if (removed) {
+            io.to(roomName).emit("voice:participant-left", {
+                tournamentId,
+                userId: removed.userId,
+                participants: getVoiceParticipants(tournamentId),
+            });
+        }
     });
 };
 
@@ -321,7 +426,80 @@ export const registerChatSocketHandlers = (io, socket) => {
         });
     });
 
+    socket.on("voice:join", (payload = {}, callback) => {
+        runSocketAction(socket, callback, async () => {
+            const tournamentId = payload.tournamentId;
+            const context = await getChatAccessContext(getSocketUser(socket), tournamentId);
+            const normalizedTournamentId = asId(context.tournament._id);
+            const roomName = getVoiceRoomName(normalizedTournamentId);
+
+            socket.join(roomName);
+            upsertVoiceParticipant(socket, normalizedTournamentId, Boolean(payload.muted));
+            const participant = updateVoiceParticipant(socket, normalizedTournamentId, { muted: Boolean(payload.muted), speaking: false });
+            const participants = getVoiceParticipants(normalizedTournamentId);
+
+            socket.emit("voice:snapshot", { tournamentId: normalizedTournamentId, participants });
+            socket.to(roomName).emit("voice:participant-joined", {
+                tournamentId: normalizedTournamentId,
+                participant,
+                participants,
+            });
+
+            return { tournamentId: normalizedTournamentId, participants };
+        });
+    });
+
+    socket.on("voice:leave", (payload = {}, callback) => {
+        runSocketAction(socket, callback, async () => {
+            const tournamentId = asId(payload.tournamentId);
+            const roomName = getVoiceRoomName(tournamentId);
+            const removed = removeVoiceParticipant(socket, tournamentId);
+            socket.leave(roomName);
+            const participants = getVoiceParticipants(tournamentId);
+            if (removed) {
+                socket.to(roomName).emit("voice:participant-left", {
+                    tournamentId,
+                    userId: removed.userId,
+                    participants,
+                });
+            }
+            return { tournamentId, participants };
+        });
+    });
+
+    socket.on("voice:state", (payload = {}) => {
+        const tournamentId = asId(payload.tournamentId);
+        if (!tournamentId || !getJoinedVoiceRooms(socket).has(tournamentId)) return;
+        const participant = updateVoiceParticipant(socket, tournamentId, {
+            muted: payload.muted,
+            speaking: payload.speaking,
+        });
+        if (!participant) return;
+        io.to(getVoiceRoomName(tournamentId)).emit("voice:state", {
+            tournamentId,
+            participant,
+        });
+    });
+
+    socket.on("voice:signal", (payload = {}) => {
+        const tournamentId = asId(payload.tournamentId);
+        const to = asId(payload.to);
+        if (!tournamentId || !to || !getJoinedVoiceRooms(socket).has(tournamentId)) return;
+        const roomVoice = voiceByRoom.get(getVoiceRoomName(tournamentId));
+        if (!roomVoice?.has(to)) return;
+
+        io.to(getUserRoomName(to)).emit("voice:signal", {
+            tournamentId,
+            from: socket.userId,
+            to,
+            type: payload.type,
+            sdp: payload.sdp,
+            candidate: payload.candidate,
+        });
+    });
+
     socket.on("disconnect", () => {
+        leaveAllVoiceRooms(io, socket);
         leaveAllChatRooms(io, socket);
     });
 };

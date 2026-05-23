@@ -16,8 +16,8 @@ const BottomNav = () => {
   const navigate = useNavigate();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-glass-border bg-[linear-gradient(180deg,hsl(var(--card))_0%,hsl(var(--background))_100%)] pb-[env(safe-area-inset-bottom)] shadow-[0_-16px_44px_hsl(var(--background)/0.65)]">
-      <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-2">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-glass-border bg-[linear-gradient(180deg,hsl(var(--card)/0.98)_0%,hsl(var(--background))_100%)] pb-[env(safe-area-inset-bottom)] shadow-[0_-14px_38px_hsl(var(--background)/0.62)]">
+      <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-1.5 sm:py-2">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;
           return (
@@ -25,23 +25,21 @@ const BottomNav = () => {
               key={tab.path}
               onClick={() => navigate(tab.path)}
               className={cn(
-                "arena-focus relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 transition-colors",
-                isActive ? "text-primary" : "text-muted-foreground hover:bg-muted/45 hover:text-foreground",
+                "arena-focus relative flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 transition-colors",
+                isActive
+                  ? "text-primary"
+                  : "text-muted-foreground hover:bg-muted/45 hover:text-foreground",
               )}
             >
               {isActive && (
                 <motion.div
                   layoutId="activeTab"
-                  className="absolute -top-2 left-0 right-0 mx-auto h-1 w-8 rounded-full gradient-primary"
+                  className="absolute -top-1.5 left-0 right-0 mx-auto h-1 w-8 rounded-full gradient-primary"
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
               )}
-              <tab.icon
-                className="h-5 w-5 transition-colors"
-              />
-              <span
-                className="text-[10px] font-heading font-semibold transition-colors"
-              >
+              <tab.icon className="h-5 w-5 transition-colors" />
+              <span className="max-w-full truncate text-[9px] font-heading font-semibold transition-colors min-[380px]:text-[10px]">
                 {tab.label}
               </span>
             </button>

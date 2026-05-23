@@ -105,11 +105,17 @@ export const initSocket = (server, allowedOrigins = []) => {
             if (!userId) return next(new Error("Invalid token"));
 
             socket.userId = userId.toString();
-            const user = await User.findById(socket.userId).select("role isActive accountStatus").lean();
+            const user = await User.findById(socket.userId).select("username avatar role isActive accountStatus").lean();
             if (!user?.isActive || user.accountStatus === "banned" || user.role?.includes("banned")) {
                 return next(new Error("Account is not active"));
             }
             socket.userRoles = Array.isArray(user.role) ? user.role : [];
+            socket.userProfile = {
+                _id: socket.userId,
+                username: user.username || "Player",
+                avatar: user.avatar || {},
+                role: socket.userRoles,
+            };
             return next();
         } catch {
             return next(new Error("Invalid token"));

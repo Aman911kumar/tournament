@@ -9,6 +9,25 @@ export type ChatPresencePayload = {
   users: { userId: string; online: boolean }[];
 };
 
+export type VoiceParticipant = {
+  userId: string;
+  username?: string;
+  avatar?: { url?: string };
+  role?: string[];
+  muted: boolean;
+  speaking: boolean;
+  joinedAt: string;
+};
+
+export type VoiceSignalPayload = {
+  tournamentId: string;
+  from: string;
+  to: string;
+  type: "offer" | "answer" | "ice";
+  sdp?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
+};
+
 export type ChatAck<T = unknown> = {
   ok: boolean;
   data?: T;
@@ -31,6 +50,11 @@ type ServerToClientEvents = {
   "chat:notify": (payload: { tournamentId: string; message: ChatMessage }) => void;
   "chat:force-leave": (payload: { tournamentId: string; reason?: string }) => void;
   "chat:error": (payload: ChatAck) => void;
+  "voice:snapshot": (payload: { tournamentId: string; participants: VoiceParticipant[] }) => void;
+  "voice:participant-joined": (payload: { tournamentId: string; participant: VoiceParticipant; participants: VoiceParticipant[] }) => void;
+  "voice:participant-left": (payload: { tournamentId: string; userId: string; participants: VoiceParticipant[] }) => void;
+  "voice:state": (payload: { tournamentId: string; participant: VoiceParticipant }) => void;
+  "voice:signal": (payload: VoiceSignalPayload) => void;
 };
 
 type ClientToServerEvents = {
@@ -46,6 +70,16 @@ type ClientToServerEvents = {
   "chat:read": (payload: { tournamentId: string; messageId?: string }, callback?: (ack: ChatAck) => void) => void;
   "chat:moderate": (payload: Record<string, unknown>, callback?: (ack: ChatAck) => void) => void;
   "chat:share-room": (payload: { tournamentId: string }, callback?: (ack: ChatAck<ChatMessage>) => void) => void;
+  "voice:join": (payload: { tournamentId: string; muted?: boolean }, callback?: (ack: ChatAck<{ tournamentId: string; participants: VoiceParticipant[] }>) => void) => void;
+  "voice:leave": (payload: { tournamentId: string }, callback?: (ack: ChatAck<{ tournamentId: string; participants: VoiceParticipant[] }>) => void) => void;
+  "voice:state": (payload: { tournamentId: string; muted?: boolean; speaking?: boolean }) => void;
+  "voice:signal": (payload: {
+    tournamentId: string;
+    to: string;
+    type: "offer" | "answer" | "ice";
+    sdp?: RTCSessionDescriptionInit;
+    candidate?: RTCIceCandidateInit;
+  }) => void;
 };
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
