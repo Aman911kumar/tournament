@@ -166,6 +166,101 @@ const GAME_PRESETS = {
     valorant: { gameMode: "competitive", type: "team", teamSize: 5, defaultTeams: 8, platform: "pc", perspective: "na" }
 };
 
+const TOURNAMENT_SETUP_RULES = {
+    freefire: {
+        battle_royale: {
+            label: "Free Fire Battle Royale",
+            defaultType: "squad",
+            formats: {
+                solo: { teamSize: 1, minTeams: 2, maxTeams: 48, maxPlayers: 48 },
+                duo: { teamSize: 2, minTeams: 2, maxTeams: 24, maxPlayers: 48 },
+                squad: { teamSize: 4, minTeams: 2, maxTeams: 12, maxPlayers: 48 }
+            }
+        },
+        clash_squad: {
+            label: "Free Fire Clash Squad",
+            defaultType: "squad",
+            formats: {
+                squad: { teamSize: 4, minTeams: 2, maxTeams: 2, maxPlayers: 8 }
+            }
+        },
+        lone_wolf: {
+            label: "Free Fire Lone Wolf",
+            defaultType: "solo",
+            formats: {
+                solo: { teamSize: 1, minTeams: 2, maxTeams: 2, maxPlayers: 2 },
+                duo: { teamSize: 2, minTeams: 2, maxTeams: 2, maxPlayers: 4 }
+            }
+        }
+    },
+    bgmi: {
+        classic: {
+            label: "BGMI Classic",
+            defaultType: "squad",
+            formats: {
+                solo: { teamSize: 1, minTeams: 2, maxTeams: 100, maxPlayers: 100 },
+                duo: { teamSize: 2, minTeams: 2, maxTeams: 50, maxPlayers: 100 },
+                squad: { teamSize: 4, minTeams: 2, maxTeams: 25, maxPlayers: 100 }
+            }
+        },
+        tdm: {
+            label: "BGMI TDM",
+            defaultType: "squad",
+            formats: {
+                squad: { teamSize: 4, minTeams: 2, maxTeams: 2, maxPlayers: 8 }
+            }
+        },
+        arena: {
+            label: "BGMI Arena",
+            defaultType: "squad",
+            formats: {
+                squad: { teamSize: 4, minTeams: 2, maxTeams: 2, maxPlayers: 8 }
+            }
+        }
+    },
+    callofduty: {
+        battle_royale: {
+            label: "COD Mobile Battle Royale",
+            defaultType: "squad",
+            formats: {
+                solo: { teamSize: 1, minTeams: 2, maxTeams: 100, maxPlayers: 100 },
+                duo: { teamSize: 2, minTeams: 2, maxTeams: 50, maxPlayers: 100 },
+                squad: { teamSize: 4, minTeams: 2, maxTeams: 25, maxPlayers: 100 }
+            }
+        },
+        multiplayer: {
+            label: "COD Mobile Multiplayer",
+            defaultType: "team",
+            formats: {
+                team: { teamSize: 5, minTeams: 2, maxTeams: 2, maxPlayers: 10 }
+            }
+        },
+        search_destroy: {
+            label: "COD Mobile Search & Destroy",
+            defaultType: "team",
+            formats: {
+                team: { teamSize: 5, minTeams: 2, maxTeams: 2, maxPlayers: 10 }
+            }
+        }
+    },
+    valorant: {
+        competitive: {
+            label: "Valorant Competitive",
+            defaultType: "team",
+            formats: {
+                team: { teamSize: 5, minTeams: 2, maxTeams: 2, maxPlayers: 10 }
+            }
+        },
+        custom: {
+            label: "Valorant Custom",
+            defaultType: "team",
+            formats: {
+                team: { teamSize: 5, minTeams: 2, maxTeams: 2, maxPlayers: 10 }
+            }
+        }
+    }
+};
+
 const normalizeGame = (game) => {
     const key = String(game || "freefire").toLowerCase().trim().replace(/\s+/g, "").replace(/_/g, "-");
     const normalized = GAME_ALIASES[key];
@@ -181,6 +276,52 @@ const normalizeType = (type, teamSize) => {
     if (teamSize === 2) return "duo";
     if (teamSize === 4) return "squad";
     return "team";
+};
+
+const getTournamentModeRule = (game, mode) => {
+    const modes = TOURNAMENT_SETUP_RULES[game] || {};
+    const requestedMode = String(mode || GAME_PRESETS[game]?.gameMode || "").trim();
+    const rule = modes[requestedMode];
+    if (!rule) {
+        throw new ApiError(400, `${GAME_PRESETS[game] ? game : "Selected game"} does not support mode "${requestedMode}"`);
+    }
+    return { value: requestedMode, ...rule };
+};
+
+const getTournamentFormatRule = (modeRule, type) => {
+    const requestedType = String(type || modeRule.defaultType || "").trim();
+    const rule = modeRule.formats?.[requestedType];
+    if (!rule) {
+        throw new ApiError(400, `${modeRule.label} does not support "${requestedType}" format`);
+    }
+    return { value: requestedType, ...rule };
+};
+
+const validateTournamentSetup = ({ game, gameMode, type, teamSize, maxTeams, maxPlayers }) => {
+    const modeRule = getTournamentModeRule(game, gameMode);
+    const formatRule = getTournamentFormatRule(modeRule, type);
+    const resolvedTeamSize = Number(teamSize);
+    const resolvedMaxTeams = Number(maxTeams);
+    const resolvedMaxPlayers = Number(maxPlayers);
+    const expectedMaxPlayers = resolvedTeamSize * resolvedMaxTeams;
+
+    if (!Number.isInteger(resolvedTeamSize) || resolvedTeamSize !== formatRule.teamSize) {
+        throw new ApiError(400, `${modeRule.label} ${formatRule.value} requires team size ${formatRule.teamSize}`);
+    }
+
+    if (!Number.isInteger(resolvedMaxTeams) || resolvedMaxTeams < formatRule.minTeams || resolvedMaxTeams > formatRule.maxTeams) {
+        throw new ApiError(400, `${modeRule.label} ${formatRule.value} supports ${formatRule.minTeams}-${formatRule.maxTeams} teams`);
+    }
+
+    if (!Number.isInteger(resolvedMaxPlayers) || resolvedMaxPlayers !== expectedMaxPlayers) {
+        throw new ApiError(400, "Max players must equal team size multiplied by team count");
+    }
+
+    if (resolvedMaxPlayers > formatRule.maxPlayers) {
+        throw new ApiError(400, `${modeRule.label} ${formatRule.value} supports maximum ${formatRule.maxPlayers} players`);
+    }
+
+    return { gameMode: modeRule.value, type: formatRule.value, formatRule };
 };
 
 const userCanManageTournament = (user, tournament) => {
@@ -415,10 +556,23 @@ const buildTournamentPayload = (body, organizerId, channelId = null) => {
 
     const game = normalizeGame(body.game);
     const preset = GAME_PRESETS[game];
-    const teamSize = Number(body.teamSize || preset.teamSize);
+    const requestedMode = body.gameMode || preset.gameMode;
+    const modeRule = getTournamentModeRule(game, requestedMode);
+    const requestedType = body.type || (body.teamSize ? normalizeType(null, Number(body.teamSize)) : modeRule.defaultType || preset.type);
+    const formatRule = getTournamentFormatRule(modeRule, requestedType);
+    const teamSize = Number(body.teamSize || formatRule.teamSize);
     const maxPlayersInput = body.maxPlayers ? Number(body.maxPlayers) : null;
-    const maxTeams = Number(body.maxTeams || (maxPlayersInput ? Math.ceil(maxPlayersInput / teamSize) : preset.defaultTeams || 2));
+    const defaultTeams = formatRule.minTeams === formatRule.maxTeams ? formatRule.maxTeams : preset.defaultTeams || 2;
+    const maxTeams = Number(body.maxTeams || (maxPlayersInput ? Math.ceil(maxPlayersInput / teamSize) : defaultTeams));
     const maxPlayers = Number(maxPlayersInput || maxTeams * teamSize);
+    const validatedSetup = validateTournamentSetup({
+        game,
+        gameMode: modeRule.value,
+        type: requestedType,
+        teamSize,
+        maxTeams,
+        maxPlayers
+    });
 
     const roomDetails = normalizeRoomDetails(body.room_details);
     validateRoomJoinTime(roomDetails, startAt);
@@ -427,13 +581,13 @@ const buildTournamentPayload = (body, organizerId, channelId = null) => {
         title: body.title.trim(),
         description: body.description,
         game,
-        gameMode: body.gameMode || preset.gameMode,
+        gameMode: validatedSetup.gameMode,
         mapName: body.mapName || "",
         platform: body.platform || preset.platform,
         perspective: body.perspective || preset.perspective,
         organizer: organizerId,
         channel: channelId,
-        type: normalizeType(body.type, teamSize),
+        type: validatedSetup.type,
         startAt,
         endAt,
         registrationStart,
@@ -711,11 +865,39 @@ const updateTournament = asyncHandler(async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(updates, "registrationStart")) updates.registrationStart = parseDate(updates.registrationStart, "registrationStart");
     if (Object.prototype.hasOwnProperty.call(updates, "registrationEnd")) updates.registrationEnd = parseDate(updates.registrationEnd, "registrationEnd");
     if (Object.prototype.hasOwnProperty.call(updates, "endAt")) updates.endAt = parseOptionalDate(updates.endAt, "endAt");
-    if (updates.teamSize) updates.teamSize = Number(updates.teamSize);
-    if (updates.maxTeams) updates.maxTeams = Number(updates.maxTeams);
-    if (updates.maxPlayers) updates.maxPlayers = Number(updates.maxPlayers);
-    if (!updates.maxPlayers && (updates.teamSize || updates.maxTeams)) {
-        updates.maxPlayers = Number(updates.maxTeams || tournament.maxTeams || 1) * Number(updates.teamSize || tournament.teamSize || 1);
+    const setupFieldsChanged = ["game", "gameMode", "type", "teamSize", "maxTeams", "maxPlayers"].some((field) =>
+        Object.prototype.hasOwnProperty.call(updates, field)
+    );
+    if (setupFieldsChanged) {
+        const nextGame = updates.game || tournament.game;
+        const preset = GAME_PRESETS[nextGame];
+        const nextMode = updates.gameMode || (updates.game ? preset.gameMode : tournament.gameMode || preset.gameMode);
+        const modeRule = getTournamentModeRule(nextGame, nextMode);
+        const nextType = updates.type || ((updates.game || updates.gameMode) ? modeRule.defaultType : tournament.type || modeRule.defaultType);
+        const formatRule = getTournamentFormatRule(modeRule, nextType);
+        const shouldUseFormatDefaults = Boolean(updates.game || updates.gameMode || updates.type);
+        const nextTeamSize = Number(updates.teamSize || (shouldUseFormatDefaults ? formatRule.teamSize : tournament.teamSize || formatRule.teamSize));
+        const defaultTeams = formatRule.minTeams === formatRule.maxTeams
+            ? formatRule.maxTeams
+            : preset.defaultTeams || tournament.maxTeams || 2;
+        const nextMaxTeams = Number(updates.maxTeams || (shouldUseFormatDefaults ? defaultTeams : tournament.maxTeams || defaultTeams));
+        const nextMaxPlayers = Number(updates.maxPlayers || nextTeamSize * nextMaxTeams);
+        const validatedSetup = validateTournamentSetup({
+            game: nextGame,
+            gameMode: modeRule.value,
+            type: nextType,
+            teamSize: nextTeamSize,
+            maxTeams: nextMaxTeams,
+            maxPlayers: nextMaxPlayers
+        });
+
+        updates.gameMode = validatedSetup.gameMode;
+        updates.type = validatedSetup.type;
+        updates.teamSize = nextTeamSize;
+        updates.maxTeams = nextMaxTeams;
+        updates.maxPlayers = nextMaxPlayers;
+        if (updates.game && !updates.platform) updates.platform = preset.platform;
+        if (updates.game && !updates.perspective) updates.perspective = preset.perspective;
     }
 
     const distributionInput = Array.isArray(updates.prizeDistribution)

@@ -1,13 +1,12 @@
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { ArrowLeft, Lock, Eye, EyeOff, ShieldCheck, KeyRound, Loader2 } from "lucide-react";
+import { Lock, Eye, EyeOff, ShieldCheck, KeyRound, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
 import { toast } from "@/components/ui/sonner";
 import { changePassword } from "@/api/auth";
 import { getErrorToast } from "@/lib/page-utils";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
+import { PageHeader, PageShell, StatusPill, Surface } from "@/components/design-system";
 
 type FieldKey = "current" | "next" | "confirm";
 
@@ -93,7 +92,7 @@ const ChangePasswordScreen = () => {
     label: string,
     placeholder: string,
   ) => (
-    <GlassCard neon>
+    <Surface neon>
       <label className="text-xs text-muted-foreground font-heading mb-1 block">{label}</label>
       <div className="flex items-center gap-2">
         <Lock className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -105,79 +104,54 @@ const ChangePasswordScreen = () => {
           disabled={loading}
           className="w-full bg-transparent border border-glass-border rounded-lg px-3 py-2.5 text-sm font-heading focus:outline-none focus:border-primary transition-colors"
         />
-        <motion.button
-          whileTap={{ scale: 0.9 }}
+        <button
           type="button"
           onClick={() => setShow((s) => ({ ...s, [key]: !s[key] }))}
           disabled={loading}
-          className="p-2 text-muted-foreground hover:text-primary transition-colors"
+          className="arena-focus rounded-lg p-2 text-muted-foreground transition-colors hover:text-primary"
           aria-label={show[key] ? "Hide password" : "Show password"}
         >
           {show[key] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-        </motion.button>
+        </button>
       </div>
-    </GlassCard>
+    </Surface>
   );
 
   return (
-    <div className="arena-shell min-h-screen pb-20 relative overflow-hidden">
-      {/* Ambient glow */}
-      <div className="pointer-events-none absolute -top-32 -left-24 h-64 w-64 rounded-full bg-primary/10 blur-xl" />
-      <div className="pointer-events-none absolute top-40 -right-24 h-56 w-56 rounded-full bg-accent/10 blur-xl" />
+    <PageShell contentClassName="max-w-2xl space-y-3 pb-6 sm:space-y-4">
+      <PageHeader
+        title={isSetPasswordMode ? "Set Password" : "Change Password"}
+        subtitle="Protect your Battle4Arena account"
+        onBack={() => navigate("/profile")}
+      />
 
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3 relative z-10">
-        <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate("/profile")}>
-          <ArrowLeft className="w-5 h-5" />
-        </motion.button>
-        <h1 className="font-heading text-xl font-bold">{isSetPasswordMode ? "Set Password" : "Change Password"}</h1>
-      </div>
-
-      <div className="mx-auto w-full max-w-2xl px-4 sm:px-5 relative z-10">
-        {/* Hero icon */}
-        <motion.div
-          initial={{ scale: 0, rotate: -45 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: "spring", stiffness: 180, damping: 14 }}
-          className="flex justify-center mb-4"
-        >
-          <div className="relative w-24 h-24 rounded-lg gradient-primary flex items-center justify-center neon-border">
+      <Surface neon className="overflow-hidden p-0 text-center">
+        <div className="bg-[radial-gradient(circle_at_24%_0%,hsl(var(--primary)/0.28),transparent_32%),linear-gradient(135deg,hsl(var(--primary)/0.14),hsl(var(--card)))] p-5">
+          <StatusPill tone="primary">Security</StatusPill>
+          <div className="mx-auto mt-5 flex h-20 w-20 items-center justify-center rounded-2xl border border-primary/35 gradient-primary">
             <KeyRound className="w-10 h-10 text-primary-foreground" />
-            <motion.div
-              animate={{ scale: [1, 1.15, 1], opacity: [0.6, 0.2, 0.6] }}
-              transition={{ duration: 2.4, repeat: Infinity }}
-              className="absolute inset-0 rounded-lg border border-primary/40"
-            />
           </div>
-        </motion.div>
-
-        <motion.p
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="text-center text-sm text-muted-foreground mb-6 max-w-xs mx-auto"
-        >
+        </div>
+        <p className="mx-auto max-w-sm px-4 py-4 text-sm leading-relaxed text-muted-foreground">
           {isSetPasswordMode
             ? "Create a password so you can log in with your phone number next time."
             : "Keep your account secure. Use a fresh password you don't reuse anywhere else."}
-        </motion.p>
+        </p>
+      </Surface>
 
         <div className="space-y-4">
           {!isSetPasswordMode && renderField("current", "Current Password", "Enter current password")}
           {isSetPasswordMode && !hasPhoneNumber && !profileLoading && (
-            <GlassCard neon className="border border-destructive/30">
+            <Surface neon className="border border-destructive/30">
               <p className="text-sm font-heading font-bold text-destructive">Phone number required</p>
               <p className="mt-1 text-xs text-muted-foreground">Add a phone number before enabling phone/password login.</p>
-            </GlassCard>
+            </Surface>
           )}
           {renderField("next", "New Password", "Enter new password")}
 
           {/* Strength meter */}
           {values.next && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="px-1"
-            >
+            <Surface className="px-3 py-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-heading">
                   Strength
@@ -207,7 +181,7 @@ const ChangePasswordScreen = () => {
                   </li>
                 ))}
               </ul>
-            </motion.div>
+            </Surface>
           )}
 
           {renderField("confirm", "Confirm New Password", "Re-enter new password")}
@@ -223,8 +197,7 @@ const ChangePasswordScreen = () => {
             </span>
           </NeonButton>
         </div>
-      </div>
-    </div>
+    </PageShell>
   );
 };
 

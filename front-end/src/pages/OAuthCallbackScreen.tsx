@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import GlassCard from "@/components/GlassCard";
 import ButtonLoadingScreen from "@/components/ui/buttonLoadingScreen";
 import { toast } from "@/components/ui/sonner";
 import { getErrorToast } from "@/lib/page-utils";
 import { oauthComplete } from "@/api/auth";
 import { setAuthTokens } from "@/lib/auth-storage";
+import { PageShell, StatusPill, Surface } from "@/components/design-system";
 
 const parseCode = (search: string) => {
   const params = new URLSearchParams(search);
@@ -72,17 +72,24 @@ export default function OAuthCallbackScreen() {
         setLoading(false);
       }
     })();
-  }, [code, navigate]);
+  }, [code, description, error, navigate]);
 
   return (
-    <div className="min-h-[100svh] flex items-center justify-center px-4 py-10">
-      <GlassCard neon className="w-full max-w-md text-center">
-        <p className="font-heading text-sm font-bold">Signing you in...</p>
+    <PageShell bottomNavPadding={false} contentClassName="flex min-h-[100dvh] max-w-md items-center py-8">
+      <Surface neon className="w-full overflow-hidden p-0 text-center">
+        <div className="bg-[radial-gradient(circle_at_22%_0%,hsl(var(--primary)/0.28),transparent_34%),linear-gradient(135deg,hsl(var(--primary)/0.14),hsl(var(--card)))] p-5">
+          <StatusPill tone="primary">Secure OAuth</StatusPill>
+          <p className="mt-4 font-heading text-lg font-black">Signing you in...</p>
+        </div>
+        <div className="p-4 sm:p-5">
         <div className="mt-3 flex justify-center">
           {loading ? <ButtonLoadingScreen label="Please wait" /> : null}
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">You can safely close this screen if it takes too long.</p>
-      </GlassCard>
-    </div>
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+            You can safely close this screen if it takes too long.
+          </p>
+        </div>
+      </Surface>
+    </PageShell>
   );
 }

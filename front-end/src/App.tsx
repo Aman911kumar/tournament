@@ -19,6 +19,7 @@ import CapacitorUrlListener from "./components/CapacitorUrlListener";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 import { ApiError, scheduleRealtimeWarmup } from "@/api/client";
 import { recordFrontendEvent } from "@/lib/frontend-monitoring";
+import { useUiPreferences } from "@/hooks/useUiPreferences";
 
 const Index = lazy(() => import("./pages/Index.tsx"));
 const LandingPage = lazy(() => import("./pages/LandingPage.tsx"));
@@ -134,10 +135,8 @@ const queryClient = new QueryClient({
 
 const ProtectedShell = () => (
   <ProtectedRoute>
-    <div className="arena-shell arena-page">
-      <OnboardingGate />
-      <Outlet />
-    </div>
+    <OnboardingGate />
+    <Outlet />
     <NotificationRealtimeBridge />
     <BottomNav />
   </ProtectedRoute>
@@ -189,6 +188,11 @@ const RealtimeWarmup = () => {
   return null;
 };
 
+const UiPreferenceBridge = () => {
+  useUiPreferences();
+  return null;
+};
+
 const App = () => (
   <AppErrorBoundary>
     <QueryClientProvider client={queryClient}>
@@ -196,6 +200,7 @@ const App = () => (
         <Sonner />
         <NetworkStatusBanner />
         <Analytics />
+        <UiPreferenceBridge />
         <BrowserRouter>
           <CapacitorUrlListener />
           <RoutePerformanceMonitor />

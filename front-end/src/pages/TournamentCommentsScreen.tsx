@@ -1726,13 +1726,13 @@ const TournamentCommentsScreen = () => {
         <button
           type="button"
           onClick={() => scrollToBottom()}
-          className="arena-focus fixed bottom-[5.3rem] left-1/2 z-30 -translate-x-1/2 rounded-full border border-cyan-400/30 bg-cyan-400/15 px-4 py-2 font-heading text-xs font-bold text-cyan-100 shadow-[0_10px_28px_rgb(0_0_0/0.25)]"
+          className="arena-focus fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 z-30 -translate-x-1/2 rounded-lg border border-cyan-400/30 bg-cyan-400/15 px-3 py-2 font-heading text-xs font-bold text-cyan-100 shadow-[0_8px_20px_rgb(0_0_0/0.2)]"
         >
           {newMessageCount} new message{newMessageCount > 1 ? "s" : ""}
         </button>
       )}
 
-      <footer className="sticky bottom-0 z-20 shrink-0 border-t border-glass-border bg-background/95 px-3 py-2 backdrop-blur-sm sm:px-5">
+      <footer className="sticky bottom-0 z-20 shrink-0 border-t border-glass-border bg-background/98 px-2.5 py-2 sm:px-5">
         <div className="mx-auto w-full max-w-5xl pb-[env(safe-area-inset-bottom)]">
           {typingLabel && (
             <p className="mb-1.5 flex items-center gap-1.5 text-[11px] text-primary">
@@ -1836,7 +1836,7 @@ const TournamentCommentsScreen = () => {
             </div>
           )}
 
-          <div className="chat-composer flex min-h-12 items-end gap-1.5 rounded-xl border border-glass-border p-1.5 focus-within:border-primary/70">
+          <div className="chat-composer flex min-h-12 items-end gap-1.5 rounded-lg border border-glass-border p-1.5 focus-within:border-primary/70">
             <input
               ref={fileInputRef}
               type="file"
@@ -1891,8 +1891,7 @@ const TournamentCommentsScreen = () => {
                 {slowModeSeconds}s
               </span>
             )}
-            <motion.button
-              whileTap={{ scale: 0.94 }}
+            <button
               type="button"
               disabled={
                 Boolean(loadError) ||
@@ -1901,7 +1900,7 @@ const TournamentCommentsScreen = () => {
                 (!input.trim() && attachments.length === 0)
               }
               onClick={handleSend}
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground shadow-[0_0_18px_hsl(var(--primary)/0.28)] transition-colors hover:bg-primary/90 disabled:opacity-50"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground shadow-[0_6px_16px_hsl(var(--primary)/0.14)] transition-colors active:scale-[0.98] hover:bg-primary/90 disabled:opacity-50"
               aria-label="Send message"
             >
               {sending && !input.trim() && attachments.length === 0 ? (
@@ -1911,7 +1910,7 @@ const TournamentCommentsScreen = () => {
               ) : (
                 <Send className="h-4 w-4" />
               )}
-            </motion.button>
+            </button>
           </div>
         </div>
       </footer>

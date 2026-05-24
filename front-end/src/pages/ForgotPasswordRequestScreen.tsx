@@ -6,6 +6,7 @@ import ButtonLoadingScreen from "@/components/ui/buttonLoadingScreen";
 import { forgotPassword } from "@/api/auth";
 import { toast } from "@/components/ui/sonner";
 import { getErrorToast } from "@/lib/page-utils";
+import { PageShell, StatusPill, Surface } from "@/components/design-system";
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
@@ -105,25 +106,29 @@ const ForgotPasswordRequestScreen = () => {
   };
 
   return (
-    <div className="arena-shell min-h-screen px-5 py-8">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6">
+    <PageShell
+      bottomNavPadding={false}
+      contentClassName="flex min-h-[100dvh] max-w-md flex-col justify-center gap-4 py-8"
+    >
         <button
           type="button"
           onClick={() => navigate("/login")}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card"
+          className="arena-icon-button"
           aria-label="Back to login"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
 
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-wider neon-text-purple">Reset Password</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Enter your username, email, or phone number. We’ll send a reset code and a reset link.
+          <StatusPill tone="primary">Account recovery</StatusPill>
+          <h1 className="mt-3 font-display text-3xl font-black tracking-wide neon-text-purple">Reset Password</h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Enter your username, email, or phone number. We will send a reset code and a reset link.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-border bg-card/70 p-4">
+        <Surface neon>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <p className="font-heading text-sm font-bold">Find Account</p>
             <p className="mt-1 text-xs text-muted-foreground">Use the same details you use for login.</p>
@@ -147,11 +152,11 @@ const ForgotPasswordRequestScreen = () => {
           </div>
 
           <NeonButton type="submit" full disabled={loading}>
-            {loading ? <ButtonLoadingScreen label="Sending..." /> : "CONTINUE"}
+            {loading ? <ButtonLoadingScreen label="Sending..." /> : "Continue"}
           </NeonButton>
         </form>
-      </div>
-    </div>
+        </Surface>
+    </PageShell>
   );
 };
 

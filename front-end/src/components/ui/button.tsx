@@ -5,11 +5,11 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "arena-focus inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-heading text-sm font-semibold ring-offset-background transition-colors motion-reduce:transition-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "arena-focus inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-heading text-sm font-bold ring-offset-background transition-[color,background-color,border-color,box-shadow,transform] active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "border border-primary/30 bg-primary text-primary-foreground shadow-[0_10px_28px_hsl(var(--primary)/0.18)] hover:bg-primary/90",
+        default: "border border-primary/35 bg-primary text-primary-foreground shadow-[0_6px_16px_hsl(var(--primary)/0.12)] hover:bg-[hsl(195_100%_60%)]",
         destructive: "border border-destructive/35 bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline: "border border-glass-border bg-background/55 text-foreground hover:border-primary/45 hover:bg-primary/10 hover:text-primary",
         secondary: "border border-secondary/30 bg-secondary text-secondary-foreground hover:bg-secondary/85",
@@ -20,12 +20,12 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        xs: "h-8 rounded-md px-2.5 text-xs",
+        xs: "h-8 rounded px-2.5 text-xs",
         default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3 text-xs",
-        lg: "h-11 rounded-lg px-6",
+        sm: "h-9 rounded px-3 text-xs",
+        lg: "h-11 rounded-md px-4 sm:px-5",
         icon: "h-10 w-10",
-        "icon-sm": "h-9 w-9 rounded-md",
+        "icon-sm": "h-9 w-9 rounded",
       },
     },
     defaultVariants: {

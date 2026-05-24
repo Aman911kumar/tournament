@@ -1,11 +1,12 @@
 // Central API client. Set VITE_API_BASE_URL in your env when you have a backend.
 // All page-specific files import `apiFetch` from here.
 
+import appConfig from "@/config/project.config";
 import { clearAuthTokens, getAccessToken, getRefreshToken, hasAuthSession, setAuthTokens } from "@/lib/auth-storage";
 
 const DEFAULT_API_BASE_URL = "/api/v1";
-const FAST_PRODUCTION_API_FALLBACK = "https://api.battle4arena.fun/api/v1";
-const REALTIME_PRODUCTION_API_FALLBACK = "https://realtime.battle4arena.fun/api/v1";
+const FAST_PRODUCTION_API_FALLBACK = appConfig.api.fastProductionBaseUrl;
+const REALTIME_PRODUCTION_API_FALLBACK = appConfig.api.realtimeProductionBaseUrl;
 
 const isPrivateOrLocalHost = (hostname: string) => {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
@@ -43,26 +44,22 @@ const resolveApiBaseUrl = (configuredValue: unknown, productionFallback: string)
 export type ApiTarget = "fast" | "realtime";
 
 export const FAST_API_BASE_URL = resolveApiBaseUrl(
-  import.meta.env.VITE_FAST_API_BASE_URL || import.meta.env.VITE_API_BASE_URL,
-  String(import.meta.env.VITE_PRODUCTION_API_BASE_URL || FAST_PRODUCTION_API_FALLBACK),
+  appConfig.api.fastBaseUrl,
+  FAST_PRODUCTION_API_FALLBACK,
 );
 
-const configuredRealtimeApi =
-  import.meta.env.VITE_REALTIME_API_BASE_URL ||
-  import.meta.env.VITE_SOCKET_API_BASE_URL ||
-  (import.meta.env.DEV ? import.meta.env.VITE_API_BASE_URL : REALTIME_PRODUCTION_API_FALLBACK);
+const configuredRealtimeApi = appConfig.api.realtimeBaseUrl;
 
 export const REALTIME_API_BASE_URL = resolveApiBaseUrl(
   configuredRealtimeApi,
-  String(import.meta.env.VITE_PRODUCTION_REALTIME_API_BASE_URL || REALTIME_PRODUCTION_API_FALLBACK),
+  REALTIME_PRODUCTION_API_FALLBACK,
 );
 
 export const API_BASE_URL = FAST_API_BASE_URL;
-const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || (import.meta.env.PROD ? 45000 : 20000));
-const API_SLOW_REQUEST_MS = Number(import.meta.env.VITE_API_SLOW_REQUEST_MS || (import.meta.env.PROD ? 2500 : 1000));
-const API_PERF_LOGS =
-  String(import.meta.env.VITE_API_PERF_LOGS || "").toLowerCase() === "true" || import.meta.env.DEV;
-const REALTIME_WAKEUP_COOLDOWN_MS = Number(import.meta.env.VITE_REALTIME_WAKEUP_COOLDOWN_MS || 120_000);
+const API_TIMEOUT_MS = appConfig.api.timeoutMs;
+const API_SLOW_REQUEST_MS = appConfig.api.slowRequestMs;
+const API_PERF_LOGS = appConfig.api.performanceLogs;
+const REALTIME_WAKEUP_COOLDOWN_MS = appConfig.api.realtimeWakeupCooldownMs;
 const inFlightGetRequests = new Map<string, Promise<unknown>>();
 let lastRealtimeWarmupAt = 0;
 let realtimeWarmupPromise: Promise<boolean> | null = null;

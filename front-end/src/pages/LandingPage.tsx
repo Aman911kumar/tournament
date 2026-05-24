@@ -62,7 +62,7 @@ const Section = ({
     initial="hidden"
     whileInView="show"
     viewport={{ once: true, amount: 0.15 }}
-    className={cn("relative max-w-6xl mx-auto px-5 md:px-8 py-20 md:py-28", className)}
+    className={cn("relative max-w-6xl mx-auto px-3 sm:px-5 md:px-6 py-14 md:py-20", className)}
   >
     {children}
   </motion.section>
@@ -70,7 +70,7 @@ const Section = ({
 const SectionTag = ({ children }: { children: React.ReactNode }) => (
   <motion.div
     variants={fadeUp}
-    className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-[11px] font-heading uppercase tracking-[0.2em] text-primary mb-4"
+    className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md border border-primary/30 bg-primary/5 text-[10px] font-heading uppercase tracking-[0.16em] text-primary mb-3"
   >
     <span className="w-1.5 h-1.5 rounded-full bg-primary animate-glow-pulse" />
     {children}
@@ -85,18 +85,18 @@ const SectionTitle = ({
   title: React.ReactNode;
   subtitle?: string;
 }) => (
-  <div className="text-center mb-12 md:mb-16">
+  <div className="text-center mb-8 md:mb-10">
     <SectionTag>{eyebrow}</SectionTag>
     <motion.h2
       variants={fadeUp}
-      className="font-display text-3xl md:text-5xl font-extrabold tracking-tight"
+      className="font-display text-2xl md:text-4xl font-extrabold tracking-tight"
     >
       {title}
     </motion.h2>
     {subtitle && (
       <motion.p
         variants={fadeUp}
-        className="mt-4 text-sm md:text-base text-muted-foreground max-w-2xl mx-auto font-body"
+        className="mt-3 text-sm md:text-base text-muted-foreground max-w-2xl mx-auto font-body"
       >
         {subtitle}
       </motion.p>
@@ -119,10 +119,7 @@ const ArenaBackground = () => (
           "radial-gradient(ellipse at 50% 0%, rgba(0,0,0,1) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)",
       }}
     />
-    {/* color blobs */}
-    <div className="absolute -top-32 -left-24 w-[36rem] h-[36rem] rounded-full bg-primary/20 blur-[120px]" />
-    <div className="absolute top-1/3 -right-24 w-[30rem] h-[30rem] rounded-full bg-secondary/20 blur-[120px]" />
-    <div className="absolute bottom-0 left-1/3 w-[26rem] h-[26rem] rounded-full bg-accent/10 blur-[120px]" />
+    <div className="absolute inset-0 bg-[linear-gradient(135deg,hsl(var(--primary)/0.08),transparent_28%,hsl(var(--secondary)/0.07)_62%,transparent_82%)]" />
     {/* scanline */}
     <div
       className="absolute inset-0 opacity-[0.04] mix-blend-overlay"
@@ -160,9 +157,9 @@ const Navbar = () => {
       <div className="max-w-6xl mx-auto px-4">
         <nav
           className={cn(
-            "flex items-center justify-between rounded-2xl border px-4 md:px-5 py-2.5 transition-all duration-300",
+            "flex items-center justify-between rounded-lg border px-3 md:px-5 py-2.5 transition-all duration-300",
             scrolled
-              ? "border-glass-border bg-background/70 backdrop-blur-md shadow-[0_10px_40px_-20px_rgba(0,0,0,0.6)]"
+              ? "border-glass-border bg-background/92 shadow-[0_8px_22px_-18px_rgba(0,0,0,0.6)]"
               : "border-transparent bg-transparent"
           )}
         >
@@ -210,7 +207,7 @@ const Navbar = () => {
           </button>
         </nav>
         {open && (
-          <div className="md:hidden mt-2 rounded-2xl border border-glass-border bg-background/90 backdrop-blur-md p-4">
+          <div className="md:hidden mt-2 rounded-lg border border-glass-border bg-background/95 p-3">
             <ul className="flex flex-col gap-1">
               {NAV_LINKS.map((l) => (
                 <li key={l.href}>
@@ -255,8 +252,8 @@ const HeroStats = [
 const Hero = () => {
   const reduce = useReducedMotion();
   return (
-    <section className="relative pt-32 md:pt-40 pb-20 md:pb-28 px-5 md:px-8 max-w-6xl mx-auto">
-      <div aria-hidden className="absolute inset-0 -z-10 overflow-hidden rounded-[40px]">
+    <section className="relative pt-28 md:pt-36 pb-14 md:pb-20 px-3 sm:px-5 md:px-6 max-w-6xl mx-auto">
+      <div aria-hidden className="absolute inset-0 -z-10 overflow-hidden rounded-lg">
         <img
           src={heroBg}
           alt=""
@@ -288,10 +285,10 @@ const Hero = () => {
           The competitive home for mobile esports - host tournaments, climb leaderboards, win
           real cash prizes and rise through a community built for winners.
         </p>
-        <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div className="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
           <a
             href="#download"
-            className="group inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3.5 text-sm font-heading font-semibold uppercase tracking-wider text-primary-foreground neon-glow-purple transition-transform active:scale-[0.97]"
+            className="group inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-heading font-semibold uppercase tracking-wider text-primary-foreground neon-glow-purple transition-transform active:scale-[0.97]"
           >
             <Download className="w-4 h-4" />
             Download APK
@@ -299,7 +296,7 @@ const Hero = () => {
           </a>
           <a
             href="#tournaments"
-            className="inline-flex items-center gap-2 rounded-xl border border-glass-border bg-card/40 backdrop-blur-sm px-6 py-3.5 text-sm font-heading font-semibold uppercase tracking-wider text-foreground hover:bg-card/70 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-glass-border bg-card/60 px-5 py-3 text-sm font-heading font-semibold uppercase tracking-wider text-foreground hover:bg-card/80 transition-colors"
           >
             <Trophy className="w-4 h-4 text-accent" />
             Join Tournament
@@ -310,13 +307,13 @@ const Hero = () => {
           variants={stagger}
           initial="hidden"
           animate="show"
-          className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-4xl mx-auto"
+          className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3 max-w-4xl mx-auto"
         >
           {HeroStats.map((s) => (
             <motion.div
               key={s.v}
               variants={fadeUp}
-              className="relative rounded-xl border border-glass-border bg-card/40 backdrop-blur-sm p-4 overflow-hidden"
+              className="relative rounded-lg border border-glass-border bg-card/60 p-3 md:p-4 overflow-hidden"
             >
               <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-primary/70 to-transparent" />
               <p className="font-display text-xl md:text-3xl font-extrabold">{s.k}</p>
@@ -332,7 +329,7 @@ const Hero = () => {
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.7 }}
-            className="hidden md:block absolute left-6 top-44 w-56 rounded-xl border border-glass-border bg-card/60 backdrop-blur-md p-3"
+            className="hidden md:block absolute left-6 top-44 w-56 rounded-lg border border-glass-border bg-card/80 p-3"
           >
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
@@ -354,7 +351,7 @@ const Hero = () => {
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.45, duration: 0.7 }}
-            className="hidden md:block absolute right-6 top-56 w-56 rounded-xl border border-glass-border bg-card/60 backdrop-blur-md p-3"
+            className="hidden md:block absolute right-6 top-56 w-56 rounded-lg border border-glass-border bg-card/80 p-3"
           >
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
@@ -413,8 +410,8 @@ const TournamentsSection = () => (
         <motion.article
           key={t.name}
           variants={fadeUp}
-          whileHover={{ y: -4 }}
-          className="group relative rounded-2xl border border-glass-border bg-card/50 backdrop-blur-sm p-4 overflow-hidden"
+          whileHover={{ y: -2 }}
+          className="group relative rounded-lg border border-glass-border bg-card/60 p-3.5 overflow-hidden transition-colors hover:border-primary/35"
         >
           <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="flex items-center justify-between mb-3">
@@ -424,7 +421,6 @@ const TournamentsSection = () => (
                 statusStyle[t.status]
               )}
             >
-              {t.status === "LIVE" && "● "}
               {t.status}
             </span>
             <span className="text-[10px] text-muted-foreground font-heading uppercase">{t.fee}</span>
@@ -522,7 +518,7 @@ const CreatorSection = () => (
         <motion.div variants={fadeUp} className="mt-7">
           <Link
             to="/login"
-            className="inline-flex items-center gap-2 rounded-xl bg-secondary px-5 py-3 text-xs font-heading font-semibold uppercase tracking-wider text-secondary-foreground neon-glow-blue"
+            className="inline-flex items-center gap-2 rounded-lg bg-secondary px-5 py-3 text-xs font-heading font-semibold uppercase tracking-wider text-secondary-foreground neon-glow-blue"
           >
             Become a Creator <ChevronRight className="w-4 h-4" />
           </Link>
@@ -530,15 +526,14 @@ const CreatorSection = () => (
       </div>
       {/* Mock dashboard */}
       <motion.div variants={fadeUp} className="relative">
-        <div className="absolute inset-0 -m-6 rounded-3xl bg-gradient-to-tr from-primary/20 via-secondary/10 to-transparent blur-2xl" />
-        <div className="relative rounded-2xl border border-glass-border bg-card/70 backdrop-blur-md p-5">
+        <div className="relative rounded-lg border border-glass-border bg-card/82 p-4 sm:p-5">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[11px] font-heading uppercase tracking-wider text-muted-foreground">Creator Dashboard</p>
               <h3 className="font-heading font-bold text-base">Pro League S4</h3>
             </div>
             <span className="text-[10px] font-heading uppercase px-2 py-0.5 rounded-full border border-accent/40 bg-accent/10 text-accent">
-              ● LIVE
+              LIVE
             </span>
           </div>
           <div className="grid grid-cols-3 gap-3 mt-5">
@@ -547,13 +542,13 @@ const CreatorSection = () => (
               { l: "Revenue", v: "Rs 14,200" },
               { l: "Reports", v: "2" },
             ].map((s) => (
-              <div key={s.l} className="rounded-xl border border-glass-border bg-background/40 p-3">
+              <div key={s.l} className="rounded-lg border border-glass-border bg-background/40 p-3">
                 <p className="text-[10px] text-muted-foreground font-heading uppercase tracking-wider">{s.l}</p>
                 <p className="font-display font-extrabold text-lg">{s.v}</p>
               </div>
             ))}
           </div>
-          <div className="mt-4 rounded-xl border border-glass-border bg-background/40 p-3">
+          <div className="mt-4 rounded-lg border border-glass-border bg-background/40 p-3">
             <p className="text-[10px] text-muted-foreground font-heading uppercase tracking-wider mb-2">Room Access</p>
             <div className="flex items-center justify-between text-xs">
               <span className="font-mono">ID 482910 - PW arena#4</span>
@@ -561,13 +556,13 @@ const CreatorSection = () => (
             </div>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-glass-border bg-background/40 p-3">
+            <div className="rounded-lg border border-glass-border bg-background/40 p-3">
               <p className="text-[10px] text-muted-foreground font-heading uppercase tracking-wider">Engagement</p>
               <div className="mt-2 h-8 rounded bg-gradient-to-r from-primary/30 via-secondary/30 to-accent/30 overflow-hidden">
                 <div className="h-full w-3/4 gradient-primary" />
               </div>
             </div>
-            <div className="rounded-xl border border-glass-border bg-background/40 p-3">
+            <div className="rounded-lg border border-glass-border bg-background/40 p-3">
               <p className="text-[10px] text-muted-foreground font-heading uppercase tracking-wider">Payouts</p>
               <p className="font-display font-extrabold text-lg text-accent">Rs 38,500</p>
             </div>
@@ -588,7 +583,7 @@ const RealtimeSection = () => (
   <Section>
     <div className="grid lg:grid-cols-2 gap-10 items-center">
       <motion.div variants={fadeUp} className="relative order-2 lg:order-1">
-        <div className="rounded-2xl border border-glass-border bg-card/70 backdrop-blur-md p-4">
+        <div className="rounded-lg border border-glass-border bg-card/82 p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-[11px] font-heading uppercase tracking-wider text-muted-foreground">Live Feed</p>
             <span className="inline-flex items-center gap-1 text-[10px] font-heading text-accent">
@@ -603,7 +598,7 @@ const RealtimeSection = () => (
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.08 }}
-                className="flex items-center gap-3 p-3 rounded-xl border border-glass-border bg-background/40"
+                className="flex items-center gap-3 p-3 rounded-lg border border-glass-border bg-background/40"
               >
                 <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
                   <f.icon className="w-4 h-4 text-primary" />
@@ -712,10 +707,10 @@ const DownloadSection = () => (
             </div>
             <div className="mx-3 grid grid-cols-2 gap-2">
               {[
-                { name: "Free Fire", img: gameFreefire },
-                { name: "BGMI", img: gameBgmi },
-                { name: "Valorant", img: gameValorant },
-                { name: "COD", img: gameCod },
+                { name: "Free Fire", img: gameFreefire, position: "50% 36%" },
+                { name: "BGMI", img: gameBgmi, position: "50% 34%" },
+                { name: "Valorant", img: gameValorant, position: "50% 36%" },
+                { name: "COD", img: gameCod, position: "50% 36%" },
               ].map((g) => (
                 <div
                   key={g.name}
@@ -725,6 +720,7 @@ const DownloadSection = () => (
                     src={g.img}
                     alt=""
                     className="absolute inset-0 h-full w-full object-cover opacity-80"
+                    style={{ objectPosition: g.position }}
                     loading="lazy"
                     decoding="async"
                     width={256}
@@ -983,3 +979,4 @@ const Landing = () => {
   );
 };
 export default Landing;
+

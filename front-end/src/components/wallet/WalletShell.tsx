@@ -1,6 +1,5 @@
 import { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { ArrowLeft, ShieldCheck, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -68,15 +67,14 @@ export const WalletShell = ({
             maxWidth,
           )}
         >
-          <motion.button
+          <button
             type="button"
-            whileTap={{ scale: 0.92 }}
             onClick={() => navigate(-1)}
-            className="arena-focus grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-glass-border bg-card/70 sm:h-10 sm:w-10 sm:rounded-xl"
+            className="arena-focus grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-glass-border bg-card/70 active:scale-[0.98] sm:h-10 sm:w-10 sm:rounded-xl"
             aria-label="Go back"
           >
             <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
-          </motion.button>
+          </button>
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-primary sm:h-10 sm:w-10 sm:rounded-xl">
             <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
           </span>

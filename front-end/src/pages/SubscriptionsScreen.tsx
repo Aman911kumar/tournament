@@ -1,18 +1,155 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { ArrowLeft, Star, Shield, Search } from "lucide-react";
-import GlassCard from "@/components/GlassCard";
+import {
+  BellRing,
+  ChevronRight,
+  Crown,
+  Flame,
+  Search,
+  Shield,
+  Sparkles,
+  Star,
+  Trophy,
+  Users,
+} from "lucide-react";
 import NeonButton from "@/components/NeonButton";
+import {
+  EmptyState,
+  PageHeader,
+  PageShell,
+  SearchBox,
+  SegmentedControl,
+  SkeletonBlock,
+  StatusPill,
+  Surface,
+} from "@/components/design-system";
 import { CreatorChannel, followCreator, getCreators, getJoinedChannels, unfollowCreator } from "@/api/creators";
 import { CACHE_KEYS, readCache, writeCache } from "@/lib/offline-cache";
 import { toast } from "@/components/ui/sonner";
 import { getErrorToast } from "@/lib/page-utils";
 import { UserAvatar } from "@/components/identity";
+import { formatCompactNumber } from "@/config/discovery.config";
+import { cn } from "@/lib/utils";
+
+type SortKey = "Trending" | "Followers" | "Tournaments" | "Rating";
+type FilterKey = "All" | "Following" | "Live" | "Verified";
+
+const sortOptions: SortKey[] = ["Trending", "Followers", "Tournaments", "Rating"];
+const filterOptions: FilterKey[] = ["All", "Following", "Live", "Verified"];
+
+const useDebouncedValue = (value: string, delay = 240) => {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timeout);
+  }, [delay, value]);
+
+  return debounced;
+};
+
+const getCreatorRating = (creator: CreatorChannel) =>
+  Number(creator.owner?.stats?.rating || creator.ranking?.rating || 0);
+
+const getTournamentCount = (creator: CreatorChannel & { tournamentCount?: number }) =>
+  Number(creator.tournamentCount ?? creator.ranking?.activeTournaments ?? creator.ranking?.completedTournaments ?? 0);
+
+const CreatorDiscoveryCard = ({
+  creator,
+  following,
+  loading,
+  onOpen,
+  onFollowToggle,
+}: {
+  creator: CreatorChannel & { tournamentCount?: number };
+  following: boolean;
+  loading: boolean;
+  onOpen: () => void;
+  onFollowToggle: () => void;
+}) => {
+  const rating = getCreatorRating(creator);
+  const tournamentCount = getTournamentCount(creator);
+  const banner = creator.banner?.url ?? creator.owner?.banner?.url;
+
+  return (
+    <Surface className="overflow-hidden p-0">
+      <button type="button" onClick={onOpen} className="arena-focus block w-full text-left">
+        <div className="relative h-24 bg-gradient-to-r from-primary/30 via-secondary/20 to-accent/20">
+          {banner && (
+            <img
+              src={banner}
+              alt=""
+              loading="lazy"
+              className="h-full w-full object-cover"
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-background/88 via-background/25 to-transparent" />
+          <div className="absolute left-3 top-3 flex gap-2">
+            <StatusPill tone={creator.isActive ? "accent" : "muted"}>
+              {creator.isActive ? "Live" : "Creator"}
+            </StatusPill>
+            {!creator.virtual && <StatusPill tone="secondary">Verified</StatusPill>}
+          </div>
+        </div>
+
+        <div className="-mt-7 flex items-end gap-3 px-3 pb-3">
+          <UserAvatar
+            user={{
+              _id: creator.owner?._id,
+              username: creator.name || creator.owner?.username,
+              avatar: { url: creator.avatar?.url ?? creator.owner?.avatar?.url },
+              role: ["creator"],
+            }}
+            size="xl"
+          />
+          <div className="min-w-0 flex-1 pb-1">
+            <p className="truncate font-heading text-base font-black">{creator.name}</p>
+            <p className="truncate text-xs text-muted-foreground">@{creator.handle}</p>
+          </div>
+          <ChevronRight className="mb-2 h-4 w-4 shrink-0 text-muted-foreground" />
+        </div>
+      </button>
+
+      <div className="grid grid-cols-3 gap-2 border-y border-glass-border/70 px-3 py-2 text-center">
+        <div>
+          <p className="font-heading text-sm font-black">{formatCompactNumber(creator.memberCount)}</p>
+          <p className="text-[10px] text-muted-foreground">Followers</p>
+        </div>
+        <div>
+          <p className="font-heading text-sm font-black text-primary">{tournamentCount}</p>
+          <p className="text-[10px] text-muted-foreground">Events</p>
+        </div>
+        <div>
+          <p className="font-heading text-sm font-black text-accent">{rating.toFixed(1)}</p>
+          <p className="text-[10px] text-muted-foreground">Rating</p>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 p-3">
+        <div className="min-w-0">
+          <p className="truncate text-xs text-muted-foreground">
+            {creator.description || "Tournament organizer and esports creator"}
+          </p>
+        </div>
+        <NeonButton
+          variant={following ? "blue" : "purple"}
+          className="min-h-9 shrink-0 px-3 py-1.5 text-[10px]"
+          onClick={onFollowToggle}
+          disabled={creator.virtual || loading}
+        >
+          {loading ? "..." : following ? "Following" : "Follow"}
+        </NeonButton>
+      </div>
+    </Surface>
+  );
+};
 
 const SubscriptionsScreen = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
+  const [activeFilter, setActiveFilter] = useState<FilterKey>("All");
+  const [activeSort, setActiveSort] = useState<SortKey>("Trending");
   const [creators, setCreators] = useState<(CreatorChannel & { tournamentCount?: number })[]>([]);
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [followLoadingId, setFollowLoadingId] = useState<string | null>(null);
@@ -54,14 +191,27 @@ const SubscriptionsScreen = () => {
   }, []);
 
   const filteredCreators = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return creators;
-    return creators.filter((creator) =>
-      creator.name.toLowerCase().includes(query) ||
-      creator.handle.toLowerCase().includes(query) ||
-      creator.owner?.username?.toLowerCase().includes(query)
-    );
-  }, [creators, search]);
+    const query = debouncedSearch.trim().toLowerCase();
+    let list = [...creators];
+
+    if (activeFilter === "Following") list = list.filter((creator) => followingIds.has(creator._id));
+    if (activeFilter === "Live") list = list.filter((creator) => creator.isActive);
+    if (activeFilter === "Verified") list = list.filter((creator) => !creator.virtual);
+
+    if (query) {
+      list = list.filter((creator) =>
+        creator.name.toLowerCase().includes(query) ||
+        creator.handle.toLowerCase().includes(query) ||
+        creator.owner?.username?.toLowerCase().includes(query) ||
+        creator.description?.toLowerCase().includes(query)
+      );
+    }
+
+    if (activeSort === "Followers") return list.sort((a, b) => Number(b.memberCount || 0) - Number(a.memberCount || 0));
+    if (activeSort === "Tournaments") return list.sort((a, b) => getTournamentCount(b) - getTournamentCount(a));
+    if (activeSort === "Rating") return list.sort((a, b) => getCreatorRating(b) - getCreatorRating(a));
+    return list.sort((a, b) => Number(b.topScore || 0) - Number(a.topScore || 0));
+  }, [activeFilter, activeSort, creators, debouncedSearch, followingIds]);
 
   const handleFollowToggle = async (creator: CreatorChannel) => {
     if (creator.virtual) {
@@ -72,11 +222,8 @@ const SubscriptionsScreen = () => {
     const isFollowing = followingIds.has(creator._id);
     const previous = new Set(followingIds);
     const next = new Set(followingIds);
-    if (isFollowing) {
-      next.delete(creator._id);
-    } else {
-      next.add(creator._id);
-    }
+    if (isFollowing) next.delete(creator._id);
+    else next.add(creator._id);
     setFollowingIds(next);
 
     try {
@@ -90,95 +237,196 @@ const SubscriptionsScreen = () => {
       }
     } catch (error) {
       setFollowingIds(previous);
-      const errorToast = getErrorToast(error, { action: isFollowing ? "Unfollow creator" : "Follow creator", fallback: "Could not update follow." });
+      const errorToast = getErrorToast(error, {
+        action: isFollowing ? "Unfollow creator" : "Follow creator",
+        fallback: "Could not update follow.",
+      });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
       setFollowLoadingId(null);
     }
   };
 
+  const followingCount = followingIds.size;
+  const liveCreators = creators.filter((creator) => creator.isActive).length;
+  const verifiedCreators = creators.filter((creator) => !creator.virtual).length;
+
   return (
-    <div className="arena-shell min-h-screen pb-20">
-      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 pt-6 pb-4 flex items-center gap-3">
-        <motion.button whileTap={{ scale: 0.9 }} onClick={() => navigate(-1)}>
-          <ArrowLeft className="w-5 h-5" />
-        </motion.button>
-        <h1 className="font-heading text-xl font-bold">Creators</h1>
-      </div>
+    <PageShell wide contentClassName="max-w-7xl space-y-4 pb-4">
+      <PageHeader
+        title="Creators"
+        subtitle="Find organizers, communities, and tournament channels"
+        onBack={() => navigate(-1)}
+      />
 
-      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mb-4">
-        <div className="glass rounded-lg flex items-center gap-2 px-3 py-2.5">
-          <Search className="w-4 h-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search creators..."
-            className="bg-transparent text-sm font-heading flex-1 focus:outline-none placeholder:text-muted-foreground/50"
-          />
-        </div>
-      </div>
-
-      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5">
-        <h2 className="font-heading text-sm font-bold text-muted-foreground mb-3">
-          CREATORS ({filteredCreators.length})
-        </h2>
-        <div className="space-y-3">
-          {loading && [0, 1, 2, 3].map((item) => (
-            <div key={item} className="h-20 animate-pulse rounded-xl bg-muted" />
-          ))}
-          {!loading && filteredCreators.length === 0 && (
-            <GlassCard className="text-center py-8">
-              <Search className="w-9 h-9 mx-auto text-muted-foreground mb-2" />
-              <p className="text-sm font-heading">No creators found</p>
-              <p className="text-xs text-muted-foreground mt-1">Try a different search.</p>
-            </GlassCard>
-          )}
-
-          {!loading && filteredCreators.map((creator, index) => (
-            <GlassCard key={creator._id} neon delay={index * 0.08}>
-              <div className="flex items-center gap-3">
-                <button onClick={() => navigate(`/creator/${creator._id}`)} className="relative shrink-0">
-                  <UserAvatar
-                    user={{
-                      _id: creator.owner?._id,
-                      username: creator.name || creator.owner?.username,
-                      avatar: { url: creator.avatar?.url ?? creator.owner?.avatar?.url },
-                      role: ["creator"],
-                    }}
-                    size="lg"
-                  />
-                  <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-secondary flex items-center justify-center">
-                    <Shield className="w-2.5 h-2.5 text-secondary-foreground fill-secondary-foreground" />
-                  </div>
-                </button>
-                <button className="flex-1 min-w-0 text-left" onClick={() => navigate(`/creator/${creator._id}`)}>
-                  <p className="font-heading font-bold text-sm truncate">{creator.name}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">@{creator.handle}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {creator.memberCount.toLocaleString("en-IN")} followers - {creator.tournamentCount ?? 0} tournaments
-                  </p>
-                  <div className="flex items-center gap-0.5 mt-0.5">
-                    <Star className="w-2.5 h-2.5 text-accent fill-accent" />
-                    <span className="text-[10px] text-accent font-heading">{Number(creator.owner?.stats?.rating || 0).toFixed(1)}</span>
-                    {typeof creator.topScore === "number" && <span className="ml-1 text-[10px] text-primary font-heading">Top {Math.round(creator.topScore)}</span>}
-                    {creator.virtual && <span className="text-[10px] text-muted-foreground">- channel pending</span>}
-                  </div>
-                </button>
-                <NeonButton
-                  variant={followingIds.has(creator._id) ? "blue" : "purple"}
-                  className="text-[10px] py-1.5 px-3"
-                  onClick={() => handleFollowToggle(creator)}
-                  disabled={creator.virtual || followLoadingId === creator._id}
-                >
-                  {followLoadingId === creator._id ? "..." : followingIds.has(creator._id) ? "Following" : "Follow"}
-                </NeonButton>
+      <Surface neon className="overflow-hidden p-0">
+        <div className="relative p-3 sm:p-4 lg:p-5">
+          <div className="absolute inset-x-0 top-0 h-px gradient-neon" />
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-secondary/25 bg-secondary/10 px-3 py-1 font-heading text-[10px] font-bold text-secondary">
+                <Crown className="h-3.5 w-3.5" />
+                CREATOR DISCOVERY
               </div>
-            </GlassCard>
-          ))}
+              <h1 className="mt-3 font-heading text-2xl font-black leading-tight sm:text-4xl">
+                Follow trusted esports organizers.
+              </h1>
+              <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
+                Discover channels by followers, live activity, ratings, and tournament consistency.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+                <p className="font-heading text-lg font-black text-primary">{creators.length}</p>
+                <p className="text-[10px] text-muted-foreground">Creators</p>
+              </div>
+              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+                <p className="font-heading text-lg font-black text-accent">{liveCreators}</p>
+                <p className="text-[10px] text-muted-foreground">Live</p>
+              </div>
+              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+                <p className="font-heading text-lg font-black text-secondary">{followingCount}</p>
+                <p className="text-[10px] text-muted-foreground">Following</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Surface>
+
+      <div className="grid gap-2.5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <SearchBox
+          value={search}
+          onChange={setSearch}
+          placeholder="Search creators, handles, communities..."
+        />
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+          {[
+            { icon: Shield, label: `${verifiedCreators} verified` },
+            { icon: Flame, label: `${liveCreators} live` },
+            { icon: BellRing, label: "Room alerts" },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <span
+                key={item.label}
+                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-glass-border bg-card/80 px-3 text-xs text-muted-foreground"
+              >
+                <Icon className="h-3.5 w-3.5 text-primary" />
+                {item.label}
+              </span>
+            );
+          })}
         </div>
       </div>
 
-    </div>
+      <div className="space-y-2.5">
+        <SegmentedControl
+          value={activeFilter}
+          onChange={setActiveFilter}
+          options={filterOptions.map((filter) => ({ label: filter, value: filter }))}
+        />
+        <SegmentedControl
+          value={activeSort}
+          onChange={setActiveSort}
+          options={sortOptions.map((sort) => ({ label: sort, value: sort }))}
+        />
+      </div>
+
+      {filteredCreators.length > 0 && (
+        <Surface className="p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-heading text-sm font-black">Trending Creator</p>
+              <p className="text-xs text-muted-foreground">Best match for current filters</p>
+            </div>
+            <StatusPill tone="accent">Featured</StatusPill>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate(`/creator/${filteredCreators[0]._id}`)}
+            className="arena-focus mt-3 flex w-full items-center gap-3 rounded-xl border border-glass-border bg-background/35 p-3 text-left transition-colors hover:border-primary/45"
+          >
+            <UserAvatar
+              user={{
+                _id: filteredCreators[0].owner?._id,
+                username: filteredCreators[0].name,
+                avatar: { url: filteredCreators[0].avatar?.url ?? filteredCreators[0].owner?.avatar?.url },
+                role: ["creator"],
+              }}
+              size="lg"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-heading text-sm font-black">{filteredCreators[0].name}</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {formatCompactNumber(filteredCreators[0].memberCount)} followers - {getTournamentCount(filteredCreators[0])} tournaments
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </Surface>
+      )}
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {loading && [0, 1, 2, 3, 4, 5].map((item) => (
+          <Surface key={item} className="space-y-3">
+            <SkeletonBlock className="h-24" />
+            <div className="flex items-center gap-3">
+              <SkeletonBlock className="h-14 w-14 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <SkeletonBlock className="h-4 w-2/3" />
+                <SkeletonBlock className="h-3 w-1/2" />
+              </div>
+            </div>
+            <SkeletonBlock className="h-10" />
+          </Surface>
+        ))}
+
+        {!loading && filteredCreators.length === 0 && (
+          <div className="md:col-span-2 xl:col-span-3">
+            <EmptyState
+              icon={Search}
+              title="No creators found"
+              description="Try a different search, filter, or sorting option."
+              action={
+                <NeonButton variant="ghost" className="text-xs" onClick={() => {
+                  setSearch("");
+                  setActiveFilter("All");
+                }}>
+                  Reset Search
+                </NeonButton>
+              }
+            />
+          </div>
+        )}
+
+        {!loading && filteredCreators.map((creator) => (
+          <CreatorDiscoveryCard
+            key={creator._id}
+            creator={creator}
+            following={followingIds.has(creator._id)}
+            loading={followLoadingId === creator._id}
+            onOpen={() => navigate(`/creator/${creator._id}`)}
+            onFollowToggle={() => handleFollowToggle(creator)}
+          />
+        ))}
+      </div>
+
+      {!loading && filteredCreators.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-glass-border bg-card/55 px-3 py-2.5 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            Follow creators to surface room alerts and new tournaments faster.
+          </span>
+          <button
+            type="button"
+            onClick={() => navigate("/channel-setup")}
+            className="arena-focus shrink-0 rounded-lg px-2 py-1 font-heading font-bold text-primary"
+          >
+            Create channel
+          </button>
+        </div>
+      )}
+    </PageShell>
   );
 };
 

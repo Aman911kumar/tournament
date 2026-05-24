@@ -1,32 +1,52 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { motion } from "framer-motion";
-import { RefreshCcw, SlidersHorizontal, Trophy } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronRight,
+  Flame,
+  Gamepad2,
+  Radio,
+  RefreshCcw,
+  Search,
+  SlidersHorizontal,
+  Sparkles,
+  Trophy,
+  Users,
+  WalletCards,
+} from "lucide-react";
 import NeonButton from "@/components/NeonButton";
-import { EmptyState, PageHeader, PageShell, SearchBox, SegmentedControl, SkeletonBlock, Surface, TournamentCard } from "@/components/design-system";
+import GameArtImage from "@/components/GameArtImage";
+import {
+  EmptyState,
+  PageHeader,
+  PageShell,
+  SearchBox,
+  SegmentedControl,
+  SkeletonBlock,
+  StatusPill,
+  Surface,
+} from "@/components/design-system";
 import { formatCurrency, formatPrizeSummary, getErrorMessage, getPrizeSortValue } from "@/lib/page-utils";
 import { getMyTournamentRegistrations, getTournamentPage, Tournament } from "@/api/tournaments";
 import { CACHE_KEYS, readCache, stableCacheKey, writeAuthenticatedCache, writeCache } from "@/lib/offline-cache";
 import { getNotificationSocket } from "@/lib/notification-socket";
 import type { NotificationItem } from "@/api/notifications";
+import {
+  DISCOVERY_GAMES,
+  formatCompactNumber,
+  formatDateShort,
+  gameLabels,
+  gameQueryLabels,
+  getDiscoveryGame,
+  normalizeGameFilter,
+} from "@/config/discovery.config";
+import { cn } from "@/lib/utils";
 
 const gameFilters = ["All", "Free Fire", "BGMI", "Valorant", "COD"];
 const feeFilters = ["All Fees", "Free", "Paid"];
+const statusFilters = ["All", "Live", "Upcoming", "Completed"];
 const sortOptions = ["Trending", "Latest", "Prize Up", "Prize Down"];
-const gameMap: Record<string, string> = { COD: "Call of Duty" };
-const queryGameMap: Record<string, string> = {
-  freefire: "Free Fire",
-  bgmi: "BGMI",
-  valorant: "Valorant",
-  callofduty: "COD",
-  cod: "COD",
-};
-const gameLabels: Record<string, string> = {
-  freefire: "Free Fire",
-  bgmi: "BGMI",
-  callofduty: "Call of Duty",
-  valorant: "Valorant",
-};
+const PAGE_SIZE = 12;
 
 const sortMap: Record<string, "trending" | "latest" | "prize_asc" | "prize_desc"> = {
   Trending: "trending",
@@ -38,21 +58,143 @@ const sortMap: Record<string, "trending" | "latest" | "prize_asc" | "prize_desc"
 const getRegistrationTournamentId = (registration: Awaited<ReturnType<typeof getMyTournamentRegistrations>>[number]) =>
   typeof registration.tournament === "string" ? registration.tournament : registration.tournament?._id;
 
-const getPrizeSummary = (tournament: Tournament) => formatPrizeSummary(tournament, { killPrefix: true });
 const isPublicTournament = (tournament: Tournament) =>
   tournament.visibility !== "private" && !["draft", "cancelled"].includes(tournament.status);
-const PAGE_SIZE = 12;
+
+const getParticipants = (tournament: Tournament) =>
+  Number(tournament.participantCount ?? tournament.registrationCount ?? 0);
+
+const useDebouncedValue = (value: string, delay = 280) => {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timeout);
+  }, [delay, value]);
+
+  return debounced;
+};
+
+const getStatusTone = (status: Tournament["status"], joined?: boolean) => {
+  if (joined) return "secondary";
+  if (status === "running") return "accent";
+  if (status === "completed") return "muted";
+  return "primary";
+};
+
+const getStatusLabel = (tournament: Tournament, joined?: boolean) => {
+  if (joined) return "Joined";
+  if (tournament.status === "running") return "Live";
+  if (tournament.status === "open") return "Upcoming";
+  return tournament.status;
+};
+
+const TournamentDiscoveryCard = ({
+  tournament,
+  joined,
+  onClick,
+  onCreatorClick,
+}: {
+  tournament: Tournament;
+  joined?: boolean;
+  onClick: () => void;
+  onCreatorClick: () => void;
+}) => {
+  const game = getDiscoveryGame(tournament.game);
+  const participants = getParticipants(tournament);
+  const fill = tournament.maxPlayers ? Math.min((participants / tournament.maxPlayers) * 100, 100) : 0;
+  const slotsLeft = Math.max(Number(tournament.maxPlayers || 0) - participants, 0);
+
+  return (
+    <Surface interactive onClick={onClick} className="group overflow-hidden p-0">
+      <div className="relative h-32">
+        <GameArtImage
+          game={game.key}
+          variant="banner"
+          className="transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/35 to-transparent" />
+        <div className="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2">
+          <StatusPill tone={getStatusTone(tournament.status, joined)}>
+            {getStatusLabel(tournament, joined)}
+          </StatusPill>
+          <StatusPill tone="muted">{game.short}</StatusPill>
+        </div>
+        <div className="absolute bottom-3 left-3 right-3">
+          <p className="truncate font-heading text-base font-black">{tournament.title}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {game.label} - {tournament.gameMode || tournament.type}
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-3 p-3">
+        <div className="grid grid-cols-3 gap-2">
+          <div className="min-w-0 rounded-lg border border-glass-border bg-background/35 p-2">
+            <Trophy className="h-3.5 w-3.5 text-accent" />
+            <p className="mt-1 truncate font-heading text-xs font-bold">{formatPrizeSummary(tournament, { killPrefix: true })}</p>
+            <p className="text-[10px] text-muted-foreground">Prize</p>
+          </div>
+          <div className="min-w-0 rounded-lg border border-glass-border bg-background/35 p-2">
+            <CalendarDays className="h-3.5 w-3.5 text-primary" />
+            <p className="mt-1 truncate font-heading text-xs font-bold">{formatDateShort(tournament.startAt)}</p>
+            <p className="text-[10px] text-muted-foreground">Starts</p>
+          </div>
+          <div className="min-w-0 rounded-lg border border-glass-border bg-background/35 p-2">
+            <WalletCards className="h-3.5 w-3.5 text-secondary" />
+            <p className="mt-1 truncate font-heading text-xs font-bold">
+              {Number(tournament.entryFee || 0) === 0 ? "Free" : formatCurrency(tournament.entryFee)}
+            </p>
+            <p className="text-[10px] text-muted-foreground">Entry</p>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <span>{participants}/{tournament.maxPlayers} players</span>
+            <span>{slotsLeft} left</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted/70">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-primary via-secondary to-accent transition-[width] duration-300"
+              style={{ width: `${fill}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 border-t border-glass-border/70 pt-3">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onCreatorClick();
+            }}
+            className="arena-focus min-w-0 truncate rounded-lg text-xs text-muted-foreground hover:text-primary"
+          >
+            {tournament.channel?.name ?? tournament.organizer?.username ?? "Creator"}
+          </button>
+          <span className="inline-flex items-center gap-1 font-heading text-xs font-bold text-primary">
+            {joined ? "Open" : "View"} <ChevronRight className="h-3.5 w-3.5" />
+          </span>
+        </div>
+      </div>
+    </Surface>
+  );
+};
 
 const TournamentsScreen = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const initialGame = queryGameMap[String(searchParams.get("game") || "").toLowerCase()] || "All";
+  const initialGame = gameQueryLabels[String(searchParams.get("game") || "").toLowerCase()] || "All";
   const initialFee = searchParams.get("type") === "free" ? "Free" : searchParams.get("type") === "paid" ? "Paid" : "All Fees";
   const initialSort = searchParams.get("sort") === "trending" ? "Trending" : "Latest";
   const [activeGame, setActiveGame] = useState(initialGame);
   const [activeFee, setActiveFee] = useState(initialFee);
+  const [activeStatus, setActiveStatus] = useState("All");
   const [activeSort, setActiveSort] = useState(initialSort);
+  const [activeMode, setActiveMode] = useState("All Modes");
   const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
+  const debouncedSearch = useDebouncedValue(searchQuery);
   const [showFilters, setShowFilters] = useState(false);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [joinedTournamentIds, setJoinedTournamentIds] = useState<Set<string>>(new Set());
@@ -64,21 +206,30 @@ const TournamentsScreen = () => {
 
   const loadTournaments = useCallback(async (nextPage = 1) => {
     const feeFilter = activeFee === "Free" ? "free" : activeFee === "Paid" ? "paid" : "all";
-    const gameFilter = activeGame === "COD" ? gameMap.COD : activeGame;
+    const gameFilter = normalizeGameFilter(activeGame);
+    const statusFilter =
+      activeStatus === "Live"
+        ? "running"
+        : activeStatus === "Upcoming"
+          ? "open"
+          : activeStatus === "Completed"
+            ? "completed"
+            : undefined;
     const cacheKey = CACHE_KEYS.tournamentPage(stableCacheKey({
       activeFee,
       activeGame,
       activeSort,
-      searchQuery: searchQuery.trim(),
+      activeStatus,
+      searchQuery: debouncedSearch.trim(),
       page: nextPage,
     }));
     const cachedPage = nextPage === 1
       ? readCache<{
-          tournaments: Tournament[];
-          page: number;
-          hasMore: boolean;
-          joinedIds: string[];
-        }>(cacheKey)
+        tournaments: Tournament[];
+        page: number;
+        hasMore: boolean;
+        joinedIds: string[];
+      }>(cacheKey)
       : null;
 
     if (cachedPage) {
@@ -101,8 +252,9 @@ const TournamentsScreen = () => {
           game: gameFilter,
           type: feeFilter,
           sort: sortMap[activeSort],
-          search: searchQuery.trim() || undefined,
-          excludeCompleted: true,
+          search: debouncedSearch.trim() || undefined,
+          status: statusFilter as Tournament["status"] | undefined,
+          excludeCompleted: false,
           page: nextPage,
           limit: PAGE_SIZE,
         }),
@@ -132,7 +284,7 @@ const TournamentsScreen = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [activeFee, activeGame, activeSort, searchQuery]);
+  }, [activeFee, activeGame, activeSort, activeStatus, debouncedSearch]);
 
   useEffect(() => {
     setTournaments([]);
@@ -157,95 +309,166 @@ const TournamentsScreen = () => {
     };
   }, [loadTournaments]);
 
+  const modeOptions = useMemo(() => {
+    const modes = new Set<string>();
+    tournaments.forEach((tournament) => {
+      if (tournament.gameMode) modes.add(tournament.gameMode);
+    });
+    return ["All Modes", ...Array.from(modes).sort()];
+  }, [tournaments]);
+
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    let list = activeGame === "All"
-      ? tournaments.filter((t) => isPublicTournament(t) && !["completed", "cancelled"].includes(t.status))
-      : tournaments.filter((t) => {
-        if (!isPublicTournament(t)) return false;
-        if (["completed", "cancelled"].includes(t.status)) return false;
-        const gameName = gameLabels[t.game] ?? t.game;
-        return gameName === activeGame || gameName === gameMap[activeGame];
-      });
+    let list = tournaments.filter(isPublicTournament);
 
+    if (activeGame !== "All") {
+      list = list.filter((t) => (gameLabels[t.game] ?? t.game) === activeGame || activeGame === "COD" && t.game === "callofduty");
+    }
     if (activeFee === "Free") list = list.filter((t) => Number(t.entryFee || 0) === 0);
     if (activeFee === "Paid") list = list.filter((t) => Number(t.entryFee || 0) > 0);
+    if (activeStatus === "Live") list = list.filter((t) => t.status === "running");
+    if (activeStatus === "Upcoming") list = list.filter((t) => t.status === "open");
+    if (activeStatus === "Completed") list = list.filter((t) => t.status === "completed");
+    if (activeMode !== "All Modes") list = list.filter((t) => t.gameMode === activeMode);
     if (query) {
       list = list.filter((t) =>
         t.title.toLowerCase().includes(query) ||
         (t.organizer?.username ?? "").toLowerCase().includes(query) ||
-        (gameLabels[t.game] ?? t.game).toLowerCase().includes(query)
+        (t.channel?.name ?? "").toLowerCase().includes(query) ||
+        (gameLabels[t.game] ?? t.game).toLowerCase().includes(query) ||
+        (t.gameMode ?? "").toLowerCase().includes(query)
       );
     }
 
     if (activeSort === "Prize Up") return [...list].sort((a, b) => getPrizeSortValue(a) - getPrizeSortValue(b));
     if (activeSort === "Prize Down") return [...list].sort((a, b) => getPrizeSortValue(b) - getPrizeSortValue(a));
-    return [...list].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
-  }, [activeFee, activeGame, activeSort, searchQuery, tournaments]);
+    if (activeSort === "Latest") return [...list].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
+    return [...list].sort((a, b) => getParticipants(b) - getParticipants(a));
+  }, [activeFee, activeGame, activeMode, activeSort, activeStatus, searchQuery, tournaments]);
+
+  const liveCount = tournaments.filter((t) => t.status === "running").length;
+  const playerCount = tournaments.reduce((sum, tournament) => sum + getParticipants(tournament), 0);
 
   return (
-    <PageShell contentClassName="space-y-4">
-      <PageHeader title="Tournaments" subtitle="Find your next battle" />
+    <PageShell wide contentClassName="max-w-7xl space-y-4 pb-4">
+      <PageHeader title="Tournaments" subtitle="Discover live rooms, upcoming events, and prize battles" />
 
-      <div className="flex gap-2">
+      <Surface neon className="overflow-hidden p-0">
+        <div className="relative p-3 sm:p-4 lg:p-5">
+          <div className="absolute inset-x-0 top-0 h-px gradient-neon" />
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 font-heading text-[10px] font-bold text-accent">
+                <Radio className="h-3.5 w-3.5" />
+                TOURNAMENT DISCOVERY
+              </div>
+              <h1 className="mt-3 font-heading text-2xl font-black leading-tight sm:text-4xl">
+                Browse arenas built for fast competitive play.
+              </h1>
+              <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
+                Search by game, mode, creator, fee, prize, and live status. Results stay cached and update from tournament notifications.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+                <p className="font-heading text-lg font-black text-accent">{liveCount}</p>
+                <p className="text-[10px] text-muted-foreground">Live</p>
+              </div>
+              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+                <p className="font-heading text-lg font-black text-secondary">{formatCompactNumber(playerCount)}</p>
+                <p className="text-[10px] text-muted-foreground">Players</p>
+              </div>
+              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+                <p className="font-heading text-lg font-black text-primary">{filtered.length}</p>
+                <p className="text-[10px] text-muted-foreground">Shown</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Surface>
+
+      <div className="grid gap-2.5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
         <SearchBox
           value={searchQuery}
           onChange={setSearchQuery}
-          placeholder="Search tournaments or creators..."
+          placeholder="Search tournament, creator, mode..."
           className="flex-1"
         />
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setShowFilters(!showFilters)}
-          className={`arena-focus flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-glass-border bg-card/80 transition-colors hover:border-primary/45 ${showFilters ? "neon-border text-primary" : "text-muted-foreground"}`}
+        <button
+          type="button"
+          onClick={() => setShowFilters((value) => !value)}
+          className={cn(
+            "arena-focus inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-glass-border bg-card/80 px-4 font-heading text-xs font-bold transition-colors hover:border-primary/45",
+            showFilters ? "neon-border text-primary" : "text-muted-foreground",
+          )}
           aria-label="Toggle tournament filters"
         >
           <SlidersHorizontal className="h-4 w-4" />
-        </motion.button>
+          Filters
+        </button>
       </div>
 
-      <SegmentedControl
-        value={activeGame}
-        onChange={setActiveGame}
-        options={gameFilters.map((filter) => ({ label: filter, value: filter }))}
-      />
+      <div className="space-y-2.5">
+        <SegmentedControl
+          value={activeStatus}
+          onChange={setActiveStatus}
+          options={statusFilters.map((filter) => ({ label: filter, value: filter }))}
+        />
+        <SegmentedControl
+          value={activeGame}
+          onChange={setActiveGame}
+          options={gameFilters.map((filter) => ({ label: filter, value: filter }))}
+        />
+        {showFilters && (
+          <div className="grid gap-2.5 lg:grid-cols-3">
+            <SegmentedControl
+              value={activeFee}
+              onChange={setActiveFee}
+              options={feeFilters.map((filter) => ({ label: filter, value: filter }))}
+            />
+            <SegmentedControl
+              value={activeSort}
+              onChange={setActiveSort}
+              options={sortOptions.map((filter) => ({ label: filter, value: filter }))}
+            />
+            <SegmentedControl
+              value={activeMode}
+              onChange={setActiveMode}
+              options={modeOptions.map((filter) => ({ label: filter.replace(/_/g, " "), value: filter }))}
+            />
+          </div>
+        )}
+      </div>
 
-      {showFilters && (
-        <motion.div
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: "auto", opacity: 1 }}
-          className="space-y-2 overflow-hidden"
-        >
-          <SegmentedControl
-            value={activeFee}
-            onChange={setActiveFee}
-            options={feeFilters.map((filter) => ({ label: filter, value: filter }))}
-          />
-          <SegmentedControl
-            value={activeSort}
-            onChange={setActiveSort}
-            options={sortOptions.map((filter) => ({ label: filter, value: filter }))}
-          />
-        </motion.div>
-      )}
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        {loading && [0, 1, 2].map((item) => (
-          <Surface key={item}>
-            <div className="space-y-3">
-              <SkeletonBlock className="h-4 w-2/3" />
-              <SkeletonBlock className="h-3 w-1/3" />
-              <div className="grid grid-cols-2 gap-2">
-                <SkeletonBlock className="h-3" />
-                <SkeletonBlock className="h-3" />
-              </div>
-              <SkeletonBlock className="h-9" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {DISCOVERY_GAMES.map((game) => (
+          <button
+            key={game.key}
+            type="button"
+            onClick={() => setActiveGame(game.label === "Call of Duty" ? "COD" : game.label)}
+            className="arena-focus group overflow-hidden rounded-xl border border-glass-border bg-card/82 text-left transition-colors hover:border-primary/45"
+          >
+            <div className="relative h-20">
+              <GameArtImage game={game.key} alt={game.label} variant="banner" />
+              <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
+              <p className="absolute bottom-2 left-2 right-2 truncate font-heading text-xs font-black">{game.label}</p>
             </div>
+          </button>
+        ))}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {loading && [0, 1, 2, 3, 4, 5].map((item) => (
+          <Surface key={item} className="space-y-3">
+            <SkeletonBlock className="h-32" />
+            <SkeletonBlock className="h-4 w-2/3" />
+            <SkeletonBlock className="h-3 w-1/2" />
+            <SkeletonBlock className="h-8" />
           </Surface>
         ))}
 
         {!loading && error && (
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-2 xl:col-span-3">
             <EmptyState
               icon={RefreshCcw}
               title="Could not load tournaments"
@@ -255,40 +478,53 @@ const TournamentsScreen = () => {
           </div>
         )}
 
-        {!loading && !error && (filtered.length === 0 ? (
-          <div className="sm:col-span-2">
-            <EmptyState icon={Trophy} title="No tournaments found" description="Try changing search or filters." />
+        {!loading && !error && filtered.length === 0 && (
+          <div className="sm:col-span-2 xl:col-span-3">
+            <EmptyState icon={Trophy} title="No tournaments found" description="Try changing search, game, or status filters." />
           </div>
-        ) : (
-          filtered.map((t) => {
-            const gameName = gameLabels[t.game] ?? t.game;
-            const creatorName = t.channel?.name ?? t.organizer?.username ?? "Creator";
-            const joined = joinedTournamentIds.has(t._id);
-            return (
-            <TournamentCard
-              key={t._id}
-              title={t.title}
-              game={`${gameName} - ${new Date(t.startAt).toLocaleString()}`}
-              creator={creatorName}
-              status={joined ? "Joined" : t.status === "running" ? "Live" : t.status}
-              prize={getPrizeSummary(t)}
-              slots={Number(t.registrationCount || 0)}
-              maxSlots={t.maxPlayers}
-              entry={Number(t.entryFee || 0) === 0 ? "Free" : formatCurrency(t.entryFee)}
-              joined={joined}
-              onClick={() => navigate(`/tournament/${t._id}`)}
-              onCreatorClick={() => navigate(t.channel?._id ? `/creator/${t.channel._id}` : "/subscriptions")}
-            />
-          )})
-        ))}
+        )}
 
+        {!loading && !error && filtered.map((tournament) => {
+          const joined = joinedTournamentIds.has(tournament._id);
+          return (
+            <TournamentDiscoveryCard
+              key={tournament._id}
+              tournament={tournament}
+              joined={joined}
+              onClick={() => navigate(`/tournament/${tournament._id}`)}
+              onCreatorClick={() => navigate(tournament.channel?._id ? `/creator/${tournament.channel._id}` : "/subscriptions")}
+            />
+          );
+        })}
       </div>
 
-        {!loading && !error && hasMore && (
-          <NeonButton full variant="blue" className="text-xs py-2" onClick={() => loadTournaments(page + 1)} disabled={loadingMore}>
-            {loadingMore ? "LOADING..." : "LOAD MORE"}
-          </NeonButton>
-        )}
+      {!loading && !error && hasMore && (
+        <NeonButton
+          full
+          variant="blue"
+          className="min-h-11 text-xs"
+          onClick={() => loadTournaments(page + 1)}
+          disabled={loadingMore}
+        >
+          {loadingMore ? "LOADING..." : "LOAD MORE"}
+        </NeonButton>
+      )}
+
+      {!loading && !error && filtered.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-glass-border bg-card/55 px-3 py-2.5 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            Results update from tournament and creator notifications.
+          </span>
+          <button
+            type="button"
+            onClick={() => navigate("/create-tournament")}
+            className="arena-focus shrink-0 rounded-lg px-2 py-1 font-heading font-bold text-primary"
+          >
+            Create
+          </button>
+        </div>
+      )}
     </PageShell>
   );
 };

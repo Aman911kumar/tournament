@@ -1,11 +1,13 @@
 import dotenv from 'dotenv'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { applyProjectConfigDefaults } from './config/project.config.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 dotenv.config({ path: path.join(__dirname, '.env'), quiet: true })
+applyProjectConfigDefaults()
 
 const PORT = process.env.PORT
 const CORS_ORIGIN = process.env.CORS_ORIGIN

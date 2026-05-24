@@ -4,6 +4,7 @@ import {
   VoiceParticipant,
   VoiceSignalPayload,
 } from "@/lib/chat-socket";
+import appConfig from "@/config/project.config";
 
 type VoiceStatus = "idle" | "joining" | "connected" | "error";
 
@@ -17,7 +18,7 @@ const VOICE_SOCKET_CONNECT_TIMEOUT_MS = 10_000;
 const VOICE_JOIN_ACK_TIMEOUT_MS = 12_000;
 
 const parseIceServers = (): RTCIceServer[] => {
-  const raw = String(import.meta.env.VITE_VOICE_ICE_SERVERS || "").trim();
+  const raw = appConfig.voice.iceServers.trim();
   if (!raw) {
     return [
       { urls: "stun:stun.l.google.com:19302" },

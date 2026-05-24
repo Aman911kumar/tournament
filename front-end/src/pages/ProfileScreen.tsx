@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -20,7 +19,6 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
-import GlassCard from "@/components/GlassCard";
 import { toast } from "@/components/ui/sonner";
 import { logout } from "@/api/auth";
 import { becomeCreator, leaveCreator } from "@/api/profile";
@@ -32,16 +30,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CACHE_KEYS, removeCache } from "@/lib/offline-cache";
 import {
-  CACHE_KEYS,
-  removeCache,
-} from "@/lib/offline-cache";
-import { formatCurrency, getErrorMessage, getErrorToast } from "@/lib/page-utils";
+  formatCurrency,
+  getErrorMessage,
+  getErrorToast,
+} from "@/lib/page-utils";
 import {
   PROFILE_QUERY_KEY,
   setCurrentProfileCache,
   useCurrentProfile,
 } from "@/hooks/useCurrentProfile";
+import {
+  EmptyState,
+  PageHeader,
+  PageShell,
+  SkeletonBlock,
+  StatusPill,
+  Surface,
+} from "@/components/design-system";
+import { cn } from "@/lib/utils";
+import UiPreferencesPanel from "@/components/UiPreferencesPanel";
 
 const menuItems = [
   { icon: Edit, label: "Edit Profile", route: "/edit-profile" },
@@ -69,18 +78,110 @@ const getDisplayPhoneNumber = (phoneNumber?: string) => {
   return value.startsWith("+") ? value : `+91 ${value}`;
 };
 
+type MenuTone = "primary" | "secondary" | "accent" | "danger";
+
+const toneClasses: Record<MenuTone, string> = {
+  primary: "border-primary/25 bg-primary/10 text-primary",
+  secondary: "border-secondary/25 bg-secondary/10 text-secondary",
+  accent: "border-accent/25 bg-accent/10 text-accent",
+  danger: "border-destructive/25 bg-destructive/10 text-destructive",
+};
+
 const ProfileSkeleton = () => (
-  <GlassCard neon className="flex flex-col items-center text-center">
-    <div className="w-20 h-20 rounded-full bg-muted animate-pulse mb-3" />
-    <div className="h-4 w-32 bg-muted rounded animate-pulse mb-3" />
-    <div className="h-3 w-48 max-w-full bg-muted rounded animate-pulse mb-2" />
-    <div className="h-3 w-36 bg-muted rounded animate-pulse mb-4" />
-    <div className="grid grid-cols-3 gap-3 w-full">
-      {[0, 1, 2].map((item) => (
-        <div key={item} className="h-12 glass rounded-lg animate-pulse" />
-      ))}
+  <Surface className="overflow-hidden p-0" neon>
+    <SkeletonBlock className="h-28 rounded-none sm:h-36" />
+    <div className="space-y-3 p-3 sm:p-4">
+      <div className="flex items-end gap-3">
+        <SkeletonBlock className="h-20 w-20 rounded-full" />
+        <div className="min-w-0 flex-1 space-y-2 pb-1">
+          <SkeletonBlock className="h-5 w-44 max-w-full" />
+          <SkeletonBlock className="h-3 w-60 max-w-full" />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {[0, 1, 2].map((item) => (
+          <SkeletonBlock key={item} className="h-14" />
+        ))}
+      </div>
     </div>
-  </GlassCard>
+  </Surface>
+);
+
+const MenuRow = ({
+  icon: Icon,
+  label,
+  description,
+  tone = "primary",
+  disabled = false,
+  onClick,
+}: {
+  icon: typeof Edit;
+  label: string;
+  description?: string;
+  tone?: MenuTone;
+  disabled?: boolean;
+  onClick?: () => void;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    className="arena-focus flex min-h-[58px] w-full items-center justify-between gap-3 rounded-xl border border-glass-border bg-background/38 px-3 py-2.5 text-left transition-colors hover:border-primary/35 hover:bg-background/55 disabled:cursor-not-allowed disabled:opacity-60"
+  >
+    <div className="flex min-w-0 items-center gap-3">
+      <span
+        className={cn(
+          "grid h-9 w-9 shrink-0 place-items-center rounded-xl border",
+          toneClasses[tone],
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0">
+        <span
+          className={cn(
+            "block truncate font-heading text-sm font-bold",
+            tone === "danger" && "text-destructive",
+          )}
+        >
+          {label}
+        </span>
+        {description && (
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+            {description}
+          </span>
+        )}
+      </span>
+    </div>
+    <ChevronRight
+      className={cn(
+        "h-4 w-4 shrink-0 text-muted-foreground",
+        tone === "danger" && "text-destructive",
+      )}
+    />
+  </button>
+);
+
+const MenuSection = ({
+  title,
+  children,
+  danger = false,
+}: {
+  title: string;
+  children: React.ReactNode;
+  danger?: boolean;
+}) => (
+  <section className="space-y-2">
+    <h2
+      className={cn(
+        "px-1 font-heading text-[11px] font-bold uppercase tracking-wider text-muted-foreground",
+        danger && "text-destructive",
+      )}
+    >
+      {title}
+    </h2>
+    <Surface className="space-y-2 p-2.5 sm:p-3">{children}</Surface>
+  </section>
 );
 
 const ProfileScreen = () => {
@@ -101,10 +202,25 @@ const ProfileScreen = () => {
 
   const stats = [
     { label: "Balance", value: formatCurrency(profile?.walletBalance ?? 0) },
-    { label: "Won", value: formatCurrency(profile?.stats?.amount_won ?? profile?.playerEarnings ?? 0) },
-    { label: "Tournaments", value: profile?.stats?.tournamentsPlayed ?? profile?.stats?.matchesPlayed ?? 0 },
+    {
+      label: "Won",
+      value: formatCurrency(
+        profile?.stats?.amount_won ?? profile?.playerEarnings ?? 0,
+      ),
+    },
+    {
+      label: "Tournaments",
+      value:
+        profile?.stats?.tournamentsPlayed ??
+        profile?.stats?.matchesPlayed ??
+        0,
+    },
   ];
-  const profileError = profile ? null : profileLoadError ? getErrorMessage(profileLoadError, "Failed to load profile.") : null;
+  const profileError = profile
+    ? null
+    : profileLoadError
+      ? getErrorMessage(profileLoadError, "Failed to load profile.")
+      : null;
 
   const handleLogout = async () => {
     try {
@@ -112,7 +228,10 @@ const ProfileScreen = () => {
       const res = await logout();
       toast.success(res.message);
     } catch (error) {
-      const errorToast = getErrorToast(error, { action: "Logout", fallback: "Logout failed." });
+      const errorToast = getErrorToast(error, {
+        action: "Logout",
+        fallback: "Logout failed.",
+      });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
       localStorage.removeItem("accessToken");
@@ -132,7 +251,10 @@ const ProfileScreen = () => {
   const isCreator = Boolean(profile?.role?.includes("creator"));
   const creatorRequestStatus = profile?.creatorRequest?.status ?? "none";
   const creatorRequestPending = creatorRequestStatus === "pending";
-  const passwordLabel = profile?.socialProvider && profile.passwordLoginEnabled !== true ? "Set Password" : "Change Password";
+  const passwordLabel =
+    profile?.socialProvider && profile.passwordLoginEnabled !== true
+      ? "Set Password"
+      : "Change Password";
   const accountMenuItems = [
     menuItems[0],
     { icon: Lock, label: passwordLabel, route: "/change-password" },
@@ -164,7 +286,11 @@ const ProfileScreen = () => {
   };
 
   const handleLeaveCreator = async () => {
-    if (!profile || leaveUsernameInput.trim() !== profile.username || leavePhraseInput.trim() !== LEAVE_CREATOR_CONFIRM_TEXT) {
+    if (
+      !profile ||
+      leaveUsernameInput.trim() !== profile.username ||
+      leavePhraseInput.trim() !== LEAVE_CREATOR_CONFIRM_TEXT
+    ) {
       toast.error("Confirmation does not match.", {
         description: `Type your username and "${LEAVE_CREATOR_CONFIRM_TEXT}" to continue.`,
       });
@@ -189,221 +315,183 @@ const ProfileScreen = () => {
     }
   };
 
-  const leaveCreatorConfirmReady = Boolean(profile)
-    && leaveUsernameInput.trim() === profile.username
-    && leavePhraseInput.trim() === LEAVE_CREATOR_CONFIRM_TEXT;
+  const leaveCreatorConfirmReady =
+    Boolean(profile) &&
+    leaveUsernameInput.trim() === profile?.username &&
+    leavePhraseInput.trim() === LEAVE_CREATOR_CONFIRM_TEXT;
 
   return (
-    <div className="arena-shell min-h-screen pb-20">
-      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 pt-6 pb-4">
-        <h1 className="font-heading text-xl font-bold">Profile</h1>
-      </div>
+    <PageShell contentClassName="max-w-4xl space-y-3 pb-6 sm:space-y-4">
+      <PageHeader
+        title="Profile"
+        subtitle="Battle identity, creator tools, and account controls"
+        action={
+          <button
+            type="button"
+            onClick={() => refetchProfile()}
+            className="arena-icon-button"
+            aria-label="Refresh profile"
+          >
+            <RefreshCcw className="h-4 w-4" />
+          </button>
+        }
+      />
 
-      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mb-6">
-        {profileLoading ? (
-          <ProfileSkeleton />
-        ) : profileError ? (
-          <GlassCard className="text-center py-8">
-            <AlertCircle className="w-10 h-10 mx-auto text-destructive mb-2" />
-            <p className="text-sm font-heading">Could not load profile</p>
-            <p className="text-xs text-muted-foreground mt-1 break-words">{profileError}</p>
+      {profileLoading ? (
+        <ProfileSkeleton />
+      ) : profileError ? (
+        <EmptyState
+          icon={AlertCircle}
+          title="Could not load profile"
+          description={profileError}
+          action={
             <button
               type="button"
               onClick={() => refetchProfile()}
-              className="mt-4 inline-flex items-center gap-2 text-xs font-heading text-primary"
+              className="arena-focus inline-flex items-center gap-2 rounded-xl border border-primary/25 px-3 py-2 font-heading text-xs font-bold text-primary"
             >
-              <RefreshCcw className="w-3.5 h-3.5" />
+              <RefreshCcw className="h-3.5 w-3.5" />
               Retry
             </button>
-          </GlassCard>
-        ) : profile ? (
-          <ProfileHero
-            user={profile}
-            title={profile.username}
-            subtitle={[
-              profile.email,
-              getDisplayPhoneNumber(profile.phone_number),
-            ].filter(Boolean).join(" • ")}
-            bannerUrl={profile.banner?.url}
-            stats={stats}
-            cacheNotice={cacheNotice}
-            onEditImages={() => navigate("/edit-profile")}
-          />
-        ) : (
-          <GlassCard className="text-center py-8">
-            <AlertCircle className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
-            <p className="text-sm font-heading">No saved profile data</p>
-            <p className="text-xs text-muted-foreground mt-1">Connect once to save your profile for offline use.</p>
-          </GlassCard>
-        )}
-      </div>
+          }
+        />
+      ) : profile ? (
+        <ProfileHero
+          compact
+          user={profile}
+          title={profile.username}
+          subtitle={[profile.email, getDisplayPhoneNumber(profile.phone_number)]
+            .filter(Boolean)
+            .join(" - ")}
+          bannerUrl={profile.banner?.url}
+          stats={stats}
+          cacheNotice={cacheNotice}
+          onEditImages={() => navigate("/edit-profile")}
+        />
+      ) : (
+        <EmptyState
+          icon={AlertCircle}
+          title="No saved profile data"
+          description="Connect once to save your profile for offline use."
+        />
+      )}
 
-      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mb-2">
-        <h2 className="font-heading text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">
-          Creator Tools
-        </h2>
-        <div className="space-y-2">
-          {!isCreator && (
-            <GlassCard
-              className={`flex items-center justify-between ${creatorRequestPending ? "opacity-75" : "cursor-pointer"}`}
-              onClick={handleCreatorRequest}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
-                  <UserPlus className="w-4 h-4 text-secondary" />
+      {profile && (
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.72fr)]">
+          <div className="space-y-3">
+            <MenuSection title="Creator Tools">
+              {!isCreator && (
+                <MenuRow
+                  icon={UserPlus}
+                  label={
+                    creatorLoading
+                      ? "Updating..."
+                      : creatorRequestPending
+                        ? "Creator Request Pending"
+                        : "Request Creator Access"
+                  }
+                  description={
+                    creatorRequestPending
+                      ? "Admin approval is required before creating tournaments"
+                      : "Admin approval is required"
+                  }
+                  tone="secondary"
+                  disabled={creatorLoading || creatorRequestPending}
+                  onClick={handleCreatorRequest}
+                />
+              )}
+
+              {isCreator &&
+                creatorMenu.map((item) => (
+                  <MenuRow
+                    key={item.label}
+                    icon={item.icon}
+                    label={item.label}
+                    tone="secondary"
+                    onClick={() => navigate(item.route)}
+                  />
+                ))}
+            </MenuSection>
+
+            <MenuSection title="Account">
+              {accountMenuItems.map((item) => (
+                <MenuRow
+                  key={item.label}
+                  icon={item.icon}
+                  label={item.label}
+                  tone="primary"
+                  onClick={() => navigate(item.route)}
+                />
+              ))}
+            </MenuSection>
+          </div>
+
+          <div className="space-y-3">
+            {adminMenu.length > 0 && (
+              <MenuSection title="Admin">
+                {adminMenu.map((item) => (
+                  <MenuRow
+                    key={item.label}
+                    icon={item.icon}
+                    label={item.label}
+                    tone="accent"
+                    onClick={() => navigate(item.route)}
+                  />
+                ))}
+              </MenuSection>
+            )}
+
+            <MenuSection title="Help & Legal">
+              {helpMenu.map((item) => (
+                <MenuRow
+                  key={item.label}
+                  icon={item.icon}
+                  label={item.label}
+                  tone="secondary"
+                  onClick={() => navigate(item.route)}
+                />
+              ))}
+            </MenuSection>
+
+            <Surface className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-heading text-sm font-bold">Account status</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Keep your profile, phone, and game IDs updated for payouts.
+                  </p>
                 </div>
-                <div className="min-w-0 text-left">
-                  <span className="text-sm font-heading font-medium truncate block">
-                    {creatorLoading ? "Updating..." : creatorRequestPending ? "Creator Request Pending" : "Request Creator Access"}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {creatorRequestPending ? "Admin approval is required before creating tournaments" : "Admin approval is required"}
-                  </span>
-                </div>
+                <StatusPill tone={isCreator ? "secondary" : "muted"}>
+                  {isCreator ? "Creator" : "Player"}
+                </StatusPill>
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-            </GlassCard>
-          )}
+            </Surface>
 
-          {isCreator &&
-            creatorMenu.map((item, i) => (
-              <GlassCard
-                key={item.label}
-                delay={i * 0.06}
-                className="flex items-center justify-between cursor-pointer"
-                onClick={() => navigate(item.route)}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
-                    <item.icon className="w-4 h-4 text-secondary" />
-                  </div>
-                  <span className="text-sm font-heading font-medium truncate">{item.label}</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-              </GlassCard>
-            ))}
-        </div>
-      </div>
+            <UiPreferencesPanel />
 
-      {adminMenu.length > 0 && (
-        <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mb-2 mt-4">
-          <h2 className="font-heading text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">
-            Admin
-          </h2>
-          <div className="space-y-2">
-            {adminMenu.map((item) => (
-              <GlassCard
-                key={item.label}
-                className="flex items-center justify-between cursor-pointer"
-                onClick={() => navigate(item.route)}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
-                    <item.icon className="w-4 h-4 text-accent" />
-                  </div>
-                  <span className="text-sm font-heading font-medium truncate">{item.label}</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-              </GlassCard>
-            ))}
+            <MenuSection title="Critical Section" danger>
+              {isCreator && (
+                <MenuRow
+                  icon={UserMinus}
+                  label="Leave Creator"
+                  description="Removes creator access after confirmation"
+                  tone="danger"
+                  disabled={creatorLoading}
+                  onClick={() => setLeaveDialogOpen(true)}
+                />
+              )}
+
+              <MenuRow
+                icon={LogOut}
+                label={logoutLoading ? "Logging out..." : "Logout"}
+                tone="danger"
+                disabled={logoutLoading}
+                onClick={handleLogout}
+              />
+            </MenuSection>
           </div>
         </div>
       )}
-
-      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mt-4">
-        <h2 className="font-heading text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">
-          Account
-        </h2>
-        <div className="space-y-2">
-          {accountMenuItems.map((item, i) => (
-            <GlassCard
-              key={item.label}
-              delay={i * 0.06}
-              className="flex items-center justify-between cursor-pointer"
-              onClick={() => navigate(item.route)}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <item.icon className="w-4 h-4 text-primary" />
-                </div>
-                <span className="text-sm font-heading font-medium truncate">{item.label}</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-            </GlassCard>
-          ))}
-        </div>
-      </div>
-
-      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mt-4">
-        <h2 className="font-heading text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wider">
-          Help & Legal
-        </h2>
-        <div className="space-y-2">
-          {helpMenu.map((item) => (
-            <GlassCard
-              key={item.label}
-              className="flex items-center justify-between cursor-pointer"
-              onClick={() => navigate(item.route)}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
-                  <item.icon className="w-4 h-4 text-secondary" />
-                </div>
-                <span className="text-sm font-heading font-medium truncate">{item.label}</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-            </GlassCard>
-          ))}
-        </div>
-      </div>
-
-      <div className="mx-auto w-full max-w-4xl px-4 sm:px-5 mt-8 pb-4">
-        <h2 className="font-heading text-xs font-bold text-destructive mb-2 uppercase tracking-wider">
-          Critical Section
-        </h2>
-        <div className="space-y-2">
-          {isCreator && (
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setLeaveDialogOpen(true)}
-              disabled={creatorLoading}
-              className="w-full glass rounded-xl p-4 flex items-center justify-between gap-3 border border-destructive/30 bg-destructive/5 disabled:opacity-60"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
-                  <UserMinus className="w-4 h-4 text-destructive" />
-                </div>
-                <div className="text-left min-w-0">
-                  <span className="text-sm font-heading font-medium text-destructive truncate block">
-                    Leave Creator
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    Removes creator access after confirmation
-                  </span>
-                </div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-destructive shrink-0" />
-            </motion.button>
-          )}
-
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={handleLogout}
-            disabled={logoutLoading}
-            className="w-full glass rounded-xl p-4 flex items-center justify-between gap-3 border border-destructive/30 bg-destructive/5 disabled:opacity-60"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
-                <LogOut className="w-4 h-4 text-destructive" />
-              </div>
-              <span className="text-sm font-heading font-medium text-destructive">
-                {logoutLoading ? "Logging out..." : "Logout"}
-              </span>
-            </div>
-            <ChevronRight className="w-4 h-4 text-destructive shrink-0" />
-          </motion.button>
-        </div>
-      </div>
 
       <Dialog
         open={leaveDialogOpen}
@@ -412,17 +500,20 @@ const ProfileScreen = () => {
           if (!open) resetLeaveDialog();
         }}
       >
-        <DialogContent className="w-[calc(100%-2rem)] rounded-lg border-destructive/30 bg-card/95 sm:max-w-md">
+        <DialogContent className="w-[calc(100%-2rem)] rounded-2xl border-destructive/30 bg-card/95 sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-heading text-destructive">Leave Creator</DialogTitle>
+            <DialogTitle className="font-heading text-destructive">
+              Leave Creator
+            </DialogTitle>
             <DialogDescription>
-              This removes creator access from your account. Existing platform records remain saved.
+              This removes creator access from your account. Existing platform
+              records remain saved.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
-              <label className="mb-1 block text-xs font-heading text-muted-foreground">
+              <label className="mb-1 block font-heading text-xs text-muted-foreground">
                 Type your username
               </label>
               <input
@@ -430,12 +521,12 @@ const ProfileScreen = () => {
                 value={leaveUsernameInput}
                 onChange={(event) => setLeaveUsernameInput(event.target.value)}
                 placeholder={profile?.username || "username"}
-                className="w-full rounded-lg border border-glass-border bg-transparent px-3 py-2.5 text-sm font-heading focus:border-destructive focus:outline-none"
+                className="arena-focus w-full rounded-xl border border-glass-border bg-transparent px-3 py-2.5 font-heading text-sm focus:border-destructive"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-heading text-muted-foreground">
+              <label className="mb-1 block font-heading text-xs text-muted-foreground">
                 Type "{LEAVE_CREATOR_CONFIRM_TEXT}"
               </label>
               <input
@@ -443,7 +534,7 @@ const ProfileScreen = () => {
                 value={leavePhraseInput}
                 onChange={(event) => setLeavePhraseInput(event.target.value)}
                 placeholder={LEAVE_CREATOR_CONFIRM_TEXT}
-                className="w-full rounded-lg border border-glass-border bg-transparent px-3 py-2.5 text-sm font-heading focus:border-destructive focus:outline-none"
+                className="arena-focus w-full rounded-xl border border-glass-border bg-transparent px-3 py-2.5 font-heading text-sm focus:border-destructive"
               />
             </div>
 
@@ -452,7 +543,7 @@ const ProfileScreen = () => {
                 type="button"
                 onClick={() => setLeaveDialogOpen(false)}
                 disabled={creatorLoading}
-                className="rounded-lg border border-glass-border px-4 py-2 text-sm font-heading text-foreground disabled:opacity-60"
+                className="arena-focus rounded-xl border border-glass-border px-4 py-2 font-heading text-sm text-foreground disabled:opacity-60"
               >
                 Cancel
               </button>
@@ -460,7 +551,7 @@ const ProfileScreen = () => {
                 type="button"
                 onClick={handleLeaveCreator}
                 disabled={!leaveCreatorConfirmReady || creatorLoading}
-                className="rounded-lg bg-destructive px-4 py-2 text-sm font-heading text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className="arena-focus rounded-xl bg-destructive px-4 py-2 font-heading text-sm text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {creatorLoading ? "Leaving..." : "Leave Creator"}
               </button>
@@ -468,8 +559,7 @@ const ProfileScreen = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-    </div>
+    </PageShell>
   );
 };
 

@@ -29,11 +29,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
 import { resolveAbsoluteApiUrl } from "@/lib/oauth";
+import appConfig from "@/config/project.config";
 
 const PASSWORD_MIN_LENGTH = 6;
-const DEEPLINK_SCHEME =
-  String(import.meta.env.VITE_APP_DEEPLINK_SCHEME || "battle4arena").trim() ||
-  "battle4arena";
+const DEEPLINK_SCHEME = appConfig.auth.deepLinkScheme;
 
 const isValidEmail = (value: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());

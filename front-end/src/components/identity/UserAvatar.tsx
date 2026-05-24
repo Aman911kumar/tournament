@@ -67,9 +67,9 @@ export const UserAvatar = ({
       <Avatar
         className={cn(
           sizeClass[size],
-          "border-white/10 bg-[radial-gradient(circle_at_30%_20%,hsl(var(--primary)/0.3),hsl(var(--card))_62%)] shadow-[0_0_0_1px_hsl(var(--primary)/0.08)]",
-          isCreator && "border-secondary/35 shadow-[0_0_18px_hsl(var(--secondary)/0.18)]",
-          isAdmin && "border-accent/40 shadow-[0_0_18px_hsl(var(--accent)/0.18)]",
+          "border-white/10 bg-[radial-gradient(circle_at_30%_20%,hsl(var(--primary)/0.24),hsl(var(--card))_62%)] shadow-[0_0_0_1px_hsl(var(--primary)/0.08)]",
+          isCreator && "border-secondary/35 shadow-[0_0_0_1px_hsl(var(--secondary)/0.18)]",
+          isAdmin && "border-accent/40 shadow-[0_0_0_1px_hsl(var(--accent)/0.2)]",
         )}
       >
         {imageUrl && (
@@ -96,7 +96,7 @@ export const UserAvatar = ({
             "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-background",
             status === "online" && "bg-emerald-400",
             status === "offline" && "bg-muted-foreground",
-            status === "speaking" && "animate-pulse bg-cyan-300",
+            status === "speaking" && "motion-safe:animate-pulse bg-cyan-300",
           )}
         />
       )}

@@ -1,3 +1,4 @@
+import "./env.js";
 import connect_db from "./src/database/dataBaseConnect.js";
 import { initEmailSystem } from "./src/services/email/index.js";
 
@@ -19,4 +20,3 @@ try {
   console.error("Email worker failed to start:", error?.message || error);
   process.exit(1);
 }
-

@@ -1,6 +1,5 @@
 import { Home, Search, Trophy, Wallet, User } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/identity";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
@@ -19,8 +18,8 @@ const BottomNav = () => {
   const { profile } = useCurrentProfile();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-glass-border bg-[linear-gradient(180deg,hsl(var(--card)/0.98)_0%,hsl(var(--background))_100%)] pb-[env(safe-area-inset-bottom)] shadow-[0_-14px_38px_hsl(var(--background)/0.62)]">
-      <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-1.5 sm:py-2">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-glass-border bg-[linear-gradient(180deg,hsl(var(--card)/0.98)_0%,hsl(var(--background))_100%)] pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_20px_hsl(var(--background)/0.36)]">
+      <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-1">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;
           return (
@@ -28,18 +27,14 @@ const BottomNav = () => {
               key={tab.path}
               onClick={() => navigate(tab.path)}
               className={cn(
-                "arena-focus relative flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 transition-colors",
+                "arena-focus relative flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-1 py-1 transition-colors",
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground hover:bg-muted/45 hover:text-foreground",
               )}
             >
               {isActive && (
-                <motion.div
-                  layoutId="activeTab"
-                  className="absolute -top-1.5 left-0 right-0 mx-auto h-1 w-8 rounded-full gradient-primary"
-                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                />
+                <span className="absolute -top-1 left-0 right-0 mx-auto h-0.5 w-7 rounded-full gradient-primary" />
               )}
               {tab.path === "/profile" && profile ? (
                 <UserAvatar
@@ -48,7 +43,7 @@ const BottomNav = () => {
                   className="transition-transform"
                 />
               ) : (
-                <tab.icon className="h-5 w-5 transition-colors" />
+                <tab.icon className="h-[18px] w-[18px] transition-colors" />
               )}
               <span className="max-w-full truncate text-[9px] font-heading font-semibold transition-colors min-[380px]:text-[10px]">
                 {tab.label}

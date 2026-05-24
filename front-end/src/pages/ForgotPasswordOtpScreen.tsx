@@ -9,6 +9,7 @@ import { resendForgotPasswordOtp, verifyForgotPasswordOtp } from "@/api/auth";
 import { toast } from "@/components/ui/sonner";
 import { getErrorToast } from "@/lib/page-utils";
 import { ApiError } from "@/api/client";
+import { PageShell, StatusPill } from "@/components/design-system";
 
 const STORAGE_KEYS = {
   requestId: "pwreset.requestId",
@@ -178,20 +179,23 @@ const ForgotPasswordOtpScreen = () => {
   };
 
   return (
-    <div className="arena-shell min-h-screen px-5 py-8">
-      <div className="mx-auto flex w-full max-w-md flex-col gap-6">
+    <PageShell
+      bottomNavPadding={false}
+      contentClassName="flex min-h-[100dvh] max-w-md flex-col justify-center gap-4 py-8"
+    >
         <button
           type="button"
           onClick={() => navigate("/forgot-password")}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card"
+          className="arena-icon-button"
           aria-label="Back"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
 
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-wider neon-text-purple">Verify Code</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <StatusPill tone="primary">6-digit OTP</StatusPill>
+          <h1 className="mt-3 font-display text-3xl font-black tracking-wide neon-text-purple">Verify Code</h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             Enter the 6-digit reset code we sent to your email.
           </p>
           {identifierHint ? (
@@ -205,7 +209,7 @@ const ForgotPasswordOtpScreen = () => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.22 }}
-          className="space-y-4 rounded-xl border border-border bg-card/70 p-4"
+          className="space-y-4 rounded-xl border border-glass-border bg-card/82 p-4 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.045)]"
         >
           <div className="flex items-center justify-between">
             <p className="font-heading text-sm font-bold">Reset Code</p>
@@ -260,7 +264,7 @@ const ForgotPasswordOtpScreen = () => {
 
           <NeonButton
             full
-            variant="outline"
+            variant="ghost"
             disabled={loadingResend || resendLocked}
             onClick={handleResend}
           >
@@ -276,10 +280,8 @@ const ForgotPasswordOtpScreen = () => {
             )}
           </NeonButton>
         </motion.div>
-      </div>
-    </div>
+    </PageShell>
   );
 };
 
 export default ForgotPasswordOtpScreen;
-

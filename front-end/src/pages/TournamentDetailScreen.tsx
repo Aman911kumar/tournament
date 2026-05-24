@@ -43,24 +43,7 @@ import { CACHE_KEYS, readCache, writeAuthenticatedCache, writeCache } from "@/li
 import { createReport, ReportCategory } from "@/api/moderation";
 import { toast } from "@/components/ui/sonner";
 import { UserAvatar, UserIdentity } from "@/components/identity";
-import gameFreefire from "@/assets/game-freefire.jpg";
-import gameBgmi from "@/assets/game-bgmi.jpg";
-import gameValorant from "@/assets/game-valorant.jpg";
-import gameCod from "@/assets/game-cod.jpg";
-
-const gameLabels: Record<string, string> = {
-  freefire: "Free Fire",
-  bgmi: "BGMI",
-  callofduty: "Call of Duty",
-  valorant: "Valorant",
-};
-
-const gameArtwork: Record<Tournament["game"], string> = {
-  freefire: gameFreefire,
-  bgmi: gameBgmi,
-  callofduty: gameCod,
-  valorant: gameValorant,
-};
+import { gameLabels, getDiscoveryGame, getGameImagePosition } from "@/config/discovery.config";
 
 const gameAccent: Record<Tournament["game"], string> = {
   freefire: "from-orange-500/28 via-primary/18 to-cyan-500/12",
@@ -268,7 +251,8 @@ const TournamentDetailScreen = () => {
   const modeLabel = [tournament?.gameMode, tournament?.mapName, tournament?.perspective?.toUpperCase()]
     .filter(Boolean)
     .join(" / ") || "Classic match";
-  const heroImage = tournament ? gameArtwork[tournament.game] : gameBgmi;
+  const heroGame = tournament ? getDiscoveryGame(tournament.game) : getDiscoveryGame("bgmi");
+  const heroImage = heroGame.image;
   const heroAccent = tournament ? gameAccent[tournament.game] : "from-primary/24 via-cyan-500/12 to-emerald-500/10";
   const participantPreview = participants.slice(0, 8);
   const registerButtonText = !tournament
@@ -468,8 +452,11 @@ const TournamentDetailScreen = () => {
               className="relative min-h-[360px] overflow-hidden rounded-xl border border-glass-border bg-card"
             >
               <div
-                className="absolute inset-0 bg-cover bg-center opacity-55"
-                style={{ backgroundImage: `url(${heroImage})` }}
+                className="absolute inset-0 bg-cover opacity-55"
+                style={{
+                  backgroundImage: `url(${heroImage})`,
+                  backgroundPosition: getGameImagePosition(tournament.game, "banner"),
+                }}
               />
               <div className={`absolute inset-0 bg-gradient-to-br ${heroAccent}`} />
               <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(5_8_18/0.24),rgb(5_8_18/0.92)_78%)]" />

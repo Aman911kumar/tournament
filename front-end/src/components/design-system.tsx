@@ -108,6 +108,9 @@ export const PageHeader = ({
   </header>
 );
 
+const hasPaddingOverride = (className?: string) =>
+  /(?:^|\s)(?:p|px|py|pt|pr|pb|pl)-/.test(className || "");
+
 export const Surface = ({
   children,
   className,
@@ -120,26 +123,30 @@ export const Surface = ({
   interactive?: boolean;
   neon?: boolean;
   onClick?: () => void;
-}) => (
-  <div
-    onClick={onClick}
-    role={interactive || onClick ? "button" : undefined}
-    tabIndex={interactive || onClick ? 0 : undefined}
-    onKeyDown={(event) => {
-      if (!onClick) return;
-      if (event.key === "Enter" || event.key === " ") onClick();
-    }}
-    className={cn(
-      "min-w-0 rounded-xl border border-glass-border bg-card/82 p-3 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.045)] sm:p-4",
-      neon && "neon-border",
-      (interactive || onClick) &&
-        "arena-focus transition-colors hover:border-primary/45 hover:bg-card",
-      className,
-    )}
-  >
-    {children}
-  </div>
-);
+}) => {
+  const clickable = interactive || Boolean(onClick);
+  return (
+    <div
+      onClick={onClick}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={(event) => {
+        if (!onClick) return;
+        if (event.key === "Enter" || event.key === " ") onClick();
+      }}
+      className={cn(
+        "min-w-0 rounded-lg border border-glass-border bg-card/82 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.045)]",
+        !hasPaddingOverride(className) && "p-[var(--ui-surface-padding)]",
+        neon && "neon-border",
+        clickable &&
+          "arena-focus transition-colors hover:border-primary/45 hover:bg-card",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+};
 
 export const MetricCard = ({
   icon: Icon,
@@ -159,7 +166,7 @@ export const MetricCard = ({
   <Surface
     onClick={onClick}
     interactive={Boolean(onClick)}
-    className="min-h-[96px] sm:min-h-[104px]"
+    className="min-h-[84px] sm:min-h-[96px]"
   >
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
@@ -196,7 +203,7 @@ export const StatusPill = ({
 }) => (
   <span
     className={cn(
-      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-heading text-[10px] font-bold",
+      "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-heading text-[10px] font-bold",
       toneClasses[tone],
       className,
     )}
@@ -217,7 +224,7 @@ export const EmptyState = ({
   action?: ReactNode;
 }) => (
   <Surface className="py-8 text-center sm:py-10">
-    <Icon className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+    <Icon className="mx-auto mb-3 h-9 w-9 text-muted-foreground" />
     <p className="font-heading text-sm font-bold">{title}</p>
     {description && (
       <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
@@ -229,7 +236,12 @@ export const EmptyState = ({
 );
 
 export const SkeletonBlock = ({ className }: { className?: string }) => (
-  <div className={cn("animate-pulse rounded-lg bg-muted/70", className)} />
+  <div
+    className={cn(
+      "rounded-md bg-[linear-gradient(90deg,hsl(var(--muted)/0.54),hsl(var(--muted)/0.78),hsl(var(--muted)/0.54))] bg-[length:200%_100%] motion-safe:animate-shimmer motion-reduce:bg-muted/70",
+      className,
+    )}
+  />
 );
 
 export const FormField = ({
@@ -270,7 +282,7 @@ export const SegmentedControl = <T extends string>({
 }) => (
   <div
     className={cn(
-      "flex gap-1 overflow-x-auto rounded-xl border border-glass-border bg-card/70 p-1 scrollbar-hide",
+      "flex gap-1 overflow-x-auto rounded-lg border border-glass-border bg-card/70 p-1 scrollbar-hide",
       className,
     )}
     role="tablist"
@@ -284,7 +296,7 @@ export const SegmentedControl = <T extends string>({
           type="button"
           onClick={() => onChange(option.value)}
           className={cn(
-            "arena-focus inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 font-heading text-xs font-bold transition-colors",
+            "arena-focus inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 font-heading text-xs font-bold transition-colors",
             active
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:bg-muted/65 hover:text-foreground",
@@ -307,7 +319,7 @@ export const ActionButton = ({
 }: ButtonProps) => (
   <Button
     variant={variant}
-    className={cn("min-h-11 rounded-xl sm:min-h-10", className)}
+    className={cn("min-h-10 rounded-lg", className)}
     {...props}
   />
 );
@@ -325,7 +337,7 @@ export const SearchBox = ({
 }) => (
   <div
     className={cn(
-      "flex min-h-11 items-center gap-2 rounded-xl border border-glass-border bg-card/70 px-3 transition-colors focus-within:border-primary/50 sm:min-h-10",
+      "flex min-h-10 items-center gap-2 rounded-lg border border-glass-border bg-card/70 px-3 transition-colors focus-within:border-primary/50",
       className,
     )}
   >
@@ -357,7 +369,7 @@ export const CreatorCard = ({
   <button
     type="button"
     onClick={onClick}
-    className="arena-focus min-w-[132px] shrink-0 rounded-xl border border-glass-border bg-card/82 p-3 text-left transition-colors hover:border-primary/45 hover:bg-card"
+    className="arena-focus min-w-[132px] shrink-0 rounded-lg border border-glass-border bg-card/82 p-3 text-left transition-colors hover:border-primary/45 hover:bg-card"
   >
     <div className="flex items-center gap-3">
       <UserAvatar

@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface GlassCardProps {
@@ -21,20 +20,17 @@ const GlassCard = ({
   const interactive = Boolean(onClick || asButton);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileTap={interactive ? { scale: 0.99 } : undefined}
-      transition={{ delay, duration: 0.18, ease: "easeOut" }}
+    <div
       onClick={onClick}
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
+      style={delay ? { transitionDelay: `${delay * 1000}ms` } : undefined}
       onKeyDown={(event) => {
         if (!interactive || !onClick) return;
         if (event.key === "Enter" || event.key === " ") onClick();
       }}
       className={cn(
-        "glass min-w-0 rounded-xl p-3 transition-colors motion-reduce:transition-none sm:p-4",
+        "glass min-w-0 rounded-lg p-3 transition-colors motion-reduce:transition-none",
         neon && "neon-border",
         interactive &&
           "arena-focus active:scale-[0.99] hover:border-primary/45 hover:bg-card",
@@ -42,7 +38,7 @@ const GlassCard = ({
       )}
     >
       {children}
-    </motion.div>
+    </div>
   );
 };
 
