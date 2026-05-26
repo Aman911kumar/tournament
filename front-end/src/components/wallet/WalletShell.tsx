@@ -50,6 +50,17 @@ export const WalletShell = ({
           border: 1px solid hsl(var(--border) / 0.68);
           background: hsl(var(--background) / 0.72);
         }
+        .wallet-flow-panel .wallet-flow-tile,
+        .wallet-flow-hero .wallet-flow-tile {
+          border: 0;
+          border-radius: 0;
+          background: transparent;
+          box-shadow: none;
+        }
+        .wallet-flow-panel .wallet-flow-tile + .wallet-flow-tile,
+        .wallet-flow-hero .wallet-flow-tile + .wallet-flow-tile {
+          border-top: 1px solid hsl(var(--glass-border));
+        }
         @media (max-width: 480px) {
           .wallet-flow-hero,
           .wallet-flow-panel {

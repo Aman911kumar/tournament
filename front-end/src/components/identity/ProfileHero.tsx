@@ -107,11 +107,11 @@ export const ProfileHero = ({
         )}
 
         {stats?.length ? (
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="arena-data-grid mt-3 grid-cols-3">
             {stats.map((stat) => (
               <div
                 key={stat.label}
-                className="min-w-0 rounded-sm border border-white/10 bg-white/[0.035] px-2 py-2.5 text-center"
+                className="arena-data-tile text-center"
               >
                 <div className="truncate font-display text-sm font-black text-primary sm:text-base">
                   {stat.value}

@@ -275,16 +275,16 @@ const SubscriptionsScreen = () => {
                 Discover channels by followers, live activity, ratings, and tournament consistency.
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+            <div className="arena-data-grid grid-cols-3">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-lg font-black text-primary">{creators.length}</p>
                 <p className="text-[10px] text-muted-foreground">Creators</p>
               </div>
-              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-lg font-black text-accent">{liveCreators}</p>
                 <p className="text-[10px] text-muted-foreground">Live</p>
               </div>
-              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-lg font-black text-secondary">{followingCount}</p>
                 <p className="text-[10px] text-muted-foreground">Following</p>
               </div>
@@ -344,7 +344,7 @@ const SubscriptionsScreen = () => {
           <button
             type="button"
             onClick={() => navigate(`/creator/${filteredCreators[0]._id}`)}
-            className="arena-focus mt-3 flex w-full items-center gap-3 rounded-xl border border-glass-border bg-background/35 p-3 text-left transition-colors hover:border-primary/45"
+            className="arena-focus mt-3 flex w-full items-center gap-3 border-t border-glass-border/70 px-0 py-3 text-left transition-colors hover:text-primary"
           >
             <UserAvatar
               user={{

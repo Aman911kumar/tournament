@@ -163,21 +163,21 @@ const WalletStat = ({
   note: string;
   tone?: string;
 }) => (
-  <div className="wallet-tile wallet-stat min-w-0 rounded-lg p-2 sm:rounded-xl sm:p-3">
+  <div className="wallet-tile wallet-stat arena-fluid-card min-w-0 rounded-lg p-2 sm:rounded-xl sm:p-3">
     <div className="mb-1.5 flex items-center gap-1.5 sm:mb-2 sm:gap-2">
       <span
-        className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border border-white/10 bg-background/45 sm:h-8 sm:w-8 sm:rounded-lg ${tone}`}
+        className={`arena-icon-cell grid shrink-0 place-items-center rounded-md border border-white/10 bg-background/45 sm:h-8 sm:w-8 sm:rounded-lg ${tone}`}
       >
         <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       </span>
-      <p className="min-w-0 truncate text-[10px] font-heading text-muted-foreground sm:text-[11px]">
+      <p className="arena-fluid-copy min-w-0 font-heading text-muted-foreground">
         {label}
       </p>
     </div>
-    <p className="truncate font-heading text-sm font-black sm:text-lg">
+    <p className="arena-fluid-title font-heading font-black sm:text-lg">
       {value}
     </p>
-    <p className="wallet-stat-note mt-0.5 truncate text-[10px] text-muted-foreground sm:mt-1">
+    <p className="wallet-stat-note arena-fluid-copy mt-0.5 text-muted-foreground sm:mt-1">
       {note}
     </p>
   </div>
@@ -440,10 +440,14 @@ const WalletScreen = () => {
             hsl(var(--card) / 0.96);
           box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.08);
         }
+        .wallet-panel {
+          border: 1px solid hsl(var(--border) / 0.72);
+          background: hsl(var(--card) / 0.96);
+          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.06);
+        }
         .wallet-tile,
         .wallet-action-card,
-        .wallet-transaction,
-        .wallet-panel {
+        .wallet-transaction {
           border: 1px solid hsl(var(--border) / 0.72);
           background: hsl(var(--card) / 0.96);
           box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.06);
@@ -494,14 +498,25 @@ const WalletScreen = () => {
             font-size: 0.5rem;
           }
         }
+        .wallet-hero .wallet-tile,
+        .wallet-panel .wallet-tile,
+        .wallet-panel .wallet-action-card,
+        .wallet-panel .wallet-transaction {
+          border: 0;
+          border-radius: 0;
+          background: transparent;
+          box-shadow: none;
+        }
+        .wallet-panel .wallet-action-card + .wallet-action-card,
+        .wallet-panel .wallet-transaction + .wallet-transaction,
+        .wallet-hero .wallet-tile + .wallet-tile,
+        .wallet-panel .wallet-tile + .wallet-tile {
+          border-top: 1px solid hsl(var(--glass-border));
+        }
         @media (max-width: 480px) {
           .wallet-hero,
           .wallet-panel {
             border-radius: var(--radius-panel);
-          }
-          .wallet-stat-note,
-          .wallet-action-desc {
-            display: none;
           }
         }
       `}</style>
@@ -594,7 +609,7 @@ const WalletScreen = () => {
                 </p>
               )}
 
-              <div className="mt-3 grid grid-cols-3 gap-1.5 sm:mt-6 sm:gap-2">
+              <div className="mt-3 grid grid-cols-1 gap-1.5 min-[390px]:grid-cols-3 sm:mt-6 sm:gap-2">
                 <WalletStat
                   icon={Trophy}
                   label="Player Winnings"
@@ -634,7 +649,7 @@ const WalletScreen = () => {
               </div>
               <Zap className="h-4 w-4 text-primary" />
             </div>
-            <div className="grid grid-cols-4 gap-1.5 sm:gap-2 lg:grid-cols-1">
+            <div className="grid grid-cols-2 gap-1.5 min-[430px]:grid-cols-4 sm:gap-2 lg:grid-cols-1">
               {[
                 {
                   icon: Plus,
@@ -673,19 +688,19 @@ const WalletScreen = () => {
                   key={action.title}
                   type="button"
                   onClick={() => navigate(action.route)}
-                  className="arena-focus wallet-action-card rounded-lg p-2 text-center sm:rounded-xl sm:p-3 lg:text-left"
+                  className="arena-focus wallet-action-card arena-fluid-card rounded-lg p-2 text-left sm:rounded-xl sm:p-3"
                 >
-                  <span className="flex flex-col items-center gap-1.5 lg:flex-row lg:gap-3">
+                  <span className="flex items-center gap-2 lg:gap-3">
                     <span
-                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border sm:h-10 sm:w-10 sm:rounded-xl ${action.bg} ${action.tone}`}
+                      className={`arena-icon-cell grid shrink-0 place-items-center rounded-lg border sm:h-10 sm:w-10 sm:rounded-xl ${action.bg} ${action.tone}`}
                     >
                       <action.icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-heading text-[10px] font-bold sm:text-sm">
+                      <span className="arena-fluid-title block font-heading font-bold">
                         {action.title}
                       </span>
-                      <span className="wallet-action-desc block truncate text-[11px] text-muted-foreground">
+                      <span className="wallet-action-desc arena-fluid-copy block text-muted-foreground">
                         {action.desc}
                       </span>
                     </span>

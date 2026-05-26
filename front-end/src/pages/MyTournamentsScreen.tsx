@@ -388,16 +388,16 @@ const MyTournamentsScreen = () => {
                 Track your joined events, open live chat fast, and jump back into match details without hunting through the tournament list.
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2 sm:min-w-[260px]">
-              <div className="rounded-lg border border-glass-border bg-background/45 p-1.5 text-center sm:rounded-xl sm:p-2">
+            <div className="arena-data-grid grid-cols-3 sm:min-w-[260px]">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-base font-black text-primary sm:text-lg">{counts.all}</p>
                 <p className="text-[10px] text-muted-foreground">Joined</p>
               </div>
-              <div className="rounded-lg border border-glass-border bg-background/45 p-1.5 text-center sm:rounded-xl sm:p-2">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-base font-black text-accent sm:text-lg">{confirmedCount}</p>
                 <p className="text-[10px] text-muted-foreground">Ready</p>
               </div>
-              <div className="rounded-lg border border-glass-border bg-background/45 p-1.5 text-center sm:rounded-xl sm:p-2">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-base font-black text-secondary sm:text-lg">{counts.live}</p>
                 <p className="text-[10px] text-muted-foreground">Live</p>
               </div>

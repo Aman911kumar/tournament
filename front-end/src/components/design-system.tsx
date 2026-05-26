@@ -54,6 +54,7 @@ export const PageShell = ({
     <div
       className={cn(
         wide ? "arena-container-wide" : "arena-container",
+        "arena-layout-root",
         contentClassName,
       )}
     >
@@ -135,7 +136,7 @@ export const Surface = ({
         if (event.key === "Enter" || event.key === " ") onClick();
       }}
       className={cn(
-        "min-w-0 rounded-md border border-glass-border bg-card/95 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.08)]",
+        "arena-auto-box min-w-0 rounded-md border border-glass-border bg-card/95 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.08)]",
         !hasPaddingOverride(className) && "p-[var(--ui-surface-padding)]",
         neon && "neon-border",
         clickable &&
@@ -238,9 +239,10 @@ export const EmptyState = ({
 export const SkeletonBlock = ({ className }: { className?: string }) => (
   <div
     className={cn(
-      "rounded-sm bg-[linear-gradient(90deg,hsl(var(--muted)/0.5),hsl(var(--muted)/0.78),hsl(var(--muted)/0.5))] bg-[length:200%_100%] motion-safe:animate-shimmer motion-reduce:bg-muted/70",
+      "b4a-skeleton",
       className,
     )}
+    aria-hidden="true"
   />
 );
 
@@ -439,20 +441,20 @@ export const TournamentCard = ({
         <ShieldCheck className="h-3.5 w-3.5" />
         {creator}
       </button>
-      <div className="mt-4 grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
-        <div className="rounded-sm border border-glass-border bg-background/70 p-2">
+      <div className="arena-data-grid mt-4 min-[380px]:grid-cols-3">
+        <div className="arena-data-tile">
           <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">Prize</p>
           <p className="truncate font-heading text-xs font-bold text-accent">
             {prize}
           </p>
         </div>
-        <div className="rounded-sm border border-glass-border bg-background/70 p-2">
+        <div className="arena-data-tile">
           <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">Slots</p>
           <p className="font-heading text-xs font-bold">
             {slots}/{maxSlots}
           </p>
         </div>
-        <div className="rounded-sm border border-glass-border bg-background/70 p-2">
+        <div className="arena-data-tile">
           <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">Entry</p>
           <p className="truncate font-heading text-xs font-bold">{entry}</p>
         </div>

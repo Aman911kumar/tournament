@@ -50,6 +50,11 @@
     --ui-motion-duration: 150ms;
     --ui-shadow-strength: 0;
     --ui-card-shadow: none;
+    --ui-auto-grid-min: 13rem;
+    --ui-auto-card-min: 11rem;
+    --ui-auto-stat-min: 8.5rem;
+    --ui-auto-gap: 0.625rem;
+    --ui-auto-panel-pad: 0.625rem;
 
     /* Custom neon tokens */
     --neon-purple: 271 76% 53%;
@@ -198,6 +203,23 @@
     min-width: 0;
   }
 
+  :where(.arena-shell, .arena-shell *) {
+    min-width: 0;
+  }
+
+  :where(.arena-shell [class*="grid"], .arena-shell [class*="flex"]) > * {
+    min-width: 0;
+  }
+
+  :where(.arena-shell h1, .arena-shell h2, .arena-shell h3) {
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
+  :where(.arena-shell p, .arena-shell span, .arena-shell a, .arena-shell button, .arena-shell label) {
+    overflow-wrap: anywhere;
+  }
+
   :where(input, textarea, select) {
     color: hsl(var(--foreground));
   }
@@ -211,6 +233,7 @@
 @layer components {
   .arena-shell {
     @apply min-h-[100dvh] overflow-x-hidden bg-background text-foreground;
+    container-type: inline-size;
     background:
       linear-gradient(180deg, hsl(var(--primary) / 0.035), transparent 14rem),
       linear-gradient(90deg, hsl(var(--foreground) / 0.018) 1px, transparent 1px),
@@ -225,16 +248,19 @@
 
   .arena-container {
     @apply mx-auto w-full max-w-2xl;
+    container-type: inline-size;
     padding-inline: var(--ui-page-inline);
   }
 
   .arena-container-wide {
     @apply mx-auto w-full max-w-7xl;
+    container-type: inline-size;
     padding-inline: var(--ui-page-inline);
   }
 
   .glass {
     @apply border border-glass-border;
+    container-type: inline-size;
     background-color: hsl(var(--card) / 0.92);
     box-shadow:
       inset 0 1px 0 hsl(var(--foreground) / 0.08),
@@ -255,6 +281,7 @@
 
   .arena-page-header {
     @apply sticky top-0 z-20 border-b border-glass-border;
+    container-type: inline-size;
     background-color: hsl(var(--background) / 0.92);
     backdrop-filter: none;
   }
@@ -273,7 +300,11 @@
 
   .arena-title {
     @apply truncate font-display text-base font-black uppercase leading-tight tracking-tight text-primary sm:text-lg;
-    font-size: calc(1rem * var(--ui-font-scale));
+    font-size: clamp(
+      calc(0.9rem * var(--ui-font-scale)),
+      calc(100cqw / 24),
+      calc(1.125rem * var(--ui-font-scale))
+    );
   }
 
   .arena-subtitle {
@@ -281,8 +312,12 @@
   }
 
   .arena-responsive-grid {
-    @apply grid sm:grid-cols-2 lg:grid-cols-3;
-    gap: var(--ui-density-gap);
+    display: grid;
+    gap: var(--ui-auto-gap);
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(100%, var(--ui-auto-grid-min)), 1fr)
+    );
   }
 
   .arena-section-stack {
@@ -304,9 +339,55 @@
 
   .arena-mobile-panel {
     @apply rounded-md border border-glass-border;
-    padding: var(--ui-surface-padding);
+    container-type: inline-size;
+    padding: var(--ui-auto-panel-pad);
     background-color: hsl(var(--card) / 0.92);
     box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.08);
+  }
+
+  .arena-layout-root,
+  .arena-auto-box {
+    container-type: inline-size;
+  }
+
+  .arena-auto-box {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .arena-auto-grid {
+    display: grid;
+    gap: var(--ui-auto-gap);
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(100%, var(--ui-auto-card-min)), 1fr)
+    );
+  }
+
+  .arena-auto-grid-tight {
+    display: grid;
+    gap: 0;
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(100%, var(--ui-auto-stat-min)), 1fr)
+    );
+  }
+
+  .arena-fluid-title {
+    font-size: clamp(0.76rem, 8cqw, 0.95rem);
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .arena-fluid-copy {
+    font-size: clamp(0.68rem, 6cqw, 0.8rem);
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .arena-icon-cell {
+    width: clamp(1.85rem, 16cqw, 2.35rem);
+    height: clamp(1.85rem, 16cqw, 2.35rem);
   }
   .neon-glow-purple {
     box-shadow:
@@ -357,7 +438,11 @@
 
   .arena-card-title {
     @apply truncate font-heading text-sm font-black leading-tight text-foreground;
-    font-size: calc(0.875rem * var(--ui-font-scale));
+    font-size: clamp(
+      calc(0.78rem * var(--ui-font-scale)),
+      calc(100cqw / 22),
+      calc(0.95rem * var(--ui-font-scale))
+    );
   }
 
   .arena-card-text {
@@ -366,12 +451,79 @@
   }
 
   .arena-data-grid {
-    @apply grid gap-2;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+    @apply grid;
+    gap: 0;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--ui-auto-stat-min)), 1fr));
+    overflow: hidden;
+    border-block: 1px solid hsl(var(--glass-border));
   }
 
   .arena-data-tile {
-    @apply min-w-0 rounded-md border border-glass-border bg-background/70 px-3 py-2;
+    @apply min-w-0;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0.5rem 0.35rem !important;
+  }
+
+  .arena-data-tile + .arena-data-tile {
+    border-top: 1px solid hsl(var(--glass-border)) !important;
+  }
+
+  .grid-cols-2 > .arena-data-tile + .arena-data-tile,
+  .grid-cols-3 > .arena-data-tile + .arena-data-tile,
+  .grid-cols-4 > .arena-data-tile + .arena-data-tile,
+  .min-\[380px\]\:grid-cols-3 > .arena-data-tile + .arena-data-tile {
+    border-top: 0 !important;
+    border-left: 1px solid hsl(var(--glass-border)) !important;
+  }
+
+  .arena-line-list {
+    @apply divide-y divide-glass-border/70;
+  }
+
+  .arena-line-item {
+    @apply min-w-0 px-0 py-2;
+  }
+
+  .b4a-skeleton {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border: 1px solid hsl(var(--glass-border));
+    border-radius: var(--radius-panel);
+    background:
+      linear-gradient(180deg, hsl(var(--card) / 0.86), hsl(var(--muted) / 0.48)),
+      linear-gradient(90deg, hsl(var(--primary) / 0.035), transparent 35%, hsl(var(--secondary) / 0.04));
+    box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.045);
+  }
+
+  .b4a-skeleton::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(90deg, transparent 0%, hsl(var(--foreground) / 0.085) 45%, transparent 72%),
+      linear-gradient(90deg, transparent, hsl(var(--primary) / 0.08), transparent);
+    transform: translateX(-115%);
+    animation: b4a-skeleton-sweep 1.65s ease-in-out infinite;
+  }
+
+  .b4a-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-left: 2px solid hsl(var(--primary) / 0.18);
+    opacity: 0.75;
+    pointer-events: none;
+  }
+
+  @keyframes b4a-skeleton-sweep {
+    100% {
+      transform: translateX(115%);
+    }
   }
 
   .arena-sticky-actions {
@@ -476,6 +628,161 @@
     background-color: hsl(var(--muted) / 0.72) !important;
   }
 
+  #root
+    :where(
+      .animate-pulse.bg-muted,
+      .animate-pulse.bg-muted\/60,
+      .animate-pulse.bg-muted\/70,
+      .animate-pulse.bg-card\/60,
+      .animate-pulse.bg-card\/70,
+      .animate-pulse.glass
+    ):not(.b4a-skeleton) {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    animation: none !important;
+    background:
+      linear-gradient(180deg, hsl(var(--card) / 0.86), hsl(var(--muted) / 0.48)),
+      linear-gradient(90deg, hsl(var(--primary) / 0.035), transparent 35%, hsl(var(--secondary) / 0.04)) !important;
+    border-color: hsl(var(--glass-border)) !important;
+    box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.045) !important;
+  }
+
+  #root
+    :where(
+      .animate-pulse.bg-muted,
+      .animate-pulse.bg-muted\/60,
+      .animate-pulse.bg-muted\/70,
+      .animate-pulse.bg-card\/60,
+      .animate-pulse.bg-card\/70,
+      .animate-pulse.glass
+    ):not(.b4a-skeleton)::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(90deg, transparent 0%, hsl(var(--foreground) / 0.085) 45%, transparent 72%),
+      linear-gradient(90deg, transparent, hsl(var(--primary) / 0.08), transparent);
+    transform: translateX(-115%);
+    animation: b4a-skeleton-sweep 1.65s ease-in-out infinite;
+  }
+
+  html[data-ui-motion="reduced"] .b4a-skeleton::before,
+  html[data-ui-animation="minimal"] .b4a-skeleton::before,
+  html[data-ui-motion="reduced"]
+    #root
+    :where(
+      .animate-pulse.bg-muted,
+      .animate-pulse.bg-muted\/60,
+      .animate-pulse.bg-muted\/70,
+      .animate-pulse.bg-card\/60,
+      .animate-pulse.bg-card\/70,
+      .animate-pulse.glass
+    ):not(.b4a-skeleton)::before,
+  html[data-ui-animation="minimal"]
+    #root
+    :where(
+      .animate-pulse.bg-muted,
+      .animate-pulse.bg-muted\/60,
+      .animate-pulse.bg-muted\/70,
+      .animate-pulse.bg-card\/60,
+      .animate-pulse.bg-card\/70,
+      .animate-pulse.glass
+    ):not(.b4a-skeleton)::before {
+    animation: none !important;
+    transform: none !important;
+    opacity: 0.45;
+  }
+
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/25"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/30"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/35"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/40"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/45"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/50"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/55"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/58"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/60"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-card/40"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-card/45"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-card/50"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-card/55"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-card/60"]:not(:has(input, textarea, select)):not([role="tablist"]) {
+    border-inline: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding-inline: 0.25rem !important;
+  }
+
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/25"]:not(:has(input, textarea, select)):not([role="tablist"])
+    + :where(div, article, section, li, details)[class*="border"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/30"]:not(:has(input, textarea, select)):not([role="tablist"])
+    + :where(div, article, section, li, details)[class*="border"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/35"]:not(:has(input, textarea, select)):not([role="tablist"])
+    + :where(div, article, section, li, details)[class*="border"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/40"]:not(:has(input, textarea, select)):not([role="tablist"])
+    + :where(div, article, section, li, details)[class*="border"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/45"]:not(:has(input, textarea, select)):not([role="tablist"])
+    + :where(div, article, section, li, details)[class*="border"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-background/50"]:not(:has(input, textarea, select)):not([role="tablist"])
+    + :where(div, article, section, li, details)[class*="border"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-card/40"]:not(:has(input, textarea, select)):not([role="tablist"])
+    + :where(div, article, section, li, details)[class*="border"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-card/45"]:not(:has(input, textarea, select)):not([role="tablist"])
+    + :where(div, article, section, li, details)[class*="border"]:not(:has(input, textarea, select)):not([role="tablist"]),
+  .arena-shell
+    :where(div, article, section, li, details)[class*="border"]
+    :where(div, article, section, li, details)[class*="border"][class*="bg-card/50"]:not(:has(input, textarea, select)):not([role="tablist"])
+    + :where(div, article, section, li, details)[class*="border"]:not(:has(input, textarea, select)):not([role="tablist"]) {
+    border-top: 1px solid hsl(var(--glass-border)) !important;
+  }
+
   img.object-cover:not([data-preserve-position="true"]) {
     object-position: center center;
   }
@@ -514,6 +821,27 @@
   }
 }
 
+@media (min-width: 768px) {
+  :root {
+    --ui-auto-grid-min: 14.5rem;
+    --ui-auto-card-min: 12.5rem;
+    --ui-auto-stat-min: 9.25rem;
+    --ui-auto-gap: 0.75rem;
+    --ui-auto-panel-pad: 0.75rem;
+  }
+}
+
+@media (min-width: 1180px) {
+  :root {
+    --ui-auto-grid-min: 16rem;
+    --ui-auto-card-min: 13.5rem;
+    --ui-auto-stat-min: 10rem;
+    --ui-auto-gap: 0.875rem;
+    --ui-auto-panel-pad: 0.875rem;
+    --ui-page-inline: 1rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -528,7 +856,15 @@
 @media (max-width: 640px) {
   :root {
     --ui-page-inline: 0.75rem;
-    --ui-section-gap: 0.875rem;
+    --ui-surface-padding: 0.55rem;
+    --ui-section-gap: 0.7rem;
+    --ui-density-gap: 0.5rem;
+    --ui-auto-grid-min: 9.5rem;
+    --ui-auto-card-min: 9rem;
+    --ui-auto-stat-min: 7.5rem;
+    --ui-auto-gap: 0.5rem;
+    --ui-auto-panel-pad: 0.55rem;
+    --ui-touch-target: 2.375rem;
     --ui-card-shadow: none;
   }
 
@@ -582,6 +918,61 @@
   }
 
   .arena-responsive-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(100%, var(--ui-auto-grid-min)), 1fr)
+    );
+  }
+
+  .arena-shell
+    :where(.arena-title, .arena-card-title, h1, h2, h3, p)[class*="truncate"] {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    text-overflow: clip;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .arena-shell :where([class*="max-w-"], [class*="w-"]) {
+    max-width: 100%;
+  }
+
+  .arena-auto-box :where(.truncate),
+  .arena-fluid-card :where(.truncate),
+  .wallet-panel :where(.truncate),
+  .wallet-hero :where(.truncate) {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    text-overflow: clip;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .arena-shell .grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+}
+
+@media (max-width: 380px) {
+  :root {
+    --ui-page-inline: 0.55rem;
+    --ui-surface-padding: 0.5rem;
+    --ui-section-gap: 0.6rem;
+    --ui-auto-grid-min: 8.25rem;
+    --ui-auto-card-min: 8rem;
+    --ui-auto-stat-min: 6.75rem;
+    --ui-auto-gap: 0.45rem;
+    --ui-auto-panel-pad: 0.5rem;
+  }
+
+  .arena-shell :where(.arena-title) {
+    letter-spacing: 0;
+  }
+
+  .arena-shell :where(button, [role="button"]) {
+    letter-spacing: 0.02em;
   }
 }

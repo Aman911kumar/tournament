@@ -124,18 +124,18 @@ const TournamentDiscoveryCard = ({
       </div>
 
       <div className="space-y-3 p-3">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="min-w-0 rounded-lg border border-glass-border bg-background/35 p-2">
+        <div className="arena-data-grid grid-cols-3">
+          <div className="arena-data-tile">
             <Trophy className="h-3.5 w-3.5 text-accent" />
             <p className="mt-1 truncate font-heading text-xs font-bold">{formatPrizeSummary(tournament, { killPrefix: true })}</p>
             <p className="text-[10px] text-muted-foreground">Prize</p>
           </div>
-          <div className="min-w-0 rounded-lg border border-glass-border bg-background/35 p-2">
+          <div className="arena-data-tile">
             <CalendarDays className="h-3.5 w-3.5 text-primary" />
             <p className="mt-1 truncate font-heading text-xs font-bold">{formatDateShort(tournament.startAt)}</p>
             <p className="text-[10px] text-muted-foreground">Starts</p>
           </div>
-          <div className="min-w-0 rounded-lg border border-glass-border bg-background/35 p-2">
+          <div className="arena-data-tile">
             <WalletCards className="h-3.5 w-3.5 text-secondary" />
             <p className="mt-1 truncate font-heading text-xs font-bold">
               {Number(tournament.entryFee || 0) === 0 ? "Free" : formatCurrency(tournament.entryFee)}
@@ -371,16 +371,16 @@ const TournamentsScreen = () => {
                 Search by game, mode, creator, fee, prize, and live status. Results stay cached and update from tournament notifications.
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+            <div className="arena-data-grid grid-cols-3">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-lg font-black text-accent">{liveCount}</p>
                 <p className="text-[10px] text-muted-foreground">Live</p>
               </div>
-              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-lg font-black text-secondary">{formatCompactNumber(playerCount)}</p>
                 <p className="text-[10px] text-muted-foreground">Players</p>
               </div>
-              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-lg font-black text-primary">{filtered.length}</p>
                 <p className="text-[10px] text-muted-foreground">Shown</p>
               </div>

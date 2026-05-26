@@ -192,7 +192,7 @@ const MenuSection = ({
     >
       {title}
     </h2>
-    <Surface className="space-y-2 bg-[#101620] p-2.5 sm:p-3">{children}</Surface>
+    <Surface className="space-y-1.5 bg-[#101620] p-2 sm:space-y-2 sm:p-3">{children}</Surface>
   </section>
 );
 
@@ -212,21 +212,23 @@ const QuickActionCard = ({
   <button
     type="button"
     onClick={onClick}
-    className="arena-focus group min-w-0 rounded-md border border-glass-border bg-[#101620] p-3 text-left transition-colors hover:border-primary/40 hover:bg-[#121A26]"
+    className="arena-focus arena-fluid-card group flex min-w-0 items-center gap-2 rounded-md border border-glass-border bg-[#101620] p-2 text-left transition-colors hover:border-primary/40 hover:bg-[#121A26] sm:block sm:p-3"
   >
     <span
       className={cn(
-        "mb-3 grid h-9 w-9 place-items-center rounded-md border transition-colors group-hover:border-primary/45",
+        "arena-icon-cell grid shrink-0 place-items-center rounded-md border transition-colors group-hover:border-primary/45 sm:mb-3 sm:h-9 sm:w-9",
         toneClasses[tone],
       )}
     >
       <Icon className="h-4 w-4" />
     </span>
-    <span className="block truncate font-heading text-xs font-black uppercase tracking-[0.06em]">
-      {label}
-    </span>
-    <span className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
-      {description}
+    <span className="min-w-0 flex-1">
+      <span className="arena-fluid-title block font-heading font-black uppercase tracking-[0.04em]">
+        {label}
+      </span>
+      <span className="arena-fluid-copy mt-0.5 line-clamp-2 text-muted-foreground sm:mt-1">
+        {description}
+      </span>
     </span>
   </button>
 );
@@ -525,7 +527,7 @@ const ProfileScreen = () => {
 
       {profile && (
         <>
-          <section className="grid gap-2 sm:grid-cols-4">
+          <section className="arena-auto-grid grid gap-1.5 min-[430px]:grid-cols-4 sm:gap-2">
             {quickActions.map((item) => (
               <QuickActionCard
                 key={item.label}
