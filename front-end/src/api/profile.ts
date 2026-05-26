@@ -89,6 +89,7 @@ export interface CompleteOnboardingPayload {
   phone_number: string;
   username?: string;
   dateOfBirth: string;
+  password: string;
   agreements: { terms: boolean; privacy: boolean; community: boolean };
   agreementsVersion?: string;
 }

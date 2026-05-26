@@ -99,6 +99,15 @@ const normalizeEmail = (value = "") => String(value).trim().toLowerCase();
 
 const isValidEmail = (value = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value));
 const isValidIndianPhoneNumber = (value = "") => /^[6-9]\d{9}$/.test(normalizePhoneNumber(value));
+const getPasswordStrengthScore = (value = "") => {
+    const password = String(value);
+    let score = 0;
+    if (password.length >= 8) score += 1;
+    if (/[A-Z]/.test(password)) score += 1;
+    if (/[0-9]/.test(password)) score += 1;
+    if (/[^A-Za-z0-9]/.test(password)) score += 1;
+    return score;
+};
 
 const toPositiveNumber = (value, fallback) => {
     const parsed = Number(value);
@@ -1906,6 +1915,7 @@ const completeUserOnboarding = asyncHandler(async (req, res) => {
     if (!user) throw new ApiError(404, "User not found");
 
     const { phone_number, username, dateOfBirth, agreements } = req.body || {};
+    const onboardingPassword = String(req.body?.password || "").trim();
     const normalizedPhone = normalizePhoneNumber(phone_number);
     const nextDateOfBirth = toDateInputString(dateOfBirth);
 
@@ -1932,6 +1942,13 @@ const completeUserOnboarding = asyncHandler(async (req, res) => {
     const acceptedCommunity = Boolean(agreements?.community);
     if (!acceptedTerms || !acceptedPrivacy || !acceptedCommunity) {
         throw new ApiError(400, "You must agree to the Terms, Privacy Policy, and Community Guidelines");
+    }
+
+    if (!onboardingPassword) {
+        throw new ApiError(400, "Password is required to complete onboarding");
+    }
+    if (getPasswordStrengthScore(onboardingPassword) < 2) {
+        throw new ApiError(400, "Password too weak. Try a stronger combination.");
     }
 
     // Optional username customization
@@ -1962,6 +1979,13 @@ const completeUserOnboarding = asyncHandler(async (req, res) => {
             { provider: "phone", providerId: normalizedPhone, verified: false },
         ];
     }
+
+    user.password = onboardingPassword;
+    user.passwordLoginEnabled = true;
+    user.linkedProviders = [
+        ...(user.linkedProviders || []).filter((link) => link.provider !== "password"),
+        { provider: "password", providerId: user.email || user.username, verified: true },
+    ];
 
     // Date of birth
     user.dateOfBirth = dobDate;

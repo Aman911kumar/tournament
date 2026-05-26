@@ -7,6 +7,9 @@ import {
   ArrowLeft,
   Calendar,
   CheckCircle2,
+  Eye,
+  EyeOff,
+  Lock,
   Phone,
   ShieldCheck,
   User,
@@ -36,6 +39,9 @@ const normalizePhoneNumber = (value: string) => {
 
 const isValidIndianPhoneNumber = (value: string) =>
   /^[6-9]\d{9}$/.test(normalizePhoneNumber(value));
+
+const isProviderPhoneNumber = (value?: string | null) =>
+  /^(google|facebook):/i.test(String(value || ""));
 
 const formatDateInput = (value?: string | null) => {
   if (!value) return "";
@@ -94,11 +100,21 @@ const GoogleOnboardingScreen = () => {
   const [phone, setPhone] = useState("");
   const [username, setUsername] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [passwordValues, setPasswordValues] = useState({
+    next: "",
+    confirm: "",
+  });
+  const [showPassword, setShowPassword] = useState({
+    next: false,
+    confirm: false,
+  });
   const [agreedAll, setAgreedAll] = useState(false);
 
   const [errors, setErrors] = useState<{
     phone?: string;
     dateOfBirth?: string;
+    password?: string;
+    confirmPassword?: string;
     agreedAll?: string;
   }>({});
   const submitAbortRef = useRef<AbortController | null>(null);
@@ -119,20 +135,25 @@ const GoogleOnboardingScreen = () => {
         const user = res.data.user;
         const completedAt = user.onboarding?.completedAt;
         const legalAccepted = Boolean(user.legalAgreements?.acceptedAt);
-        const hasPhone = Boolean(String(user.phone_number || "").trim());
+        const savedPhone = String(user.phone_number || "");
+        const hasPhone =
+          Boolean(savedPhone.trim()) &&
+          !isProviderPhoneNumber(savedPhone) &&
+          isValidIndianPhoneNumber(savedPhone);
         const hasDob = Boolean(user.dateOfBirth);
+        const hasPassword = user.passwordLoginEnabled === true;
 
         if (!user.socialProvider) {
           navigate("/", { replace: true });
           return;
         }
 
-        if (completedAt && legalAccepted && hasPhone && hasDob) {
+        if (completedAt && legalAccepted && hasPhone && hasDob && hasPassword) {
           navigate("/", { replace: true });
           return;
         }
 
-        setPhone(String(user.phone_number || ""));
+        setPhone(isProviderPhoneNumber(savedPhone) ? "" : savedPhone);
         setUsername(String(user.username || ""));
         setDateOfBirth(formatDateInput(user.dateOfBirth));
         setAgreedAll(Boolean(user.legalAgreements?.acceptedAt));
@@ -157,6 +178,45 @@ const GoogleOnboardingScreen = () => {
     return "Adult account (18+)";
   }, [dateOfBirth]);
 
+  const passwordStrength = useMemo(() => {
+    const p = passwordValues.next;
+    let score = 0;
+    if (p.length >= 8) score++;
+    if (/[A-Z]/.test(p)) score++;
+    if (/[0-9]/.test(p)) score++;
+    if (/[^A-Za-z0-9]/.test(p)) score++;
+    return score;
+  }, [passwordValues.next]);
+
+  const passwordStrengthMeta = [
+    { label: "Too weak", color: "bg-destructive" },
+    { label: "Weak", color: "bg-destructive" },
+    { label: "Fair", color: "bg-yellow-500" },
+    { label: "Strong", color: "bg-accent" },
+    { label: "Excellent", color: "bg-primary" },
+  ][passwordStrength];
+
+  const passwordChecks = useMemo(
+    () => [
+      { ok: passwordValues.next.length >= 8, label: "8+ characters" },
+      { ok: /[A-Z]/.test(passwordValues.next), label: "Uppercase" },
+      { ok: /[0-9]/.test(passwordValues.next), label: "Number" },
+      { ok: /[^A-Za-z0-9]/.test(passwordValues.next), label: "Symbol" },
+    ],
+    [passwordValues.next],
+  );
+
+  const phoneReady =
+    countryCode === "+91" && isValidIndianPhoneNumber(phone);
+  const dobReady = Boolean(dateOfBirth) && getAgeYears(dateOfBirth) >= 13;
+  const passwordReady =
+    Boolean(passwordValues.next) &&
+    Boolean(passwordValues.confirm) &&
+    passwordStrength >= 2 &&
+    passwordValues.next === passwordValues.confirm;
+  const canContinue =
+    phoneReady && dobReady && passwordReady && agreedAll && !submitting;
+
   const handleContinue = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
@@ -170,6 +230,16 @@ const GoogleOnboardingScreen = () => {
     if (dateOfBirth && getAgeYears(dateOfBirth) < 13) {
       nextErrors.dateOfBirth =
         "Battle4Arena is for players aged 13+. Please check your date of birth.";
+    }
+    if (!passwordValues.next) {
+      nextErrors.password = "Create a password for your account.";
+    } else if (passwordStrength < 2) {
+      nextErrors.password = "Password is too weak. Use a stronger combination.";
+    }
+    if (!passwordValues.confirm) {
+      nextErrors.confirmPassword = "Confirm your password.";
+    } else if (passwordValues.confirm !== passwordValues.next) {
+      nextErrors.confirmPassword = "Passwords do not match.";
     }
     if (!agreedAll)
       nextErrors.agreedAll = "Please accept the policies to continue.";
@@ -190,6 +260,7 @@ const GoogleOnboardingScreen = () => {
         phone_number: normalizePhoneNumber(phone),
         username: username.trim() || undefined,
         dateOfBirth,
+        password: passwordValues.next,
         agreements: {
           terms: agreedAll,
           privacy: agreedAll,
@@ -292,12 +363,10 @@ const GoogleOnboardingScreen = () => {
                       value={countryCode}
                       onChange={(e) => setCountryCode(e.target.value)}
                       disabled={submitting}
-                      className="h-10 min-w-[7.5rem] rounded-lg border border-glass-border bg-background/45 px-2 text-sm font-heading text-foreground focus:outline-none"
+                      className="h-10 w-[4.9rem] shrink-0 rounded-lg border border-glass-border bg-background/45 px-2 text-sm font-heading text-foreground focus:outline-none"
                       aria-label="Country code"
                     >
-                      <option value="+91">+91 (IN)</option>
-                      <option value="+1">+1 (US) - Soon</option>
-                      <option value="+44">+44 (UK) - Soon</option>
+                      <option value="+91">+91</option>
                     </select>
                     <input
                       type="tel"
@@ -318,6 +387,152 @@ const GoogleOnboardingScreen = () => {
                       className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
                     />
                   </OnboardingInput>
+
+                  <div className="space-y-3 rounded-xl border border-glass-border bg-background/25 p-3">
+                    <OnboardingInput
+                      icon={Lock}
+                      label="Password"
+                      error={errors.password}
+                    >
+                      <input
+                        type={showPassword.next ? "text" : "password"}
+                        placeholder="Create password"
+                        value={passwordValues.next}
+                        onChange={(e) => {
+                          setPasswordValues((cur) => ({
+                            ...cur,
+                            next: e.target.value,
+                          }));
+                          if (errors.password) {
+                            setErrors((cur) => ({
+                              ...cur,
+                              password: undefined,
+                            }));
+                          }
+                        }}
+                        disabled={submitting}
+                        className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowPassword((cur) => ({
+                            ...cur,
+                            next: !cur.next,
+                          }))
+                        }
+                        disabled={submitting}
+                        className="arena-focus rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-primary"
+                        aria-label={
+                          showPassword.next ? "Hide password" : "Show password"
+                        }
+                      >
+                        {showPassword.next ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </OnboardingInput>
+
+                    {passwordValues.next && (
+                      <div className="rounded-lg border border-glass-border bg-background/35 px-3 py-2.5">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="font-heading text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                            Strength
+                          </span>
+                          <span className="font-heading text-[11px] font-bold text-foreground">
+                            {passwordStrengthMeta.label}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[0, 1, 2, 3].map((i) => (
+                            <span
+                              key={i}
+                              className={`h-1.5 rounded-full transition-colors ${
+                                i < passwordStrength
+                                  ? passwordStrengthMeta.color
+                                  : "bg-glass-border"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <ul className="mt-2 grid grid-cols-2 gap-1.5">
+                          {passwordChecks.map((check) => (
+                            <li
+                              key={check.label}
+                              className={`flex items-center gap-1.5 text-[11px] ${
+                                check.ok ? "text-accent" : "text-muted-foreground"
+                              }`}
+                            >
+                              <ShieldCheck
+                                className={`h-3 w-3 ${
+                                  check.ok ? "opacity-100" : "opacity-40"
+                                }`}
+                              />
+                              <span className="truncate">{check.label}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <OnboardingInput
+                      icon={Lock}
+                      label="Confirm password"
+                      error={errors.confirmPassword}
+                    >
+                      <input
+                        type={showPassword.confirm ? "text" : "password"}
+                        placeholder="Re-enter password"
+                        value={passwordValues.confirm}
+                        onChange={(e) => {
+                          setPasswordValues((cur) => ({
+                            ...cur,
+                            confirm: e.target.value,
+                          }));
+                          if (errors.confirmPassword) {
+                            setErrors((cur) => ({
+                              ...cur,
+                              confirmPassword: undefined,
+                            }));
+                          }
+                        }}
+                        disabled={submitting}
+                        className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowPassword((cur) => ({
+                            ...cur,
+                            confirm: !cur.confirm,
+                          }))
+                        }
+                        disabled={submitting}
+                        className="arena-focus rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-primary"
+                        aria-label={
+                          showPassword.confirm
+                            ? "Hide confirmation password"
+                            : "Show confirmation password"
+                        }
+                      >
+                        {showPassword.confirm ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </OnboardingInput>
+
+                    {passwordValues.confirm &&
+                      passwordValues.confirm !== passwordValues.next &&
+                      !errors.confirmPassword && (
+                        <p className="px-1 text-[11px] text-destructive">
+                          Passwords do not match.
+                        </p>
+                      )}
+                  </div>
 
                   <OnboardingInput icon={User} label="Username (optional)">
                     <input
@@ -422,7 +637,7 @@ const GoogleOnboardingScreen = () => {
                   <NeonButton
                     type="submit"
                     full
-                    disabled={submitting || !agreedAll}
+                    disabled={!canContinue}
                     className="min-h-12"
                   >
                     {submitting ? (
