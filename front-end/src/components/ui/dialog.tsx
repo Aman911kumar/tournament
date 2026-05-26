@@ -36,13 +36,13 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-lg border border-glass-border bg-card/95 p-5 shadow-[0_24px_80px_hsl(0_0%_0%/0.38)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98 motion-reduce:animate-none sm:p-6",
+        "fixed left-[50%] top-[50%] z-50 grid max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-md border border-glass-border bg-card p-4 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.08)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98 motion-reduce:animate-none sm:p-5",
         className,
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="arena-focus absolute right-3 top-3 rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none">
+      <DialogPrimitive.Close className="arena-focus absolute right-3 top-3 rounded-sm p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
@@ -67,7 +67,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn("font-heading text-lg font-bold leading-none", className)}
+    className={cn("font-display text-base font-extrabold uppercase leading-none tracking-tight", className)}
     {...props}
   />
 ));

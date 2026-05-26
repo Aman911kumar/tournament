@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   BarChart3,
+  BadgeCheck,
   ChevronRight,
   Crown,
   Edit,
@@ -11,13 +12,17 @@ import {
   HelpCircle,
   Lock,
   LogOut,
+  MailCheck,
+  Phone,
   RefreshCcw,
   Settings,
   ShieldCheck,
+  Sparkles,
   Trophy,
   UserMinus,
   UserPlus,
   Users,
+  Wallet,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { logout } from "@/api/auth";
@@ -53,21 +58,21 @@ import { cn } from "@/lib/utils";
 import UiPreferencesPanel from "@/components/UiPreferencesPanel";
 
 const menuItems = [
-  { icon: Edit, label: "Edit Profile", route: "/edit-profile" },
-  { icon: Trophy, label: "My Tournaments", route: "/my-tournaments" },
-  { icon: Gamepad2, label: "Game Accounts", route: "/game-accounts" },
+  { icon: Edit, label: "Edit Profile", description: "Avatar, banner, username", route: "/edit-profile" },
+  { icon: Trophy, label: "My Tournaments", description: "Registered and joined events", route: "/my-tournaments" },
+  { icon: Gamepad2, label: "Game Accounts", description: "Linked player IDs", route: "/game-accounts" },
 ];
 
 const helpMenu = [
-  { icon: HelpCircle, label: "Help Center", route: "/help" },
-  { icon: ShieldCheck, label: "Legal & Policies", route: "/legal/terms" },
+  { icon: HelpCircle, label: "Help Center", description: "Support and guides", route: "/help" },
+  { icon: ShieldCheck, label: "Legal & Policies", description: "Rules, privacy, safety", route: "/legal/terms" },
 ];
 
 const creatorMenu = [
-  { icon: Crown, label: "Creator Dashboard", route: "/creator-dashboard" },
-  { icon: Settings, label: "Channel Setup", route: "/channel-setup" },
-  { icon: BarChart3, label: "Create Tournament", route: "/create-tournament" },
-  { icon: Users, label: "My Subscribers", route: "/subscriptions" },
+  { icon: Crown, label: "Creator Dashboard", description: "Manage your creator hub", route: "/creator-dashboard" },
+  { icon: Settings, label: "Channel Setup", description: "Branding and community", route: "/channel-setup" },
+  { icon: BarChart3, label: "Create Tournament", description: "Publish a new arena", route: "/create-tournament" },
+  { icon: Users, label: "My Subscribers", description: "Followers and community", route: "/subscriptions" },
 ];
 
 const LEAVE_CREATOR_CONFIRM_TEXT = "Leave create";
@@ -88,23 +93,30 @@ const toneClasses: Record<MenuTone, string> = {
 };
 
 const ProfileSkeleton = () => (
-  <Surface className="overflow-hidden p-0" neon>
-    <SkeletonBlock className="h-28 rounded-none sm:h-36" />
-    <div className="space-y-3 p-3 sm:p-4">
-      <div className="flex items-end gap-3">
-        <SkeletonBlock className="h-20 w-20 rounded-full" />
-        <div className="min-w-0 flex-1 space-y-2 pb-1">
-          <SkeletonBlock className="h-5 w-44 max-w-full" />
-          <SkeletonBlock className="h-3 w-60 max-w-full" />
+  <div className="space-y-3">
+    <Surface className="overflow-hidden p-0" neon>
+      <SkeletonBlock className="h-28 rounded-none sm:h-36" />
+      <div className="space-y-3 p-3 sm:p-4">
+        <div className="flex items-end gap-3">
+          <SkeletonBlock className="h-20 w-20 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-2 pb-1">
+            <SkeletonBlock className="h-5 w-44 max-w-full" />
+            <SkeletonBlock className="h-3 w-60 max-w-full" />
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {[0, 1, 2].map((item) => (
+            <SkeletonBlock key={item} className="h-14" />
+          ))}
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-2">
-        {[0, 1, 2].map((item) => (
-          <SkeletonBlock key={item} className="h-14" />
-        ))}
-      </div>
+    </Surface>
+    <div className="grid gap-2 sm:grid-cols-4">
+      {[0, 1, 2, 3].map((item) => (
+        <SkeletonBlock key={item} className="h-20" />
+      ))}
     </div>
-  </Surface>
+  </div>
 );
 
 const MenuRow = ({
@@ -126,12 +138,12 @@ const MenuRow = ({
     type="button"
     onClick={onClick}
     disabled={disabled}
-    className="arena-focus flex min-h-[58px] w-full items-center justify-between gap-3 rounded-xl border border-glass-border bg-background/38 px-3 py-2.5 text-left transition-colors hover:border-primary/35 hover:bg-background/55 disabled:cursor-not-allowed disabled:opacity-60"
+    className="arena-focus flex min-h-[54px] w-full items-center justify-between gap-3 rounded-md border border-glass-border bg-[#0D1117] px-3 py-2.5 text-left transition-colors hover:border-primary/35 hover:bg-[#101824] disabled:cursor-not-allowed disabled:opacity-60"
   >
     <div className="flex min-w-0 items-center gap-3">
       <span
         className={cn(
-          "grid h-9 w-9 shrink-0 place-items-center rounded-xl border",
+          "grid h-9 w-9 shrink-0 place-items-center rounded-md border",
           toneClasses[tone],
         )}
       >
@@ -180,9 +192,105 @@ const MenuSection = ({
     >
       {title}
     </h2>
-    <Surface className="space-y-2 p-2.5 sm:p-3">{children}</Surface>
+    <Surface className="space-y-2 bg-[#101620] p-2.5 sm:p-3">{children}</Surface>
   </section>
 );
+
+const QuickActionCard = ({
+  icon: Icon,
+  label,
+  description,
+  tone = "primary",
+  onClick,
+}: {
+  icon: typeof Edit;
+  label: string;
+  description: string;
+  tone?: MenuTone;
+  onClick: () => void;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="arena-focus group min-w-0 rounded-md border border-glass-border bg-[#101620] p-3 text-left transition-colors hover:border-primary/40 hover:bg-[#121A26]"
+  >
+    <span
+      className={cn(
+        "mb-3 grid h-9 w-9 place-items-center rounded-md border transition-colors group-hover:border-primary/45",
+        toneClasses[tone],
+      )}
+    >
+      <Icon className="h-4 w-4" />
+    </span>
+    <span className="block truncate font-heading text-xs font-black uppercase tracking-[0.06em]">
+      {label}
+    </span>
+    <span className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+      {description}
+    </span>
+  </button>
+);
+
+const ReadinessItem = ({
+  icon: Icon,
+  label,
+  value,
+  complete,
+  onClick,
+}: {
+  icon: typeof BadgeCheck;
+  label: string;
+  value: string;
+  complete: boolean;
+  onClick?: () => void;
+}) => {
+  const content = (
+    <>
+      <span
+        className={cn(
+          "grid h-9 w-9 shrink-0 place-items-center rounded-md border",
+          complete
+            ? "border-accent/30 bg-accent/10 text-accent"
+            : "border-[hsl(var(--warning)/0.30)] bg-[hsl(var(--warning)/0.10)] text-[hsl(var(--warning))]",
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-heading text-xs font-bold">{label}</span>
+        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{value}</span>
+      </span>
+      <StatusPill tone={complete ? "accent" : "muted"}>
+        {complete ? "Ready" : "Needs setup"}
+      </StatusPill>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="arena-focus flex w-full items-center gap-3 rounded-md border border-glass-border bg-[#0D1117] p-2.5 text-left transition-colors hover:border-primary/35 hover:bg-[#101824]"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-glass-border bg-[#0D1117] p-2.5">
+      {content}
+    </div>
+  );
+};
+
+const formatDateLabel = (value?: string | null) => {
+  if (!value) return "Not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not available";
+  return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+};
 
 const ProfileScreen = () => {
   const navigate = useNavigate();
@@ -319,9 +427,48 @@ const ProfileScreen = () => {
     Boolean(profile) &&
     leaveUsernameInput.trim() === profile?.username &&
     leavePhraseInput.trim() === LEAVE_CREATOR_CONFIRM_TEXT;
+  const emailVerified = Boolean(profile?.emailVerified ?? profile?.email_verified);
+  const phoneVerified = Boolean(profile?.phoneVerified ?? profile?.phone_verified);
+  const passwordReady = Boolean(profile?.passwordLoginEnabled || !profile?.socialProvider);
+  const onboardingReady = Boolean(
+    profile?.onboarding?.completedAt ||
+      profile?.legalAgreements?.acceptedAt ||
+      profile?.legalAgreements?.termsAcceptedAt,
+  );
+  const readinessScore = [emailVerified, phoneVerified, passwordReady, onboardingReady].filter(Boolean).length;
+  const quickActions = [
+    {
+      icon: Wallet,
+      label: "Wallet",
+      description: "Balance, rewards, transfers",
+      tone: "accent" as const,
+      route: "/wallet",
+    },
+    {
+      icon: Edit,
+      label: "Edit",
+      description: "Identity and visuals",
+      tone: "primary" as const,
+      route: "/edit-profile",
+    },
+    {
+      icon: Trophy,
+      label: "Events",
+      description: "Joined tournaments",
+      tone: "secondary" as const,
+      route: "/my-tournaments",
+    },
+    {
+      icon: Gamepad2,
+      label: "Game IDs",
+      description: "Linked accounts",
+      tone: "primary" as const,
+      route: "/game-accounts",
+    },
+  ];
 
   return (
-    <PageShell contentClassName="max-w-4xl space-y-3 pb-6 sm:space-y-4">
+    <PageShell contentClassName="max-w-6xl space-y-3 pb-6 sm:space-y-4">
       <PageHeader
         title="Profile"
         subtitle="Battle identity, creator tools, and account controls"
@@ -377,120 +524,225 @@ const ProfileScreen = () => {
       )}
 
       {profile && (
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.72fr)]">
-          <div className="space-y-3">
-            <MenuSection title="Creator Tools">
-              {!isCreator && (
-                <MenuRow
-                  icon={UserPlus}
-                  label={
-                    creatorLoading
-                      ? "Updating..."
-                      : creatorRequestPending
-                        ? "Creator Request Pending"
-                        : "Request Creator Access"
-                  }
-                  description={
-                    creatorRequestPending
-                      ? "Admin approval is required before creating tournaments"
-                      : "Admin approval is required"
-                  }
-                  tone="secondary"
-                  disabled={creatorLoading || creatorRequestPending}
-                  onClick={handleCreatorRequest}
-                />
-              )}
+        <>
+          <section className="grid gap-2 sm:grid-cols-4">
+            {quickActions.map((item) => (
+              <QuickActionCard
+                key={item.label}
+                icon={item.icon}
+                label={item.label}
+                description={item.description}
+                tone={item.tone}
+                onClick={() => navigate(item.route)}
+              />
+            ))}
+          </section>
 
-              {isCreator &&
-                creatorMenu.map((item) => (
-                  <MenuRow
-                    key={item.label}
-                    icon={item.icon}
-                    label={item.label}
-                    tone="secondary"
-                    onClick={() => navigate(item.route)}
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+            <div className="space-y-3">
+              <Surface neon className="bg-[#101620] p-3 sm:p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="inline-flex items-center gap-1.5 rounded-sm border border-primary/25 bg-primary/10 px-2.5 py-1 font-heading text-[10px] font-bold uppercase tracking-[0.08em] text-primary">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Identity readiness
+                    </div>
+                    <h2 className="mt-3 font-display text-lg font-black uppercase tracking-tight">
+                      {readinessScore}/4 systems ready
+                    </h2>
+                    <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
+                      Complete verification and profile setup to keep tournaments, payouts, and account recovery smooth.
+                    </p>
+                  </div>
+                  <StatusPill tone={isCreator ? "secondary" : "primary"}>
+                    {isCreator ? "Creator profile" : "Player profile"}
+                  </StatusPill>
+                </div>
+
+                <div className="mt-4 grid gap-2 md:grid-cols-2">
+                  <ReadinessItem
+                    icon={MailCheck}
+                    label="Email"
+                    value={emailVerified ? "Verified for alerts and recovery" : "Verify from account settings"}
+                    complete={emailVerified}
+                    onClick={() => navigate("/edit-profile")}
                   />
-                ))}
-            </MenuSection>
+                  <ReadinessItem
+                    icon={Phone}
+                    label="Phone"
+                    value={phoneVerified ? getDisplayPhoneNumber(profile.phone_number) || "Verified" : "Add or verify phone"}
+                    complete={phoneVerified}
+                    onClick={() => navigate("/edit-profile")}
+                  />
+                  <ReadinessItem
+                    icon={Lock}
+                    label="Password"
+                    value={passwordReady ? "Login protection enabled" : "Set password for backup login"}
+                    complete={passwordReady}
+                    onClick={() => navigate("/change-password")}
+                  />
+                  <ReadinessItem
+                    icon={BadgeCheck}
+                    label="Agreement"
+                    value={onboardingReady ? "Terms and onboarding complete" : "Complete profile onboarding"}
+                    complete={onboardingReady}
+                    onClick={() => navigate("/onboarding")}
+                  />
+                </div>
+              </Surface>
 
-            <MenuSection title="Account">
-              {accountMenuItems.map((item) => (
-                <MenuRow
-                  key={item.label}
-                  icon={item.icon}
-                  label={item.label}
-                  tone="primary"
-                  onClick={() => navigate(item.route)}
-                />
-              ))}
-            </MenuSection>
-          </div>
+              <MenuSection title={isCreator ? "Creator Studio" : "Creator Access"}>
+                {!isCreator && (
+                  <MenuRow
+                    icon={UserPlus}
+                    label={
+                      creatorLoading
+                        ? "Updating..."
+                        : creatorRequestPending
+                          ? "Creator Request Pending"
+                          : "Request Creator Access"
+                    }
+                    description={
+                      creatorRequestPending
+                        ? "Admin approval is required before creating tournaments"
+                        : "Host tournaments, build channels, and manage players"
+                    }
+                    tone="secondary"
+                    disabled={creatorLoading || creatorRequestPending}
+                    onClick={handleCreatorRequest}
+                  />
+                )}
 
-          <div className="space-y-3">
-            {adminMenu.length > 0 && (
-              <MenuSection title="Admin">
-                {adminMenu.map((item) => (
+                {isCreator &&
+                  creatorMenu.map((item) => (
+                    <MenuRow
+                      key={item.label}
+                      icon={item.icon}
+                      label={item.label}
+                      description={item.description}
+                      tone="secondary"
+                      onClick={() => navigate(item.route)}
+                    />
+                  ))}
+              </MenuSection>
+
+              <MenuSection title="Account Controls">
+                {accountMenuItems.map((item) => (
                   <MenuRow
                     key={item.label}
                     icon={item.icon}
                     label={item.label}
-                    tone="accent"
+                    description={item.description}
+                    tone="primary"
                     onClick={() => navigate(item.route)}
                   />
                 ))}
               </MenuSection>
-            )}
+            </div>
 
-            <MenuSection title="Help & Legal">
-              {helpMenu.map((item) => (
-                <MenuRow
-                  key={item.label}
-                  icon={item.icon}
-                  label={item.label}
-                  tone="secondary"
-                  onClick={() => navigate(item.route)}
-                />
-              ))}
-            </MenuSection>
-
-            <Surface className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-heading text-sm font-bold">Account status</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    Keep your profile, phone, and game IDs updated for payouts.
-                  </p>
+            <aside className="space-y-3">
+              <Surface className="bg-[#101620] p-3 sm:p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-heading text-sm font-black uppercase tracking-[0.06em]">
+                      Battle record
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Account snapshot and competitive history.
+                    </p>
+                  </div>
+                  <Trophy className="h-5 w-5 text-primary" />
                 </div>
-                <StatusPill tone={isCreator ? "secondary" : "muted"}>
-                  {isCreator ? "Creator" : "Player"}
-                </StatusPill>
-              </div>
-            </Surface>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="rounded-md border border-glass-border bg-[#0D1117] p-2.5">
+                    <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Last login
+                    </p>
+                    <p className="mt-1 truncate font-heading text-xs font-bold">
+                      {formatDateLabel(profile.lastLoginAt)}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-glass-border bg-[#0D1117] p-2.5">
+                    <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Joined
+                    </p>
+                    <p className="mt-1 truncate font-heading text-xs font-bold">
+                      {formatDateLabel(profile.createdAt)}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-glass-border bg-[#0D1117] p-2.5">
+                    <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Kills
+                    </p>
+                    <p className="mt-1 truncate font-heading text-xs font-bold text-accent">
+                      {profile.stats?.kills ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-glass-border bg-[#0D1117] p-2.5">
+                    <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Status
+                    </p>
+                    <p className={cn("mt-1 truncate font-heading text-xs font-bold", profile.isActive ? "text-accent" : "text-destructive")}>
+                      {profile.isActive ? "Active" : "Restricted"}
+                    </p>
+                  </div>
+                </div>
+              </Surface>
 
-            <UiPreferencesPanel />
-
-            <MenuSection title="Critical Section" danger>
-              {isCreator && (
-                <MenuRow
-                  icon={UserMinus}
-                  label="Leave Creator"
-                  description="Removes creator access after confirmation"
-                  tone="danger"
-                  disabled={creatorLoading}
-                  onClick={() => setLeaveDialogOpen(true)}
-                />
+              {adminMenu.length > 0 && (
+                <MenuSection title="Admin">
+                  {adminMenu.map((item) => (
+                    <MenuRow
+                      key={item.label}
+                      icon={item.icon}
+                      label={item.label}
+                      description="Platform operations"
+                      tone="accent"
+                      onClick={() => navigate(item.route)}
+                    />
+                  ))}
+                </MenuSection>
               )}
 
-              <MenuRow
-                icon={LogOut}
-                label={logoutLoading ? "Logging out..." : "Logout"}
-                tone="danger"
-                disabled={logoutLoading}
-                onClick={handleLogout}
-              />
-            </MenuSection>
+              <MenuSection title="Help & Legal">
+                {helpMenu.map((item) => (
+                  <MenuRow
+                    key={item.label}
+                    icon={item.icon}
+                    label={item.label}
+                    description={item.description}
+                    tone="secondary"
+                    onClick={() => navigate(item.route)}
+                  />
+                ))}
+              </MenuSection>
+
+              <UiPreferencesPanel />
+
+              <MenuSection title="Critical Section" danger>
+                {isCreator && (
+                  <MenuRow
+                    icon={UserMinus}
+                    label="Leave Creator"
+                    description="Removes creator access after confirmation"
+                    tone="danger"
+                    disabled={creatorLoading}
+                    onClick={() => setLeaveDialogOpen(true)}
+                  />
+                )}
+
+                <MenuRow
+                  icon={LogOut}
+                  label={logoutLoading ? "Logging out..." : "Logout"}
+                  description="End this session on this device"
+                  tone="danger"
+                  disabled={logoutLoading}
+                  onClick={handleLogout}
+                />
+              </MenuSection>
+            </aside>
           </div>
-        </div>
+        </>
       )}
 
       <Dialog

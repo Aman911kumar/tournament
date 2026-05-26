@@ -33,11 +33,34 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
+import { hasAuthSession } from "@/lib/auth-storage";
 import heroBg from "@/assets/hero-bg.jpg";
 import gameFreefire from "@/assets/game-freefire.jpg";
 import gameBgmi from "@/assets/game-bgmi.jpg";
 import gameValorant from "@/assets/game-valorant.jpg";
 import gameCod from "@/assets/game-cod.jpg";
+
+const getJoinTournamentRoute = () => (hasAuthSession() ? "/tournaments" : "/login");
+
+const JoinTournamentLink = ({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) => {
+  const to = getJoinTournamentRoute();
+
+  return (
+    <Link
+      to={to}
+      state={to === "/login" ? { from: { pathname: "/tournaments" } } : undefined}
+      className={className}
+    >
+      {children}
+    </Link>
+  );
+};
 /* ---------- Reusable bits ---------- */
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -294,13 +317,12 @@ const Hero = () => {
             Download APK
             <ChevronRight className="w-4 h-4 -mr-1 transition-transform group-hover:translate-x-0.5" />
           </a>
-          <a
-            href="#tournaments"
+          <JoinTournamentLink
             className="inline-flex items-center gap-2 rounded-lg border border-glass-border bg-card/60 px-5 py-3 text-sm font-heading font-semibold uppercase tracking-wider text-foreground hover:bg-card/80 transition-colors"
           >
             <Trophy className="w-4 h-4 text-accent" />
             Join Tournament
-          </a>
+          </JoinTournamentLink>
         </div>
         {/* Stats row */}
         <motion.div
@@ -733,9 +755,9 @@ const DownloadSection = () => (
                 </div>
               ))}
             </div>
-            <div className="mx-3 mt-3 p-2 rounded-lg bg-primary text-primary-foreground text-center text-[10px] font-heading uppercase tracking-wider">
+            <JoinTournamentLink className="mx-3 mt-3 block rounded-lg bg-primary p-2 text-center text-[10px] font-heading uppercase tracking-wider text-primary-foreground">
               Join Tournament
-            </div>
+            </JoinTournamentLink>
           </div>
         </motion.div>
       </div>

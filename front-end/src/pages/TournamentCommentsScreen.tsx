@@ -1461,9 +1461,9 @@ const TournamentCommentsScreen = () => {
           justify-content: center;
           min-width: 32px;
           height: 32px;
-          border-radius: 999px;
+          border-radius: var(--radius-card);
           border: 1px solid hsl(var(--border) / 0.55);
-          background: hsl(var(--card) / 0.6);
+          background: hsl(var(--card) / 0.95);
           color: hsl(var(--muted-foreground));
           font-size: 12px;
           transition: transform 140ms ease, border-color 140ms ease, color 140ms ease;
@@ -1476,7 +1476,7 @@ const TournamentCommentsScreen = () => {
           contain: layout paint;
         }
         .chat-bubble {
-          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.045), 0 8px 18px rgb(0 0 0 / 0.18);
+          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.08);
         }
         .voice-avatar,
         .voice-count {
@@ -1491,7 +1491,7 @@ const TournamentCommentsScreen = () => {
           font-family: var(--font-heading, inherit);
           font-size: 0.7rem;
           font-weight: 800;
-          box-shadow: 0 6px 16px rgb(0 0 0 / 0.22);
+          box-shadow: none;
           transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
         }
         .voice-avatar-speaking {
@@ -1506,9 +1506,8 @@ const TournamentCommentsScreen = () => {
         }
         .chat-composer {
           background:
-            linear-gradient(135deg, hsl(var(--card) / 0.9), hsl(var(--background) / 0.96)),
-            radial-gradient(circle at 100% 0%, hsl(var(--primary) / 0.11), transparent 34%);
-          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.05), 0 -8px 24px rgb(0 0 0 / 0.16);
+            linear-gradient(180deg, hsl(var(--card) / 0.98), hsl(var(--background) / 0.96));
+          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.08);
         }
         .chat-composer-action {
           display: grid;
@@ -1516,7 +1515,7 @@ const TournamentCommentsScreen = () => {
           width: 2.25rem;
           flex-shrink: 0;
           place-items: center;
-          border-radius: 0.65rem;
+          border-radius: var(--radius-card);
           color: hsl(var(--muted-foreground));
           transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
         }
@@ -1537,12 +1536,12 @@ const TournamentCommentsScreen = () => {
         }
       `}</style>
 
-      <header className="sticky top-0 z-20 shrink-0 border-b border-glass-border bg-background/95 backdrop-blur-md">
+      <header className="sticky top-0 z-20 shrink-0 border-b border-glass-border bg-background/95">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3 sm:px-5">
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={() => navigate(-1)}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-glass-border bg-card/70"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-glass-border bg-card/95"
             aria-label="Go back"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -1550,7 +1549,7 @@ const TournamentCommentsScreen = () => {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5 shrink-0 text-primary" />
-              <h1 className="truncate font-heading text-lg font-bold sm:text-xl">
+              <h1 className="truncate font-display text-base font-extrabold uppercase tracking-tight text-primary sm:text-lg">
                 {access?.tournament.title || "Room Chat"}
               </h1>
             </div>
@@ -1570,7 +1569,7 @@ const TournamentCommentsScreen = () => {
             <button
               type="button"
               onClick={() => setModerationOpen((value) => !value)}
-              className="grid h-10 w-10 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-primary"
+              className="grid h-10 w-10 place-items-center rounded-md border border-primary/30 bg-primary/10 text-primary"
               aria-label="Moderation controls"
             >
               <Shield className="h-4 w-4" />
@@ -1580,14 +1579,14 @@ const TournamentCommentsScreen = () => {
       </header>
 
       {moderationOpen && canModerate && (
-        <div className="shrink-0 border-b border-glass-border bg-card/90 px-4 py-3 backdrop-blur-md">
+        <div className="shrink-0 border-b border-glass-border bg-card/95 px-4 py-3">
           <div className="mx-auto grid w-full max-w-5xl gap-2 sm:grid-cols-[160px_1fr_auto_auto]">
             <select
               value={slowModeSeconds}
               onChange={(event) =>
                 setSlowModeSeconds(Number(event.target.value))
               }
-              className="rounded-lg border border-glass-border bg-background px-3 py-2 text-sm font-heading"
+              className="rounded-sm border border-glass-border bg-background px-3 py-2 text-sm font-heading"
             >
               <option value={0}>Slow off</option>
               <option value={5}>5s slow</option>
@@ -1599,12 +1598,12 @@ const TournamentCommentsScreen = () => {
               value={announcement}
               onChange={(event) => setAnnouncement(event.target.value)}
               placeholder="Announcement"
-              className="rounded-lg border border-glass-border bg-background px-3 py-2 text-sm font-heading outline-none focus:border-primary"
+              className="rounded-sm border border-glass-border bg-background px-3 py-2 text-sm font-heading outline-none focus:border-primary"
             />
             <button
               type="button"
               onClick={handleShareRoom}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-heading text-primary"
+              className="inline-flex items-center justify-center gap-2 rounded-sm border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-heading text-primary"
             >
               <Clipboard className="h-4 w-4" />
               Share Room
@@ -1612,7 +1611,7 @@ const TournamentCommentsScreen = () => {
             <button
               type="button"
               onClick={handleSaveModeration}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-heading font-bold text-primary-foreground"
+              className="rounded-sm bg-primary px-4 py-2 text-sm font-heading font-bold text-primary-foreground"
             >
               Save
             </button>
@@ -1726,7 +1725,7 @@ const TournamentCommentsScreen = () => {
         <button
           type="button"
           onClick={() => scrollToBottom()}
-          className="arena-focus fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 z-30 -translate-x-1/2 rounded-lg border border-cyan-400/30 bg-cyan-400/15 px-3 py-2 font-heading text-xs font-bold text-cyan-100 shadow-[0_8px_20px_rgb(0_0_0/0.2)]"
+          className="arena-focus fixed bottom-[calc(4.75rem_+_env(safe-area-inset-bottom))] left-1/2 z-30 -translate-x-1/2 rounded-lg border border-cyan-400/30 bg-cyan-400/15 px-3 py-2 font-heading text-xs font-bold text-cyan-100 shadow-[0_8px_20px_rgb(0_0_0/0.2)]"
         >
           {newMessageCount} new message{newMessageCount > 1 ? "s" : ""}
         </button>

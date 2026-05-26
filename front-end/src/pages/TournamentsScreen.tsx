@@ -3,19 +3,14 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
   ChevronRight,
-  Flame,
-  Gamepad2,
   Radio,
   RefreshCcw,
-  Search,
   SlidersHorizontal,
   Sparkles,
   Trophy,
-  Users,
   WalletCards,
 } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
-import GameArtImage from "@/components/GameArtImage";
 import {
   EmptyState,
   PageHeader,
@@ -32,7 +27,6 @@ import { CACHE_KEYS, readCache, stableCacheKey, writeAuthenticatedCache, writeCa
 import { getNotificationSocket } from "@/lib/notification-socket";
 import type { NotificationItem } from "@/api/notifications";
 import {
-  DISCOVERY_GAMES,
   formatCompactNumber,
   formatDateShort,
   gameLabels,
@@ -44,7 +38,7 @@ import { cn } from "@/lib/utils";
 
 const gameFilters = ["All", "Free Fire", "BGMI", "Valorant", "COD"];
 const feeFilters = ["All Fees", "Free", "Paid"];
-const statusFilters = ["All", "Live", "Upcoming", "Completed"];
+const statusFilters = ["All", "Upcoming", "Live", "Completed"];
 const sortOptions = ["Trending", "Latest", "Prize Up", "Prize Down"];
 const PAGE_SIZE = 12;
 
@@ -89,6 +83,13 @@ const getStatusLabel = (tournament: Tournament, joined?: boolean) => {
   return tournament.status;
 };
 
+const getStatusRank = (status: Tournament["status"]) => {
+  if (status === "open") return 0;
+  if (status === "running") return 1;
+  if (status === "completed") return 2;
+  return 3;
+};
+
 const TournamentDiscoveryCard = ({
   tournament,
   joined,
@@ -107,25 +108,19 @@ const TournamentDiscoveryCard = ({
 
   return (
     <Surface interactive onClick={onClick} className="group overflow-hidden p-0">
-      <div className="relative h-32">
-        <GameArtImage
-          game={game.key}
-          variant="banner"
-          className="transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/35 to-transparent" />
-        <div className="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2">
+      <div className="border-b border-glass-border p-3">
+        <div className="mb-3 flex max-w-full flex-wrap gap-2">
           <StatusPill tone={getStatusTone(tournament.status, joined)}>
             {getStatusLabel(tournament, joined)}
           </StatusPill>
           <StatusPill tone="muted">{game.short}</StatusPill>
         </div>
-        <div className="absolute bottom-3 left-3 right-3">
-          <p className="truncate font-heading text-base font-black">{tournament.title}</p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {game.label} - {tournament.gameMode || tournament.type}
-          </p>
-        </div>
+        <p className="truncate font-display text-base font-extrabold uppercase tracking-tight">
+          {tournament.title}
+        </p>
+        <p className="mt-1 truncate text-xs text-muted-foreground">
+          {game.label} - {tournament.gameMode || tournament.type}
+        </p>
       </div>
 
       <div className="space-y-3 p-3">
@@ -340,10 +335,17 @@ const TournamentsScreen = () => {
       );
     }
 
-    if (activeSort === "Prize Up") return [...list].sort((a, b) => getPrizeSortValue(a) - getPrizeSortValue(b));
-    if (activeSort === "Prize Down") return [...list].sort((a, b) => getPrizeSortValue(b) - getPrizeSortValue(a));
-    if (activeSort === "Latest") return [...list].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
-    return [...list].sort((a, b) => getParticipants(b) - getParticipants(a));
+    return [...list].sort((a, b) => {
+      if (activeStatus === "All") {
+        const statusDifference = getStatusRank(a.status) - getStatusRank(b.status);
+        if (statusDifference !== 0) return statusDifference;
+      }
+
+      if (activeSort === "Prize Up") return getPrizeSortValue(a) - getPrizeSortValue(b);
+      if (activeSort === "Prize Down") return getPrizeSortValue(b) - getPrizeSortValue(a);
+      if (activeSort === "Latest") return new Date(b.startAt).getTime() - new Date(a.startAt).getTime();
+      return getParticipants(b) - getParticipants(a);
+    });
   }, [activeFee, activeGame, activeMode, activeSort, activeStatus, searchQuery, tournaments]);
 
   const liveCount = tournaments.filter((t) => t.status === "running").length;
@@ -408,18 +410,20 @@ const TournamentsScreen = () => {
         </button>
       </div>
 
-      <div className="space-y-2.5">
-        <SegmentedControl
-          value={activeStatus}
-          onChange={setActiveStatus}
-          options={statusFilters.map((filter) => ({ label: filter, value: filter }))}
-        />
-        <SegmentedControl
-          value={activeGame}
-          onChange={setActiveGame}
-          options={gameFilters.map((filter) => ({ label: filter, value: filter }))}
-        />
-        {showFilters && (
+      {showFilters && (
+        <Surface className="space-y-2.5 p-2.5 sm:p-3">
+          <div className="grid gap-2.5 lg:grid-cols-2">
+            <SegmentedControl
+              value={activeStatus}
+              onChange={setActiveStatus}
+              options={statusFilters.map((filter) => ({ label: filter, value: filter }))}
+            />
+            <SegmentedControl
+              value={activeGame}
+              onChange={setActiveGame}
+              options={gameFilters.map((filter) => ({ label: filter, value: filter }))}
+            />
+          </div>
           <div className="grid gap-2.5 lg:grid-cols-3">
             <SegmentedControl
               value={activeFee}
@@ -437,30 +441,13 @@ const TournamentsScreen = () => {
               options={modeOptions.map((filter) => ({ label: filter.replace(/_/g, " "), value: filter }))}
             />
           </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {DISCOVERY_GAMES.map((game) => (
-          <button
-            key={game.key}
-            type="button"
-            onClick={() => setActiveGame(game.label === "Call of Duty" ? "COD" : game.label)}
-            className="arena-focus group overflow-hidden rounded-xl border border-glass-border bg-card/82 text-left transition-colors hover:border-primary/45"
-          >
-            <div className="relative h-20">
-              <GameArtImage game={game.key} alt={game.label} variant="banner" />
-              <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
-              <p className="absolute bottom-2 left-2 right-2 truncate font-heading text-xs font-black">{game.label}</p>
-            </div>
-          </button>
-        ))}
-      </div>
+        </Surface>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {loading && [0, 1, 2, 3, 4, 5].map((item) => (
           <Surface key={item} className="space-y-3">
-            <SkeletonBlock className="h-32" />
+            <SkeletonBlock className="h-16" />
             <SkeletonBlock className="h-4 w-2/3" />
             <SkeletonBlock className="h-3 w-1/2" />
             <SkeletonBlock className="h-8" />

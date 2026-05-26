@@ -36,7 +36,7 @@ export const ProfileHero = ({
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-lg border border-glass-border bg-card shadow-[inset_0_1px_0_hsl(var(--foreground)/0.045)]",
+        "relative overflow-hidden rounded-md border border-glass-border bg-card shadow-[inset_0_1px_0_hsl(var(--foreground)/0.08)]",
         className,
       )}
     >
@@ -51,10 +51,10 @@ export const ProfileHero = ({
             referrerPolicy="no-referrer"
           />
         ) : (
-          <div className="h-full w-full bg-[radial-gradient(circle_at_18%_20%,hsl(var(--secondary)/0.26),transparent_34%),radial-gradient(circle_at_88%_18%,hsl(var(--accent)/0.18),transparent_28%),linear-gradient(135deg,hsl(var(--primary)/0.22),hsl(var(--background))_52%,hsl(var(--secondary)/0.16))]" />
+          <div className="h-full w-full bg-[linear-gradient(180deg,hsl(var(--primary)/0.12),transparent_54%),linear-gradient(90deg,hsl(var(--foreground)/0.04)_1px,transparent_1px),linear-gradient(0deg,hsl(var(--foreground)/0.03)_1px,transparent_1px)] bg-[size:auto,32px_32px,32px_32px]" />
         )}
         <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,hsl(var(--background)/0.2)_44%,hsl(var(--card))_100%)]" />
-        <div className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-md border border-white/10 bg-black/35 px-2.5 py-1.5 text-[10px] font-heading font-bold text-cyan-100 sm:left-4 sm:top-4">
+        <div className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-sm border border-white/10 bg-background/80 px-2.5 py-1.5 text-[10px] font-heading font-bold uppercase tracking-[0.08em] text-primary sm:left-4 sm:top-4">
           <Sparkles className="h-3.5 w-3.5 text-cyan-300" />
           BATTLE IDENTITY
         </div>
@@ -62,7 +62,7 @@ export const ProfileHero = ({
           <button
             type="button"
             onClick={onEditImages}
-            className="arena-focus absolute right-3 top-3 inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-black/35 px-3 text-[10px] font-heading font-bold text-white transition-colors hover:bg-black/50 sm:right-4 sm:top-4"
+            className="arena-focus absolute right-3 top-3 inline-flex h-9 items-center gap-2 rounded-sm border border-white/10 bg-background/80 px-3 text-[10px] font-heading font-bold uppercase tracking-[0.06em] text-white transition-colors hover:bg-card sm:right-4 sm:top-4"
           >
             <Camera className="h-3.5 w-3.5" />
             Edit visuals
@@ -84,7 +84,7 @@ export const ProfileHero = ({
                 {isAdmin && <RolePill role="admin" />}
                 {!isAdmin && isCreator && <RolePill role="creator" />}
               </div>
-              <h1 className="truncate font-heading text-lg font-black text-white sm:text-2xl">
+              <h1 className="truncate font-display text-lg font-extrabold uppercase tracking-tight text-white sm:text-2xl">
                 {title || user?.username || "Player"}
               </h1>
               {subtitle && (
@@ -99,7 +99,7 @@ export const ProfileHero = ({
 
         {cacheNotice && (
           <p
-            className="mt-3 rounded-lg border border-secondary/20 bg-secondary/10 px-3 py-2 text-[11px] text-secondary"
+            className="mt-3 rounded-sm border border-secondary/20 bg-secondary/10 px-3 py-2 text-[11px] text-secondary"
             title={cacheNotice}
           >
             {cacheNotice}
@@ -111,7 +111,7 @@ export const ProfileHero = ({
             {stats.map((stat) => (
               <div
                 key={stat.label}
-                className="min-w-0 rounded-lg border border-white/10 bg-white/[0.035] px-2 py-2.5 text-center"
+                className="min-w-0 rounded-sm border border-white/10 bg-white/[0.035] px-2 py-2.5 text-center"
               >
                 <div className="truncate font-display text-sm font-black text-primary sm:text-base">
                   {stat.value}

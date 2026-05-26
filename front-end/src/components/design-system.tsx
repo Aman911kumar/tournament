@@ -79,7 +79,7 @@ export const PageHeader = ({
 }) => (
   <header
     className={cn(
-      "flex items-center justify-between gap-2 pb-3 pt-4 sm:gap-3 sm:pb-4 sm:pt-6",
+      "flex items-center justify-between gap-2 border-b border-glass-border pb-2 pt-3 sm:gap-3 sm:pb-3 sm:pt-4",
       className,
     )}
   >
@@ -95,7 +95,7 @@ export const PageHeader = ({
         </button>
       )}
       {Icon && (
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary sm:h-10 sm:w-10">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-primary/35 bg-primary/10 text-primary sm:h-9 sm:w-9">
           <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
         </span>
       )}
@@ -135,7 +135,7 @@ export const Surface = ({
         if (event.key === "Enter" || event.key === " ") onClick();
       }}
       className={cn(
-        "min-w-0 rounded-lg border border-glass-border bg-card/82 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.045)]",
+        "min-w-0 rounded-md border border-glass-border bg-card/95 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.08)]",
         !hasPaddingOverride(className) && "p-[var(--ui-surface-padding)]",
         neon && "neon-border",
         clickable &&
@@ -166,20 +166,20 @@ export const MetricCard = ({
   <Surface
     onClick={onClick}
     interactive={Boolean(onClick)}
-    className="min-h-[84px] sm:min-h-[96px]"
+    className="min-h-[72px] sm:min-h-[84px]"
   >
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <p className="font-heading text-[10px] uppercase text-muted-foreground">
+        <p className="font-heading text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
           {label}
         </p>
-        <p className="mt-2 truncate font-heading text-xl font-bold leading-tight sm:text-2xl">
+        <p className="mt-1.5 truncate font-display text-lg font-extrabold leading-tight sm:text-xl">
           {value}
         </p>
       </div>
       <span
         className={cn(
-          "grid h-9 w-9 shrink-0 place-items-center rounded-xl border sm:h-10 sm:w-10",
+          "grid h-8 w-8 shrink-0 place-items-center rounded-md border sm:h-9 sm:w-9",
           toneClasses[tone],
         )}
       >
@@ -203,7 +203,7 @@ export const StatusPill = ({
 }) => (
   <span
     className={cn(
-      "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-heading text-[10px] font-bold",
+      "inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-heading text-[10px] font-bold uppercase tracking-[0.06em]",
       toneClasses[tone],
       className,
     )}
@@ -223,9 +223,9 @@ export const EmptyState = ({
   description?: ReactNode;
   action?: ReactNode;
 }) => (
-  <Surface className="py-8 text-center sm:py-10">
-    <Icon className="mx-auto mb-3 h-9 w-9 text-muted-foreground" />
-    <p className="font-heading text-sm font-bold">{title}</p>
+  <Surface className="py-7 text-center sm:py-8">
+    <Icon className="mx-auto mb-3 h-8 w-8 text-primary" />
+    <p className="font-display text-sm font-extrabold uppercase tracking-tight">{title}</p>
     {description && (
       <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
         {description}
@@ -238,7 +238,7 @@ export const EmptyState = ({
 export const SkeletonBlock = ({ className }: { className?: string }) => (
   <div
     className={cn(
-      "rounded-md bg-[linear-gradient(90deg,hsl(var(--muted)/0.54),hsl(var(--muted)/0.78),hsl(var(--muted)/0.54))] bg-[length:200%_100%] motion-safe:animate-shimmer motion-reduce:bg-muted/70",
+      "rounded-sm bg-[linear-gradient(90deg,hsl(var(--muted)/0.5),hsl(var(--muted)/0.78),hsl(var(--muted)/0.5))] bg-[length:200%_100%] motion-safe:animate-shimmer motion-reduce:bg-muted/70",
       className,
     )}
   />
@@ -258,7 +258,7 @@ export const FormField = ({
   className?: string;
 }) => (
   <label className={cn("block space-y-1.5", className)}>
-    <span className="flex items-center gap-1.5 font-heading text-xs font-semibold text-muted-foreground">
+    <span className="flex items-center gap-1.5 font-heading text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
       {Icon && <Icon className="h-3.5 w-3.5" />}
       {label}
     </span>
@@ -282,7 +282,7 @@ export const SegmentedControl = <T extends string>({
 }) => (
   <div
     className={cn(
-      "flex gap-1 overflow-x-auto rounded-lg border border-glass-border bg-card/70 p-1 scrollbar-hide",
+      "flex gap-1 overflow-x-auto rounded-md border border-glass-border bg-card/95 p-1 scrollbar-hide",
       className,
     )}
     role="tablist"
@@ -319,7 +319,7 @@ export const ActionButton = ({
 }: ButtonProps) => (
   <Button
     variant={variant}
-    className={cn("min-h-10 rounded-lg", className)}
+    className={cn("min-h-10 rounded-md", className)}
     {...props}
   />
 );
@@ -337,7 +337,7 @@ export const SearchBox = ({
 }) => (
   <div
     className={cn(
-      "flex min-h-10 items-center gap-2 rounded-lg border border-glass-border bg-card/70 px-3 transition-colors focus-within:border-primary/50",
+      "flex min-h-10 items-center gap-2 rounded-md border border-glass-border bg-background/80 px-3 transition-colors focus-within:border-primary/60",
       className,
     )}
   >
@@ -369,7 +369,7 @@ export const CreatorCard = ({
   <button
     type="button"
     onClick={onClick}
-    className="arena-focus min-w-[132px] shrink-0 rounded-lg border border-glass-border bg-card/82 p-3 text-left transition-colors hover:border-primary/45 hover:bg-card"
+    className="arena-focus min-w-[132px] shrink-0 rounded-md border border-glass-border bg-card/95 p-3 text-left transition-colors hover:border-primary/55 hover:bg-card"
   >
     <div className="flex items-center gap-3">
       <UserAvatar
@@ -377,7 +377,7 @@ export const CreatorCard = ({
         size="lg"
       />
       <div className="min-w-0">
-        <p className="truncate font-heading text-sm font-bold">{name}</p>
+        <p className="truncate font-display text-sm font-bold">{name}</p>
         <p className="mt-0.5 text-[10px] text-muted-foreground">
           {Number(followers || 0).toLocaleString("en-IN")} followers
         </p>
@@ -420,10 +420,10 @@ export const TournamentCard = ({
   onCreatorClick?: () => void;
 }) => (
   <Surface interactive onClick={onClick} neon className="overflow-hidden p-0">
-    <div className="p-4">
+    <div className="p-3 sm:p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate font-heading text-base font-bold">{title}</p>
+          <p className="truncate font-display text-base font-extrabold uppercase tracking-tight">{title}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{game}</p>
         </div>
         <StatusPill tone={joined ? "accent" : "secondary"}>{status}</StatusPill>
@@ -434,26 +434,26 @@ export const TournamentCard = ({
           event.stopPropagation();
           onCreatorClick?.();
         }}
-        className="arena-focus mt-3 inline-flex items-center gap-1.5 rounded-md text-xs text-primary"
+        className="arena-focus mt-3 inline-flex items-center gap-1.5 rounded-sm font-heading text-[10px] uppercase tracking-wide text-primary"
       >
         <ShieldCheck className="h-3.5 w-3.5" />
         {creator}
       </button>
       <div className="mt-4 grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
-        <div className="rounded-lg bg-background/45 p-2">
-          <p className="text-[10px] text-muted-foreground">Prize</p>
+        <div className="rounded-sm border border-glass-border bg-background/70 p-2">
+          <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">Prize</p>
           <p className="truncate font-heading text-xs font-bold text-accent">
             {prize}
           </p>
         </div>
-        <div className="rounded-lg bg-background/45 p-2">
-          <p className="text-[10px] text-muted-foreground">Slots</p>
+        <div className="rounded-sm border border-glass-border bg-background/70 p-2">
+          <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">Slots</p>
           <p className="font-heading text-xs font-bold">
             {slots}/{maxSlots}
           </p>
         </div>
-        <div className="rounded-lg bg-background/45 p-2">
-          <p className="text-[10px] text-muted-foreground">Entry</p>
+        <div className="rounded-sm border border-glass-border bg-background/70 p-2">
+          <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">Entry</p>
           <p className="truncate font-heading text-xs font-bold">{entry}</p>
         </div>
       </div>
@@ -480,7 +480,7 @@ export const ResponsiveTable = ({
 }) => (
   <div
     className={cn(
-      "arena-scrollbar overflow-x-auto rounded-xl border border-glass-border bg-card/45",
+      "arena-scrollbar overflow-x-auto rounded-md border border-glass-border bg-card/95",
       className,
     )}
   >
@@ -520,11 +520,11 @@ export const ActionNoteDialog = ({
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md">
       <DialogHeader>
-        <DialogTitle className="font-heading">{title}</DialogTitle>
+        <DialogTitle className="font-display uppercase tracking-tight">{title}</DialogTitle>
         {description && <DialogDescription>{description}</DialogDescription>}
       </DialogHeader>
       <label className="block space-y-2">
-        <span className="font-heading text-xs font-semibold text-muted-foreground">
+        <span className="font-heading text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
           {label}
           {required ? " *" : ""}
         </span>

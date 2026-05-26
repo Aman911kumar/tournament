@@ -429,22 +429,21 @@ const WalletScreen = () => {
   }, [activeTab, historyView]);
 
   return (
-    <div className="arena-shell min-h-[100dvh] overflow-x-hidden pb-[calc(5.75rem+env(safe-area-inset-bottom))] sm:pb-24">
+    <div className="arena-shell min-h-[100dvh] overflow-x-hidden pb-[calc(5.75rem_+_env(safe-area-inset-bottom))] sm:pb-24">
       <style>{`
         .wallet-hero {
           background:
-            radial-gradient(circle at 86% 8%, hsl(var(--accent) / 0.16), transparent 26%),
-            radial-gradient(circle at 8% 0%, hsl(var(--primary) / 0.18), transparent 30%),
-            linear-gradient(135deg, hsl(var(--card) / 0.94), hsl(var(--background) / 0.96));
-          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.045), 0 12px 28px rgb(0 0 0 / 0.18);
+            linear-gradient(180deg, hsl(var(--primary) / 0.08), transparent 44%),
+            hsl(var(--card) / 0.96);
+          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.08);
         }
         .wallet-tile,
         .wallet-action-card,
         .wallet-transaction,
         .wallet-panel {
           border: 1px solid hsl(var(--border) / 0.72);
-          background: hsl(var(--card) / 0.74);
-          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.04);
+          background: hsl(var(--card) / 0.96);
+          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.06);
         }
         .wallet-action-card {
           transition: transform 150ms ease, border-color 150ms ease, background-color 150ms ease;
@@ -481,7 +480,7 @@ const WalletScreen = () => {
         @media (max-width: 480px) {
           .wallet-hero,
           .wallet-panel {
-            border-radius: 1rem;
+            border-radius: var(--radius-panel);
           }
           .wallet-stat-note,
           .wallet-action-desc {
@@ -523,9 +522,9 @@ const WalletScreen = () => {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            className="wallet-hero relative overflow-hidden rounded-2xl border border-glass-border p-3 sm:p-6"
+            className="wallet-hero relative overflow-hidden rounded-md border border-glass-border p-3 sm:p-5"
           >
-            <div className="absolute right-4 top-4 hidden h-24 w-24 rounded-full border border-white/10 bg-white/5 sm:block" />
+            <div className="absolute right-4 top-4 hidden h-16 w-16 border border-white/10 bg-white/5 sm:block" />
             <div className="relative">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-5 sm:gap-3">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 font-heading text-[10px] font-bold text-emerald-200 sm:gap-2 sm:px-3 sm:text-[11px]">
@@ -606,7 +605,7 @@ const WalletScreen = () => {
             </div>
           </motion.div>
 
-          <section className="wallet-panel rounded-2xl p-2.5 sm:p-4">
+          <section className="wallet-panel rounded-md p-2.5 sm:p-4">
             <div className="mb-2 flex items-center justify-between gap-3 sm:mb-3">
               <div>
                 <h2 className="font-heading text-sm font-black">
@@ -711,7 +710,7 @@ const WalletScreen = () => {
           />
         </section>
 
-        <section className="wallet-panel rounded-2xl p-2.5 sm:p-5">
+        <section className="wallet-panel rounded-md p-2.5 sm:p-5">
           <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <div>
               <h2 className="flex items-center gap-2 font-heading text-sm font-black sm:text-base">

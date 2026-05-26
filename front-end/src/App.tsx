@@ -151,11 +151,15 @@ const ProtectedFullscreenShell = () => (
 );
 
 const RouteLoader = () => (
-  <div className="arena-shell min-h-[100dvh] px-3 pt-6 sm:px-4 sm:pt-8">
-    <div className="mx-auto w-full max-w-2xl space-y-3">
-      <div className="h-6 w-36 animate-pulse rounded-lg bg-muted" />
-      <div className="h-24 animate-pulse rounded-xl bg-muted" />
-      <div className="h-20 animate-pulse rounded-xl bg-muted" />
+  <div className="arena-shell arena-page-no-nav px-3 pt-4 sm:px-4 sm:pt-6">
+    <div className="mx-auto w-full max-w-2xl space-y-2.5">
+      <div className="h-5 w-36 animate-pulse rounded-sm bg-muted/70" />
+      <div className="rounded-md border border-glass-border bg-card/95 p-3">
+        <div className="h-16 animate-pulse rounded-sm bg-muted/70" />
+      </div>
+      <div className="rounded-md border border-glass-border bg-card/95 p-3">
+        <div className="h-12 animate-pulse rounded-sm bg-muted/70" />
+      </div>
     </div>
   </div>
 );
