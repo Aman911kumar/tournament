@@ -487,6 +487,10 @@
     @apply min-w-0 px-0 py-2;
   }
 
+  .b4a-soft-copy {
+    overflow-wrap: anywhere;
+  }
+
   .b4a-skeleton {
     position: relative;
     isolation: isolate;
@@ -952,6 +956,10 @@
 
   .arena-shell .grid-cols-4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .arena-shell :where(.b4a-soft-copy, .arena-section-copy, .arena-card-text) {
+    display: none !important;
   }
 
 }

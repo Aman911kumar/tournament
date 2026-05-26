@@ -354,7 +354,7 @@ const TournamentsScreen = () => {
   return (
     <PageShell wide contentClassName="max-w-7xl space-y-4 pb-4">
       <PageHeader title="Tournaments" subtitle="Discover live rooms, upcoming events, and prize battles" />
-
+      {/* 
       <Surface neon className="overflow-hidden p-0">
         <div className="relative p-3 sm:p-4 lg:p-5">
           <div className="absolute inset-x-0 top-0 h-px gradient-neon" />
@@ -387,26 +387,26 @@ const TournamentsScreen = () => {
             </div>
           </div>
         </div>
-      </Surface>
+      </Surface> */}
 
-      <div className="grid gap-2.5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <div className="flex min-w-0 items-center gap-2">
         <SearchBox
           value={searchQuery}
           onChange={setSearchQuery}
           placeholder="Search tournament, creator, mode..."
-          className="flex-1"
+          className="min-w-0 flex-1"
         />
         <button
           type="button"
           onClick={() => setShowFilters((value) => !value)}
           className={cn(
-            "arena-focus inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-glass-border bg-card/80 px-4 font-heading text-xs font-bold transition-colors hover:border-primary/45",
+            "arena-focus inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-md border border-glass-border bg-card/80 px-3 font-heading text-[10px] font-bold transition-colors hover:border-primary/45 min-[420px]:gap-2 min-[420px]:px-4 min-[420px]:text-xs",
             showFilters ? "neon-border text-primary" : "text-muted-foreground",
           )}
           aria-label="Toggle tournament filters"
         >
           <SlidersHorizontal className="h-4 w-4" />
-          Filters
+          <span className="hidden min-[360px]:inline">Filters</span>
         </button>
       </div>
 

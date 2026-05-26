@@ -159,7 +159,7 @@ const MenuRow = ({
           {label}
         </span>
         {description && (
-          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+          <span className="b4a-soft-copy mt-0.5 block truncate text-[11px] text-muted-foreground">
             {description}
           </span>
         )}
@@ -226,7 +226,7 @@ const QuickActionCard = ({
       <span className="arena-fluid-title block font-heading font-black uppercase tracking-[0.04em]">
         {label}
       </span>
-      <span className="arena-fluid-copy mt-0.5 line-clamp-2 text-muted-foreground sm:mt-1">
+      <span className="b4a-soft-copy arena-fluid-copy mt-0.5 line-clamp-2 text-muted-foreground sm:mt-1">
         {description}
       </span>
     </span>
@@ -552,7 +552,7 @@ const ProfileScreen = () => {
                     <h2 className="mt-3 font-display text-lg font-black uppercase tracking-tight">
                       {readinessScore}/4 systems ready
                     </h2>
-                    <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
+                    <p className="b4a-soft-copy mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
                       Complete verification and profile setup to keep tournaments, payouts, and account recovery smooth.
                     </p>
                   </div>
@@ -649,7 +649,7 @@ const ProfileScreen = () => {
                     <p className="font-heading text-sm font-black uppercase tracking-[0.06em]">
                       Battle record
                     </p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">
+                    <p className="b4a-soft-copy mt-1 text-[11px] text-muted-foreground">
                       Account snapshot and competitive history.
                     </p>
                   </div>

@@ -163,8 +163,8 @@ const WalletStat = ({
   note: string;
   tone?: string;
 }) => (
-  <div className="wallet-tile wallet-stat arena-fluid-card min-w-0 rounded-lg p-2 sm:rounded-xl sm:p-3">
-    <div className="mb-1.5 flex items-center gap-1.5 sm:mb-2 sm:gap-2">
+  <div className="wallet-tile wallet-stat arena-fluid-card flex min-w-0 items-center gap-2 rounded-lg p-2 sm:block sm:rounded-xl sm:p-3">
+    <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:mb-2 sm:gap-2">
       <span
         className={`arena-icon-cell grid shrink-0 place-items-center rounded-md border border-white/10 bg-background/45 sm:h-8 sm:w-8 sm:rounded-lg ${tone}`}
       >
@@ -174,12 +174,14 @@ const WalletStat = ({
         {label}
       </p>
     </div>
-    <p className="arena-fluid-title font-heading font-black sm:text-lg">
-      {value}
-    </p>
-    <p className="wallet-stat-note arena-fluid-copy mt-0.5 text-muted-foreground sm:mt-1">
-      {note}
-    </p>
+    <div className="min-w-0 shrink-0 text-right sm:text-left">
+      <p className="arena-fluid-title font-heading font-black sm:text-lg">
+        {value}
+      </p>
+      <p className="wallet-stat-note b4a-soft-copy arena-fluid-copy mt-0.5 text-muted-foreground sm:mt-1">
+        {note}
+      </p>
+    </div>
   </div>
 );
 
@@ -563,7 +565,7 @@ const WalletScreen = () => {
                   <span className="live-dot h-2 w-2 rounded-full bg-emerald-300" />
                   Realtime wallet
                 </span>
-                <span className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-background/35 px-3 py-1 text-[11px] text-muted-foreground min-[430px]:inline-flex">
+                <span className="b4a-soft-copy hidden items-center gap-1.5 rounded-full border border-white/10 bg-background/35 px-3 py-1 text-[11px] text-muted-foreground min-[430px]:inline-flex">
                   <ShieldCheck className="h-3.5 w-3.5 text-accent" />
                   Protected by account security
                 </span>
@@ -609,7 +611,7 @@ const WalletScreen = () => {
                 </p>
               )}
 
-              <div className="mt-3 grid grid-cols-1 gap-1.5 min-[390px]:grid-cols-3 sm:mt-6 sm:gap-2">
+              <div className="mt-3 grid grid-cols-1 gap-1.5 min-[560px]:grid-cols-3 sm:mt-6 sm:gap-2">
                 <WalletStat
                   icon={Trophy}
                   label="Player Winnings"
@@ -643,7 +645,7 @@ const WalletScreen = () => {
                 <h2 className="font-heading text-sm font-black">
                   Quick Actions
                 </h2>
-                <p className="hidden text-[11px] text-muted-foreground min-[430px]:block">
+                <p className="b4a-soft-copy hidden text-[11px] text-muted-foreground min-[430px]:block">
                   Fast and secure wallet controls
                 </p>
               </div>
@@ -700,7 +702,7 @@ const WalletScreen = () => {
                       <span className="arena-fluid-title block font-heading font-bold">
                         {action.title}
                       </span>
-                      <span className="wallet-action-desc arena-fluid-copy block text-muted-foreground">
+                      <span className="wallet-action-desc b4a-soft-copy arena-fluid-copy block text-muted-foreground">
                         {action.desc}
                       </span>
                     </span>
@@ -755,7 +757,7 @@ const WalletScreen = () => {
                   ? "Wallet Ledger"
                   : "Payment Activity"}
               </h2>
-              <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground sm:mt-1 sm:text-xs">
+              <p className="b4a-soft-copy mt-0.5 line-clamp-1 text-[11px] text-muted-foreground sm:mt-1 sm:text-xs">
                 Clear status, amount direction, and source for every money
                 movement.
               </p>

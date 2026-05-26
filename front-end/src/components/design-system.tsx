@@ -102,7 +102,7 @@ export const PageHeader = ({
       )}
       <div className="min-w-0">
         <h1 className="arena-title">{title}</h1>
-        {subtitle && <p className="arena-subtitle mt-1">{subtitle}</p>}
+        {subtitle && <p className="arena-subtitle b4a-soft-copy mt-1">{subtitle}</p>}
       </div>
     </div>
     {action && <div className="shrink-0">{action}</div>}
@@ -188,7 +188,7 @@ export const MetricCard = ({
       </span>
     </div>
     {note && (
-      <p className="mt-3 truncate text-xs text-muted-foreground">{note}</p>
+      <p className="b4a-soft-copy mt-3 truncate text-xs text-muted-foreground">{note}</p>
     )}
   </Surface>
 );
