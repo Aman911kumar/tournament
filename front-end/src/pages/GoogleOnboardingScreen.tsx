@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   AlertCircle,
@@ -23,6 +24,7 @@ import { getErrorToast } from "@/lib/page-utils";
 import { toast } from "@/components/ui/sonner";
 import { completeOnboarding, getMyProfile } from "@/api/profile";
 import type { CompleteOnboardingPayload } from "@/api/profile";
+import { setCurrentProfileCache } from "@/hooks/useCurrentProfile";
 
 const LEGAL_LINKS = {
   terms: "/legal/terms",
@@ -92,6 +94,7 @@ const modeTransition = { duration: 0.22, ease: "easeOut" as const };
 
 const GoogleOnboardingScreen = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const shouldReduceMotion = useReducedMotion();
 
   const [loading, setLoading] = useState(true);
@@ -272,6 +275,7 @@ const GoogleOnboardingScreen = () => {
       const res = await completeOnboarding(payload, {
         signal: controller.signal,
       });
+      setCurrentProfileCache(queryClient, res.data.user, res);
       toast.success(res.message || "Onboarding completed.");
       navigate("/", { replace: true });
     } catch (error) {

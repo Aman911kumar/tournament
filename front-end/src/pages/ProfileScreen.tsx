@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -309,6 +309,27 @@ const ProfileScreen = () => {
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [leaveUsernameInput, setLeaveUsernameInput] = useState("");
   const [leavePhraseInput, setLeavePhraseInput] = useState("");
+  const passwordStatusRefetchedForRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const profileId = profile?._id ? String(profile._id) : "";
+    if (
+      !profileId ||
+      !profile?.socialProvider ||
+      profile.passwordLoginEnabled === true ||
+      passwordStatusRefetchedForRef.current === profileId
+    ) {
+      return;
+    }
+
+    passwordStatusRefetchedForRef.current = profileId;
+    void refetchProfile();
+  }, [
+    profile?._id,
+    profile?.passwordLoginEnabled,
+    profile?.socialProvider,
+    refetchProfile,
+  ]);
 
   const stats = [
     { label: "Balance", value: formatCurrency(profile?.walletBalance ?? 0) },
