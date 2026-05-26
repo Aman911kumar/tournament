@@ -211,35 +211,38 @@ const TransactionRow = ({
         ease: "easeOut",
       }}
       onClick={onClick}
-      className="arena-focus wallet-transaction group w-full rounded-lg p-2 text-left sm:rounded-xl sm:p-3"
+      className="arena-focus wallet-transaction group w-full rounded-md p-2 text-left"
     >
-      <div className="wallet-transaction-grid grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[2.75rem_1fr_auto] sm:gap-3">
+      <div className="wallet-transaction-grid grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[2.5rem_1fr_auto] sm:gap-3">
         <span
-          className={`grid h-8 w-8 place-items-center rounded-lg border sm:h-11 sm:w-11 sm:rounded-xl ${credit ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200" : "border-primary/25 bg-primary/10 text-primary"}`}
+          className={`grid h-9 w-9 place-items-center rounded-sm border sm:h-10 sm:w-10 ${credit ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200" : "border-primary/25 bg-primary/10 text-primary"}`}
         >
-          <Icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
+          <Icon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
         </span>
         <span className="min-w-0">
-          <span className="block truncate font-heading text-xs font-bold sm:text-sm">
+          <span className="block truncate font-heading text-[12px] font-bold leading-tight sm:text-sm">
             {transaction.label}
           </span>
-          <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1 text-[10px] text-muted-foreground sm:mt-1 sm:gap-1.5">
-            <span className="truncate">{transaction.date}</span>
-            <span
-              className={`rounded-full border px-1.5 py-px font-heading sm:py-0.5 ${style.bg} ${style.text}`}
-            >
-              {formatTransactionStatus(transaction.status)}
+          <span className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] leading-none text-muted-foreground sm:text-[11px]">
+            <span className="truncate" title={transaction.date}>
+              {transaction.date}
+            </span>
+            <span className="h-1 w-1 shrink-0 rounded-full bg-muted-foreground/45" />
+            <span className="shrink-0">
+              {transaction.kind === "PAYMENT" ? "Gateway" : "Wallet"}
             </span>
           </span>
         </span>
-        <span className="wallet-transaction-amount text-right">
+        <span className="wallet-transaction-amount min-w-[4.75rem] text-right">
           <span
-            className={`block whitespace-nowrap font-heading text-xs font-black sm:text-sm ${credit ? "text-emerald-200" : "text-foreground"}`}
+            className={`block whitespace-nowrap font-heading text-[12px] font-black leading-tight sm:text-sm ${credit ? "text-emerald-200" : "text-foreground"}`}
           >
             {amountLabel}
           </span>
-          <span className="mt-0.5 block text-[10px] text-muted-foreground sm:mt-1">
-            {transaction.kind === "PAYMENT" ? "Gateway" : "Wallet"}
+          <span
+            className={`mt-1 inline-flex max-w-full items-center rounded-sm border px-1.5 py-0.5 font-heading text-[9px] font-bold uppercase leading-none ${style.bg} ${style.text}`}
+          >
+            {formatTransactionStatus(transaction.status)}
           </span>
         </span>
       </div>
@@ -469,12 +472,8 @@ const WalletScreen = () => {
           .live-dot { animation: none; }
         }
         @media (max-width: 420px) {
-          .wallet-transaction-grid {
-            grid-template-columns: 2rem minmax(0, 1fr);
-          }
-          .wallet-transaction-amount {
-            grid-column: 2;
-            text-align: left;
+          .wallet-transaction {
+            padding: 0.5rem;
           }
         }
         @media (max-width: 480px) {
