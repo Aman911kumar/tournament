@@ -213,7 +213,7 @@ const TransactionRow = ({
       onClick={onClick}
       className="arena-focus wallet-transaction group w-full rounded-md p-2 text-left"
     >
-      <div className="wallet-transaction-grid grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[2.5rem_1fr_auto] sm:gap-3">
+      <div className="wallet-transaction-grid grid grid-cols-[2.25rem_minmax(0,1fr)_4.5rem] items-center gap-2 sm:grid-cols-[2.5rem_1fr_5.25rem] sm:gap-3">
         <span
           className={`grid h-9 w-9 place-items-center rounded-sm border sm:h-10 sm:w-10 ${credit ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200" : "border-primary/25 bg-primary/10 text-primary"}`}
         >
@@ -227,13 +227,13 @@ const TransactionRow = ({
             <span className="truncate" title={transaction.date}>
               {transaction.date}
             </span>
-            <span className="h-1 w-1 shrink-0 rounded-full bg-muted-foreground/45" />
-            <span className="shrink-0">
+            <span className="wallet-transaction-separator h-1 w-1 shrink-0 rounded-full bg-muted-foreground/45" />
+            <span className="wallet-transaction-source shrink-0">
               {transaction.kind === "PAYMENT" ? "Gateway" : "Wallet"}
             </span>
           </span>
         </span>
-        <span className="wallet-transaction-amount min-w-[4.75rem] text-right">
+        <span className="wallet-transaction-amount min-w-0 text-right">
           <span
             className={`block whitespace-nowrap font-heading text-[12px] font-black leading-tight sm:text-sm ${credit ? "text-emerald-200" : "text-foreground"}`}
           >
@@ -473,7 +473,25 @@ const WalletScreen = () => {
         }
         @media (max-width: 420px) {
           .wallet-transaction {
-            padding: 0.5rem;
+            padding: 0.375rem 0.5rem;
+          }
+          .wallet-transaction-grid {
+            grid-template-columns: 2rem minmax(0, 1fr) 3.875rem !important;
+            gap: 0.5rem;
+          }
+          .wallet-transaction-source {
+            display: none;
+          }
+          .wallet-transaction-separator {
+            display: none;
+          }
+          .wallet-transaction-amount > span:first-child {
+            font-size: 0.6875rem;
+          }
+          .wallet-transaction-amount > span:last-child {
+            max-width: 100%;
+            padding-inline: 0.25rem;
+            font-size: 0.5rem;
           }
         }
         @media (max-width: 480px) {
