@@ -18,7 +18,7 @@ const BottomNav = () => {
   const { profile } = useCurrentProfile();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.06] bg-[#10151D] pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-glass-border bg-[#10151D] pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto grid h-14 max-w-[520px] grid-cols-5 px-1 min-[380px]:h-16">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;
@@ -40,7 +40,7 @@ const BottomNav = () => {
                 <UserAvatar
                   user={profile}
                   size="xs"
-                  className="ring-1 ring-white/10 transition-transform"
+                  className="ring-1 ring-primary/20 transition-transform"
                 />
               ) : (
                 <tab.icon className="h-[18px] w-[18px] transition-colors min-[380px]:h-5 min-[380px]:w-5" />

@@ -17,6 +17,7 @@ export const PROJECT_CONFIG = {
   urls: {
     corsOrigins: [
       "http://localhost:8080",
+      "http://192.168.29.138:8080",
       "https://battle4arena.fun",
       "https://battle4arena.vercel.app",
     ],

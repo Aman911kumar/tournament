@@ -166,7 +166,7 @@ const WalletStat = ({
   <div className="wallet-tile wallet-stat arena-fluid-card flex min-w-0 items-center gap-2 rounded-lg p-2 sm:block sm:rounded-xl sm:p-3">
     <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:mb-2 sm:gap-2">
       <span
-        className={`arena-icon-cell grid shrink-0 place-items-center rounded-md border border-white/10 bg-background/45 sm:h-8 sm:w-8 sm:rounded-lg ${tone}`}
+        className={`arena-icon-cell grid shrink-0 place-items-center rounded-md border border-glass-border bg-background/45 sm:h-8 sm:w-8 sm:rounded-lg ${tone}`}
       >
         <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       </span>
@@ -558,14 +558,14 @@ const WalletScreen = () => {
             transition={{ duration: 0.22, ease: "easeOut" }}
             className="wallet-hero relative overflow-hidden rounded-md border border-glass-border p-3 sm:p-5"
           >
-            <div className="absolute right-4 top-4 hidden h-16 w-16 border border-white/10 bg-white/5 sm:block" />
+            <div className="absolute right-4 top-4 hidden h-16 w-16 border border-primary/15 bg-primary/5 sm:block" />
             <div className="relative">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-5 sm:gap-3">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 font-heading text-[10px] font-bold text-emerald-200 sm:gap-2 sm:px-3 sm:text-[11px]">
                   <span className="live-dot h-2 w-2 rounded-full bg-emerald-300" />
                   Realtime wallet
                 </span>
-                <span className="b4a-soft-copy hidden items-center gap-1.5 rounded-full border border-white/10 bg-background/35 px-3 py-1 text-[11px] text-muted-foreground min-[430px]:inline-flex">
+                <span className="b4a-soft-copy hidden items-center gap-1.5 rounded-full border border-glass-border bg-background/35 px-3 py-1 text-[11px] text-muted-foreground min-[430px]:inline-flex">
                   <ShieldCheck className="h-3.5 w-3.5 text-accent" />
                   Protected by account security
                 </span>

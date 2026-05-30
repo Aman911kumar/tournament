@@ -127,6 +127,33 @@ const msFromMinutes = (minutes, fallbackMinutes) =>
 const msFromDays = (days, fallbackDays) =>
     clampInt(days, 1, 365, fallbackDays) * 24 * 60 * 60 * 1000;
 
+const PROFILE_VERIFICATION_EXPIRES_MINUTES = clampInt(
+    process.env.PROFILE_VERIFICATION_EXPIRY_MINUTES,
+    5,
+    60 * 24,
+    30
+);
+const PROFILE_VERIFICATION_RESEND_COOLDOWN_MS = msFromMinutes(
+    process.env.PROFILE_VERIFICATION_RESEND_COOLDOWN_MINUTES,
+    1
+);
+
+const getProfileVerificationCooldownMs = (expiresAt) => {
+    const expiresAtMs = expiresAt ? new Date(expiresAt).getTime() : 0;
+    if (!expiresAtMs || expiresAtMs <= Date.now()) return 0;
+
+    const issuedAtMs = expiresAtMs - PROFILE_VERIFICATION_EXPIRES_MINUTES * 60 * 1000;
+    return Math.max(0, PROFILE_VERIFICATION_RESEND_COOLDOWN_MS - (Date.now() - issuedAtMs));
+};
+
+const throwVerificationCooldown = (cooldownMs, label) => {
+    if (cooldownMs <= 0) return;
+    throw new ApiError(
+        429,
+        `${label} verification was sent recently. Try again in ${Math.ceil(cooldownMs / 1000)} seconds.`
+    );
+};
+
 const randomOtpCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
 const sha256Hex = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
@@ -1870,6 +1897,8 @@ const updateUserProfile = asyncHandler(async (req, res) => {
         }
         updates.phone_number = nextPhoneNumber;
         updates.phoneVerified = false;
+        updates.phoneVerificationToken = undefined;
+        updates.phoneVerificationExpires = undefined;
     }
 
     if (emailChanged) {
@@ -1879,6 +1908,8 @@ const updateUserProfile = asyncHandler(async (req, res) => {
         }
         updates.email = nextEmail;
         updates.emailVerified = false;
+        updates.emailVerificationToken = undefined;
+        updates.emailVerificationExpires = undefined;
     }
 
     if (gamenameChanged) updates.gamename = gamename.trim();
@@ -2027,9 +2058,14 @@ const verifyProfileEmail = asyncHandler(async (req, res) => {
         );
     }
 
+    throwVerificationCooldown(
+        getProfileVerificationCooldownMs(user.emailVerificationExpires),
+        "Email"
+    );
+
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-    const expiresInMinutes = 30;
+    const expiresInMinutes = PROFILE_VERIFICATION_EXPIRES_MINUTES;
 
     user.emailVerificationToken = tokenHash;
     user.emailVerificationExpires = new Date(Date.now() + expiresInMinutes * 60 * 1000);
@@ -2045,7 +2081,19 @@ const verifyProfileEmail = asyncHandler(async (req, res) => {
 
     const updatedUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
     return res.status(200).json(
-        new ApiResponse(200, { user: await buildUserProfileResponse(updatedUser) }, "Verification email sent")
+        new ApiResponse(
+            200,
+            {
+                user: await buildUserProfileResponse(updatedUser),
+                verification: {
+                    type: "email",
+                    delivery: "email",
+                    expiresInSeconds: expiresInMinutes * 60,
+                    resendCooldownSeconds: Math.ceil(PROFILE_VERIFICATION_RESEND_COOLDOWN_MS / 1000),
+                },
+            },
+            "Verification link sent to your email"
+        )
     );
 });
 
@@ -2093,6 +2141,13 @@ const verifyProfilePhone = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Add a valid email before phone verification");
     }
 
+    const hasVerifiedEmailProvider = Boolean(
+        (user.linkedProviders || []).some((link) => link.provider === "email" && link.verified)
+    );
+    if (!user.emailVerified && !hasVerifiedEmailProvider) {
+        throw new ApiError(400, "Verify your email before phone verification");
+    }
+
     if (user.phoneVerified) {
         const currentUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
         return res.status(200).json(
@@ -2100,9 +2155,14 @@ const verifyProfilePhone = asyncHandler(async (req, res) => {
         );
     }
 
+    throwVerificationCooldown(
+        getProfileVerificationCooldownMs(user.phoneVerificationExpires),
+        "Phone"
+    );
+
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-    const expiresInMinutes = 30;
+    const expiresInMinutes = PROFILE_VERIFICATION_EXPIRES_MINUTES;
 
     user.phoneVerificationToken = tokenHash;
     user.phoneVerificationExpires = new Date(Date.now() + expiresInMinutes * 60 * 1000);
@@ -2119,7 +2179,19 @@ const verifyProfilePhone = asyncHandler(async (req, res) => {
 
     const updatedUser = await User.findById(user._id).select("-password -refreshToken -accessToken");
     return res.status(200).json(
-        new ApiResponse(200, { user: await buildUserProfileResponse(updatedUser) }, "Phone verification email sent")
+        new ApiResponse(
+            200,
+            {
+                user: await buildUserProfileResponse(updatedUser),
+                verification: {
+                    type: "phone",
+                    delivery: "email",
+                    expiresInSeconds: expiresInMinutes * 60,
+                    resendCooldownSeconds: Math.ceil(PROFILE_VERIFICATION_RESEND_COOLDOWN_MS / 1000),
+                },
+            },
+            "Phone verification link sent to your email"
+        )
     );
 });
 

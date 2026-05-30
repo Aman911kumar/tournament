@@ -148,7 +148,7 @@ const ArenaBackground = () => (
       className="absolute inset-0 opacity-[0.04] mix-blend-overlay"
       style={{
         backgroundImage:
-          "repeating-linear-gradient(0deg, rgba(255,255,255,0.6) 0px, rgba(255,255,255,0.6) 1px, transparent 1px, transparent 4px)",
+          "repeating-linear-gradient(0deg, hsl(var(--primary)/0.4) 0px, hsl(var(--primary)/0.4) 1px, transparent 1px, transparent 4px)",
       }}
     />
   </div>
@@ -524,6 +524,14 @@ const CreatorSection = () => (
           A complete organizer dashboard with room ID/password management, moderation tools,
           revenue reporting and audience growth - without leaving the app.
         </motion.p>
+        <motion.div variants={fadeUp} className="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-3">
+          <p className="font-heading text-xs font-bold uppercase tracking-[0.12em] text-primary">
+            Follow trusted esports organizers
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Discover verified creators by followers, live activity, ratings, and tournament consistency.
+          </p>
+        </motion.div>
         <motion.ul variants={stagger} className="mt-6 space-y-3">
           {[
             "Secure room code distribution to verified players",

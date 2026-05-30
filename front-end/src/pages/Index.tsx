@@ -2,19 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  BellRing,
   ChevronRight,
   Crown,
   Flame,
   Gamepad2,
   Radio,
   Search,
-  ShieldCheck,
   Sparkles,
   Trophy,
-  Users,
-  WalletCards,
-  Zap,
 } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
 import GameArtImage from "@/components/GameArtImage";
@@ -311,11 +306,13 @@ const Index = () => {
               <Radio className="h-3.5 w-3.5" />
               {liveTournaments.length > 0 ? "LIVE ECOSYSTEM" : "MATCH DISCOVERY"}
             </div>
-            <h1 className="mt-4 max-w-2xl font-heading text-3xl font-black leading-[0.98] sm:text-4xl lg:text-5xl">
-              Find your next arena, squad up, and win real rewards.
+            <h1 className="mt-4 max-w-2xl font-heading text-2xl font-black leading-tight sm:text-3xl lg:text-4xl">
+              {featuredTournament?.title ?? (liveTournaments.length > 0 ? "Live tournaments are open" : "Tournament hub")}
             </h1>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Browse live rooms, follow trusted creators, and jump into mobile-first esports tournaments built for fast play.
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              {featuredTournament
+                ? `${gameLabels[featuredTournament.game] ?? featuredTournament.game} - ${formatPrizeSummary(featuredTournament)}`
+                : "Browse matches, creators, and live rooms from one compact esports feed."}
             </p>
 
             <div className="mt-5 flex flex-col gap-2 min-[420px]:flex-row">
@@ -480,94 +477,64 @@ const Index = () => {
         </div>
       </section>
 
-      <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.75fr)]">
-        <div>
-          <SectionHeading
-            icon={Crown}
-            title="Featured Creators"
-            action={
-              <button
-                type="button"
-                onClick={() => navigate("/subscriptions")}
-                className="arena-focus inline-flex items-center gap-1 rounded-lg px-2 py-1 font-heading text-xs font-bold text-primary"
-              >
-                Discover <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            }
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
-            {recommendedCreators.slice(0, 4).map((creator) => (
-              <Surface
-                key={creator._id}
-                interactive
-                onClick={() => navigate(`/creator/${creator._id}`)}
-                className="overflow-hidden p-0"
-              >
-                <div className="h-16 bg-gradient-to-r from-primary/30 via-secondary/20 to-accent/20">
-                  {(creator.banner?.url || creator.owner?.banner?.url) && (
-                    <img
-                      src={creator.banner?.url ?? creator.owner?.banner?.url}
-                      alt=""
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                    />
-                  )}
-                </div>
-                <div className="-mt-6 flex items-end gap-3 px-3 pb-3">
-                  <UserAvatar
-                    user={{
-                      _id: creator.owner?._id,
-                      username: creator.name,
-                      avatar: { url: creator.avatar?.url ?? creator.owner?.avatar?.url },
-                      role: ["creator"],
-                    }}
-                    size="xl"
+      <section>
+        <SectionHeading
+          icon={Crown}
+          title="Featured Creators"
+          action={
+            <button
+              type="button"
+              onClick={() => navigate("/subscriptions")}
+              className="arena-focus inline-flex items-center gap-1 rounded-lg px-2 py-1 font-heading text-xs font-bold text-primary"
+            >
+              Discover <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          }
+        />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {recommendedCreators.slice(0, 4).map((creator) => (
+            <Surface
+              key={creator._id}
+              interactive
+              onClick={() => navigate(`/creator/${creator._id}`)}
+              className="overflow-hidden p-0"
+            >
+              <div className="h-14 bg-gradient-to-r from-primary/30 via-secondary/20 to-accent/20">
+                {(creator.banner?.url || creator.owner?.banner?.url) && (
+                  <img
+                    src={creator.banner?.url ?? creator.owner?.banner?.url}
+                    alt=""
+                    loading="lazy"
+                    className="h-full w-full object-cover"
                   />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-heading text-sm font-black">{creator.name}</p>
-                    <p className="truncate text-[11px] text-muted-foreground">@{creator.handle}</p>
-                  </div>
-                  <StatusPill tone={creator.isActive ? "accent" : "muted"}>
-                    {creator.isActive ? "Active" : "Creator"}
-                  </StatusPill>
+                )}
+              </div>
+              <div className="-mt-5 flex items-end gap-2.5 px-3 pb-3">
+                <UserAvatar
+                  user={{
+                    _id: creator.owner?._id,
+                    username: creator.name,
+                    avatar: { url: creator.avatar?.url ?? creator.owner?.avatar?.url },
+                    role: ["creator"],
+                  }}
+                  size="lg"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-heading text-sm font-black">{creator.name}</p>
+                  <p className="truncate text-[11px] text-muted-foreground">@{creator.handle}</p>
                 </div>
-                <div className="grid grid-cols-3 gap-2 border-t border-glass-border/70 px-3 py-2.5 text-center text-[10px] text-muted-foreground">
-                  <span><b className="block font-heading text-xs text-foreground">{formatCompactNumber(creator.memberCount)}</b>Followers</span>
-                  <span><b className="block font-heading text-xs text-foreground">{creator.tournamentCount ?? creator.ranking?.activeTournaments ?? 0}</b>Events</span>
-                  <span><b className="block font-heading text-xs text-accent">{Number(creator.owner?.stats?.rating || creator.ranking?.rating || 0).toFixed(1)}</b>Rating</span>
-                </div>
-              </Surface>
-            ))}
-          </div>
+                <StatusPill tone={creator.isActive ? "accent" : "muted"}>
+                  {creator.isActive ? "Active" : "Creator"}
+                </StatusPill>
+              </div>
+              <div className="grid grid-cols-3 gap-1 border-t border-glass-border/70 px-3 py-2 text-center text-[10px] text-muted-foreground">
+                <span><b className="block font-heading text-xs text-foreground">{formatCompactNumber(creator.memberCount)}</b>Followers</span>
+                <span><b className="block font-heading text-xs text-foreground">{creator.tournamentCount ?? creator.ranking?.activeTournaments ?? 0}</b>Events</span>
+                <span><b className="block font-heading text-xs text-accent">{Number(creator.owner?.stats?.rating || creator.ranking?.rating || 0).toFixed(1)}</b>Rating</span>
+              </div>
+            </Surface>
+          ))}
         </div>
-
-        <Surface className="p-3 sm:p-4">
-          <div className="flex items-center gap-2">
-            <WalletCards className="h-4 w-4 text-accent" />
-            <p className="font-heading text-sm font-black">Rewards Preview</p>
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Join tournaments, claim winnings, follow reliable creators, and keep room alerts synced from one mobile-first esports hub.
-          </p>
-          <div className="mt-4 grid gap-2">
-            {[
-              { icon: ShieldCheck, label: "Verified creators", value: `${recommendedCreators.filter((c) => c.isActive).length}+ active` },
-              { icon: BellRing, label: "Room alerts", value: "Chat + push ready" },
-              { icon: Zap, label: "Fast routing", value: "Optimized API cache" },
-            ].map((item) => {
-              const Icon = item.icon;
-              return (
-                <div key={item.label} className="flex items-center justify-between gap-3 rounded-xl border border-glass-border bg-background/35 p-2.5">
-                  <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                    <Icon className="h-4 w-4 text-primary" />
-                    {item.label}
-                  </span>
-                  <span className="font-heading text-xs font-bold">{item.value}</span>
-                </div>
-              );
-            })}
-          </div>
-        </Surface>
       </section>
     </PageShell>
   );

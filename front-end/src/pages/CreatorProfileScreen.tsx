@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -65,7 +65,16 @@ const statusTone: Record<
   cancelled: "muted",
 };
 
-const ratingSteps = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
+const starRatingOptions = [
+  { value: 5, title: "Excellent!" },
+  { value: 4, title: "Great!" },
+  { value: 3, title: "Good" },
+  { value: 2, title: "Okay" },
+  { value: 1, title: "Bad" },
+] as const;
+
+const starPath =
+  "M316.9 18C311.6 7 300.4 0 288.1 0s-23.4 7-28.8 18L195 150.3 51.4 171.5c-12 1.8-22 10.2-25.7 21.7s-.7 24.2 7.9 32.7L137.8 329 113.2 474.7c-2 12 3 24.2 12.9 31.3s23 8 33.8 2.3l128.3-68.5 128.3 68.5c10.8 5.7 23.9 4.9 33.8-2.3s14.9-19.3 12.9-31.3L438.5 329 542.7 225.9c8.6-8.5 11.7-21.2 7.9-32.7s-13.7-19.9-25.7-21.7L381.2 150.3 316.9 18z";
 
 const normalizeRatingValue = (value?: number | null) => {
   const numeric = Number(value);
@@ -81,19 +90,24 @@ const getRatingDraftValue = (profile?: CreatorProfileData | null) => {
   return ownRating ?? averageRating ?? 4;
 };
 
+const getStarDraftValue = (profile?: CreatorProfileData | null) =>
+  Math.min(5, Math.max(1, Math.round(getRatingDraftValue(profile))));
+
 const stripViewerState = (profile: CreatorProfileData): CreatorProfileData => ({
   ...profile,
   viewer: undefined,
 });
 
 const getTournamentFill = (tournament: Tournament) => {
-  const taken = Number(
-    tournament.participantCount ??
-      tournament.registrationCount ??
-      tournament.joinedPlayers?.length ??
-      0,
-  );
-  const capacity = Number(tournament.maxTeams || tournament.maxPlayers || 0);
+  const capacity = Number(tournament.maxPlayers || 0);
+  const teamCapacity = Number(tournament.maxTeams || 0);
+  const participantCount = Number(tournament.participantCount || 0);
+  const joinedPlayerCount = Array.isArray(tournament.joinedPlayers)
+    ? tournament.joinedPlayers.length
+    : 0;
+  const registrationCount = Number(tournament.registrationCount || 0);
+  const booked = Math.max(participantCount, joinedPlayerCount, registrationCount);
+  const taken = capacity ? Math.min(booked, capacity) : booked;
   const percent = capacity
     ? Math.min(100, Math.max(0, Math.round((taken / capacity) * 100)))
     : 0;
@@ -103,6 +117,8 @@ const getTournamentFill = (tournament: Tournament) => {
     taken,
     remaining: capacity ? Math.max(capacity - taken, 0) : 0,
     percent,
+    teamCapacity,
+    teamBooked: registrationCount,
   };
 };
 
@@ -134,6 +150,53 @@ const RatingStars = ({
     })}
   </div>
 );
+
+const StarRatingInput = ({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: number;
+  disabled?: boolean;
+  onChange: (value: number) => void;
+}) => {
+  const controlId = useId();
+  const selectedValue = Math.min(5, Math.max(1, Math.round(value || 0)));
+
+  return (
+    <div
+      className={cn("b4a-star-rating", disabled && "is-disabled")}
+      aria-label="Select creator rating"
+    >
+      {starRatingOptions.map((option) => {
+        const inputId = `${controlId}-star-${option.value}`;
+        return (
+          <Fragment key={option.value}>
+            <input
+              type="radio"
+              id={inputId}
+              name={`${controlId}-creator-rating`}
+              value={option.value}
+              checked={selectedValue === option.value}
+              disabled={disabled}
+              onChange={() => onChange(option.value)}
+            />
+            <label
+              title={option.title}
+              htmlFor={inputId}
+              data-rating={option.value}
+              aria-label={`${option.value} star${option.value === 1 ? "" : "s"}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" aria-hidden="true">
+                <path d={starPath} />
+              </svg>
+            </label>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+};
 
 const CreatorProfileSkeleton = () => (
   <div className="space-y-3 sm:space-y-4">
@@ -229,19 +292,24 @@ const CreatorTournamentCard = ({
 
       <div className="space-y-3 p-3 sm:p-4">
         <div className="grid grid-cols-3 gap-2">
-          <div className="min-w-0 rounded-lg border border-white/10 bg-background/45 p-2">
+          <div className="min-w-0 rounded-lg border border-glass-border bg-background/45 p-2">
             <p className="text-[10px] text-muted-foreground">Prize</p>
             <p className="truncate font-heading text-xs font-bold text-accent">
               {formatPrizeSummary(tournament)}
             </p>
           </div>
-          <div className="min-w-0 rounded-lg border border-white/10 bg-background/45 p-2">
-            <p className="text-[10px] text-muted-foreground">Slots</p>
+          <div className="min-w-0 rounded-lg border border-glass-border bg-background/45 p-2">
+            <p className="text-[10px] text-muted-foreground">Booked</p>
             <p className="font-heading text-xs font-bold">
-              {fill.taken}/{fill.capacity || tournament.maxPlayers}
+              {fill.taken}/{fill.capacity || "-"}
             </p>
+            {fill.teamCapacity > 0 && (
+              <p className="mt-0.5 truncate text-[9px] text-muted-foreground">
+                {fill.teamBooked}/{fill.teamCapacity} teams
+              </p>
+            )}
           </div>
-          <div className="min-w-0 rounded-lg border border-white/10 bg-background/45 p-2">
+          <div className="min-w-0 rounded-lg border border-glass-border bg-background/45 p-2">
             <p className="text-[10px] text-muted-foreground">Mode</p>
             <p className="truncate font-heading text-xs font-bold capitalize">
               {tournament.gameMode || tournament.type}
@@ -295,7 +363,7 @@ const CreatorProfileScreen = () => {
     setProfile(nextProfile);
     setIsFollowing(Boolean(nextProfile.viewer?.isFollowing));
     setMyRating(normalizeRatingValue(nextProfile.viewer?.myRating));
-    setDraftRating(getRatingDraftValue(nextProfile));
+    setDraftRating(getStarDraftValue(nextProfile));
   }, []);
 
   const loadProfile = useCallback(async () => {
@@ -505,43 +573,23 @@ const CreatorProfileScreen = () => {
       </div>
 
       <div className="rounded-xl border border-glass-border bg-background/58 p-3">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 min-[430px]:flex-row min-[430px]:items-center min-[430px]:justify-between">
           <span className="min-w-0 truncate text-[11px] text-muted-foreground">
             {ratingStatusText}
           </span>
           <span className="font-heading text-sm font-bold text-accent">
-            {draftRating.toFixed(1)}
+            {draftRating.toFixed(0)}/5
           </span>
         </div>
-        <input
-          type="range"
-          min={1}
-          max={5}
-          step={0.5}
-          value={draftRating}
-          onChange={(event) => setDraftRating(Number(event.target.value))}
-          disabled={!canSubmitRating || ratingLoading}
-          className="mt-3 w-full accent-[hsl(var(--accent))] disabled:opacity-50"
-          aria-label="Select creator rating"
-        />
-        <div className="mt-3 grid grid-cols-5 gap-1 sm:grid-cols-9">
-          {ratingSteps.map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setDraftRating(value)}
-              disabled={!canSubmitRating || ratingLoading}
-              className={cn(
-                "arena-focus rounded-lg border px-1.5 py-1.5 font-heading text-[10px] transition-colors disabled:opacity-50",
-                draftRating === value
-                  ? "border-accent bg-accent/15 text-accent"
-                  : "border-glass-border text-muted-foreground hover:border-accent/50 hover:text-accent",
-              )}
-            >
-              {value.toFixed(1)}
-            </button>
-          ))}
+
+        <div className="mt-3 flex items-center justify-center rounded-lg bg-[#0D1117]/75 px-3 py-3">
+          <StarRatingInput
+            value={draftRating}
+            onChange={setDraftRating}
+            disabled={!canSubmitRating || ratingLoading}
+          />
         </div>
+
         {!currentUserId && (
           <button
             type="button"
@@ -650,14 +698,14 @@ const CreatorProfileScreen = () => {
                 <button
                   type="button"
                   onClick={() => setReportOpen(true)}
-                  className="arena-focus grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/[0.045] transition-colors hover:border-destructive/40 hover:text-destructive"
+                  className="arena-focus grid h-9 w-9 place-items-center rounded-xl border border-destructive/30 bg-destructive/10 text-destructive transition-colors hover:border-destructive/55 hover:bg-destructive/15"
                   title="Report creator"
                 >
                   <Flag className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
-                  className="arena-focus grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/[0.045] text-muted-foreground transition-colors hover:border-secondary/40 hover:text-secondary"
+                  className="arena-focus grid h-9 w-9 place-items-center rounded-xl border border-glass-border bg-secondary/[0.045] text-muted-foreground transition-colors hover:border-secondary/40 hover:text-secondary"
                   title="Message creator"
                 >
                   <MessageCircle className="h-4 w-4" />
@@ -886,7 +934,7 @@ const CreatorProfileScreen = () => {
                   Cancel
                 </NeonButton>
                 <NeonButton
-                  variant="purple"
+                  variant="danger"
                   onClick={handleReportCreator}
                   disabled={reportLoading}
                 >

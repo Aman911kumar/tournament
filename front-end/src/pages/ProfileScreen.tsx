@@ -55,7 +55,6 @@ import {
   Surface,
 } from "@/components/design-system";
 import { cn } from "@/lib/utils";
-import UiPreferencesPanel from "@/components/UiPreferencesPanel";
 
 const menuItems = [
   { icon: Edit, label: "Edit Profile", description: "Avatar, banner, username", route: "/edit-profile" },
@@ -138,7 +137,7 @@ const MenuRow = ({
     type="button"
     onClick={onClick}
     disabled={disabled}
-    className="arena-focus flex min-h-[54px] w-full items-center justify-between gap-3 rounded-md border border-glass-border bg-[#0D1117] px-3 py-2.5 text-left transition-colors hover:border-primary/35 hover:bg-[#101824] disabled:cursor-not-allowed disabled:opacity-60"
+    className="arena-focus flex min-h-[48px] w-full items-center justify-between gap-3 border-b border-[#1B2532] bg-transparent px-2.5 py-2 text-left transition-colors last:border-b-0 hover:bg-primary/[0.04] disabled:cursor-not-allowed disabled:opacity-60"
   >
     <div className="flex min-w-0 items-center gap-3">
       <span
@@ -192,7 +191,7 @@ const MenuSection = ({
     >
       {title}
     </h2>
-    <Surface className="space-y-1.5 bg-[#101620] p-2 sm:space-y-2 sm:p-3">{children}</Surface>
+    <Surface className="overflow-hidden border-[#1B2532] bg-[#101620]/80 p-0">{children}</Surface>
   </section>
 );
 
@@ -212,7 +211,7 @@ const QuickActionCard = ({
   <button
     type="button"
     onClick={onClick}
-    className="arena-focus arena-fluid-card group flex min-w-0 items-center gap-2 rounded-md border border-glass-border bg-[#101620] p-2 text-left transition-colors hover:border-primary/40 hover:bg-[#121A26] sm:block sm:p-3"
+    className="arena-focus group flex min-w-0 items-center gap-2 border border-[#1B2532] bg-[#101620]/80 p-2 text-left transition-colors hover:border-primary/25 hover:bg-[#121A26] sm:min-h-[72px]"
   >
     <span
       className={cn(
@@ -273,7 +272,7 @@ const ReadinessItem = ({
       <button
         type="button"
         onClick={onClick}
-        className="arena-focus flex w-full items-center gap-3 rounded-md border border-glass-border bg-[#0D1117] p-2.5 text-left transition-colors hover:border-primary/35 hover:bg-[#101824]"
+        className="arena-focus flex w-full items-center gap-3 border-b border-[#1B2532] bg-transparent px-2.5 py-2 text-left transition-colors last:border-b-0 hover:bg-primary/[0.04]"
       >
         {content}
       </button>
@@ -281,7 +280,7 @@ const ReadinessItem = ({
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-md border border-glass-border bg-[#0D1117] p-2.5">
+    <div className="flex items-center gap-3 border-b border-[#1B2532] bg-transparent px-2.5 py-2 last:border-b-0">
       {content}
     </div>
   );
@@ -489,6 +488,22 @@ const ProfileScreen = () => {
       route: "/game-accounts",
     },
   ];
+  const battleRecordItems = profile
+    ? [
+        { label: "Last login", value: formatDateLabel(profile.lastLoginAt) },
+        { label: "Joined", value: formatDateLabel(profile.createdAt) },
+        {
+          label: "Kills",
+          value: profile.stats?.kills ?? 0,
+          className: "text-accent",
+        },
+        {
+          label: "Status",
+          value: profile.isActive ? "Active" : "Restricted",
+          className: profile.isActive ? "text-accent" : "text-destructive",
+        },
+      ]
+    : [];
 
   return (
     <PageShell contentClassName="max-w-6xl space-y-3 pb-6 sm:space-y-4">
@@ -563,7 +578,7 @@ const ProfileScreen = () => {
 
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
             <div className="space-y-3">
-              <Surface neon className="bg-[#101620] p-3 sm:p-4">
+              <Surface className="border-[#1B2532] bg-[#101620] p-3 sm:p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <div className="inline-flex items-center gap-1.5 rounded-sm border border-primary/25 bg-primary/10 px-2.5 py-1 font-heading text-[10px] font-bold uppercase tracking-[0.08em] text-primary">
@@ -664,51 +679,34 @@ const ProfileScreen = () => {
             </div>
 
             <aside className="space-y-3">
-              <Surface className="bg-[#101620] p-3 sm:p-4">
+              <Surface className="overflow-hidden border-[#1B2532] bg-[#101620]/80 p-0">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="min-w-0 px-3 py-2.5">
                     <p className="font-heading text-sm font-black uppercase tracking-[0.06em]">
                       Battle record
                     </p>
-                    <p className="b4a-soft-copy mt-1 text-[11px] text-muted-foreground">
-                      Account snapshot and competitive history.
-                    </p>
                   </div>
-                  <Trophy className="h-5 w-5 text-primary" />
+                  <Trophy className="mr-3 h-5 w-5 text-primary" />
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div className="rounded-md border border-glass-border bg-[#0D1117] p-2.5">
-                    <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Last login
-                    </p>
-                    <p className="mt-1 truncate font-heading text-xs font-bold">
-                      {formatDateLabel(profile.lastLoginAt)}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-glass-border bg-[#0D1117] p-2.5">
-                    <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Joined
-                    </p>
-                    <p className="mt-1 truncate font-heading text-xs font-bold">
-                      {formatDateLabel(profile.createdAt)}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-glass-border bg-[#0D1117] p-2.5">
-                    <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Kills
-                    </p>
-                    <p className="mt-1 truncate font-heading text-xs font-bold text-accent">
-                      {profile.stats?.kills ?? 0}
-                    </p>
-                  </div>
-                  <div className="rounded-md border border-glass-border bg-[#0D1117] p-2.5">
-                    <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Status
-                    </p>
-                    <p className={cn("mt-1 truncate font-heading text-xs font-bold", profile.isActive ? "text-accent" : "text-destructive")}>
-                      {profile.isActive ? "Active" : "Restricted"}
-                    </p>
-                  </div>
+                <div className="border-t border-[#1B2532]">
+                  {battleRecordItems.map((item) => (
+                    <div
+                      key={item.label}
+                      className="flex items-center justify-between gap-3 border-b border-[#1B2532] px-3 py-2 last:border-b-0"
+                    >
+                      <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {item.label}
+                      </p>
+                      <p
+                        className={cn(
+                          "min-w-0 truncate text-right font-heading text-xs font-bold",
+                          item.className,
+                        )}
+                      >
+                        {item.value}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </Surface>
 
@@ -739,8 +737,6 @@ const ProfileScreen = () => {
                   />
                 ))}
               </MenuSection>
-
-              <UiPreferencesPanel />
 
               <MenuSection title="Critical Section" danger>
                 {isCreator && (
@@ -796,7 +792,7 @@ const ProfileScreen = () => {
                 value={leaveUsernameInput}
                 onChange={(event) => setLeaveUsernameInput(event.target.value)}
                 placeholder={profile?.username || "username"}
-                className="arena-focus w-full rounded-xl border border-glass-border bg-transparent px-3 py-2.5 font-heading text-sm focus:border-destructive"
+                className="arena-focus w-full rounded-xl border border-[#1B2532] bg-transparent px-3 py-2.5 font-heading text-sm focus:border-destructive"
               />
             </div>
 
@@ -809,7 +805,7 @@ const ProfileScreen = () => {
                 value={leavePhraseInput}
                 onChange={(event) => setLeavePhraseInput(event.target.value)}
                 placeholder={LEAVE_CREATOR_CONFIRM_TEXT}
-                className="arena-focus w-full rounded-xl border border-glass-border bg-transparent px-3 py-2.5 font-heading text-sm focus:border-destructive"
+                className="arena-focus w-full rounded-xl border border-[#1B2532] bg-transparent px-3 py-2.5 font-heading text-sm focus:border-destructive"
               />
             </div>
 
@@ -818,7 +814,7 @@ const ProfileScreen = () => {
                 type="button"
                 onClick={() => setLeaveDialogOpen(false)}
                 disabled={creatorLoading}
-                className="arena-focus rounded-xl border border-glass-border px-4 py-2 font-heading text-sm text-foreground disabled:opacity-60"
+                className="arena-focus rounded-xl border border-[#1B2532] px-4 py-2 font-heading text-sm text-foreground disabled:opacity-60"
               >
                 Cancel
               </button>

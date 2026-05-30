@@ -21,6 +21,7 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   Trash2,
   TrendingUp,
   Trophy,
@@ -161,6 +162,7 @@ const CreatorDashboardScreen = () => {
   const [creatorProfile, setCreatorProfile] = useState<ProfileUser | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof statusFilters)[number]>("all");
+  const [showTournamentFilters, setShowTournamentFilters] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [updatingVisibilityId, setUpdatingVisibilityId] = useState<string | null>(null);
@@ -838,30 +840,61 @@ const CreatorDashboardScreen = () => {
           <span className="text-[10px] text-muted-foreground font-heading">{filteredTournaments.length} shown</span>
         </div>
 
-        <div className="glass rounded-lg flex items-center gap-2 px-3 py-2 mb-3">
-          <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search created tournaments..."
-            className="min-w-0 flex-1 bg-transparent text-xs font-heading focus:outline-none placeholder:text-muted-foreground/50"
-          />
+        <div className="mb-3 flex min-w-0 items-center gap-2">
+          <div className="glass flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-lg px-3 py-2">
+            <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search created tournaments..."
+              className="min-w-0 flex-1 bg-transparent text-xs font-heading focus:outline-none placeholder:text-muted-foreground/50"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowTournamentFilters((value) => !value)}
+            className={`arena-focus inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 font-heading text-[10px] font-bold transition-colors ${
+              showTournamentFilters || status !== "all"
+                ? "border-primary/45 text-primary neon-border"
+                : "border-glass-border bg-card/80 text-muted-foreground"
+            }`}
+            aria-label="Toggle creator tournament filters"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            <span className="hidden min-[360px]:inline">Filters</span>
+          </button>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide mb-3">
-          {statusFilters.map((filter) => (
-            <button
-              key={filter}
-              type="button"
-              onClick={() => setStatus(filter)}
-              className={`px-3 py-1.5 rounded-full text-[10px] font-heading font-medium capitalize whitespace-nowrap transition-colors ${
-                status === filter ? "bg-primary text-primary-foreground neon-glow-purple" : "glass text-muted-foreground"
-              }`}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
+        {showTournamentFilters && (
+          <div className="glass mb-3 rounded-lg p-2">
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+              {statusFilters.map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setStatus(filter)}
+                  className={`px-3 py-1.5 rounded-md text-[10px] font-heading font-medium capitalize whitespace-nowrap transition-colors ${
+                    status === filter ? "bg-primary text-primary-foreground neon-glow-purple" : "text-muted-foreground hover:bg-muted/60"
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+            {status !== "all" && (
+              <div className="mt-2 flex items-center justify-between gap-3 border-t border-glass-border pt-2 text-[11px] text-muted-foreground">
+                <span>Showing {status} tournaments.</span>
+                <button
+                  type="button"
+                  onClick={() => setStatus("all")}
+                  className="arena-focus shrink-0 rounded-sm font-heading font-bold text-primary"
+                >
+                  Reset
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="space-y-3">
           {loading && skeletonCards(5)}
@@ -1255,7 +1288,7 @@ const CreatorDashboardScreen = () => {
                               type="button"
                               onClick={() => handleReportPlayer(player)}
                               disabled={busy}
-                              className={`${tournamentActionButtonBase} ${actionButtonClass.secondary}`}
+                              className={`${tournamentActionButtonBase} ${actionButtonClass.destructive}`}
                             >
                               <Flag className="h-3 w-3" />
                               Report
@@ -1357,7 +1390,7 @@ const CreatorDashboardScreen = () => {
                       ? "bg-destructive text-destructive-foreground"
                       : moderationIntent.type === "unban"
                         ? "bg-accent text-accent-foreground"
-                        : "bg-secondary text-secondary-foreground"
+                        : "bg-destructive text-destructive-foreground"
                   }`}
                 >
                   {moderationActionId === moderationIntent.player.id ? "Saving..." : "Confirm"}

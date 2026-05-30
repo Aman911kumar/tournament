@@ -43,7 +43,7 @@ const typeColor: Record<NotificationType, string> = {
   creator: "text-primary",
   reward: "text-accent",
   security: "text-destructive",
-  report: "text-secondary",
+  report: "text-destructive",
   moderation: "text-destructive",
 };
 
@@ -127,7 +127,7 @@ const NotificationBell = () => {
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button
-          className="arena-focus relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-[#0D1117] text-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.08)] transition-colors hover:border-primary/55 hover:bg-[#101824] hover:text-primary sm:h-10 sm:w-10"
+          className="arena-focus relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-glass-border bg-[#0D1117] text-foreground shadow-[inset_0_1px_0_hsl(var(--primary)/0.08)] transition-colors hover:border-primary/55 hover:bg-[#101824] hover:text-primary sm:h-10 sm:w-10"
           aria-label="Notifications"
         >
           <Bell className="h-4 w-4" />
@@ -138,8 +138,8 @@ const NotificationBell = () => {
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={10} className="w-[min(380px,calc(100vw-24px))] overflow-hidden rounded-lg border-white/10 bg-[#0D1117] p-0 shadow-[0_24px_80px_hsl(0_0%_0%/0.55)]">
-        <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-[#101620] px-4 py-3">
+      <DropdownMenuContent align="end" sideOffset={10} className="w-[min(380px,calc(100vw-24px))] overflow-hidden rounded-lg border-glass-border bg-[#0D1117] p-0 shadow-[0_24px_80px_hsl(0_0%_0%/0.55)]">
+        <div className="flex items-center justify-between gap-2 border-b border-glass-border bg-[#101620] px-4 py-3">
           <div>
             <p className="font-heading text-sm font-bold">Notifications</p>
             <p className="text-[11px] text-muted-foreground">{unreadCount} unread</p>
@@ -182,11 +182,11 @@ const NotificationBell = () => {
                     if (event.key === "Enter" || event.key === " ") openNotification(item);
                   }}
                   className={cn(
-                    "arena-focus mb-1 flex w-full gap-3 rounded-md border border-transparent p-3 text-left transition-colors hover:border-white/10 hover:bg-[#161B22]",
+                    "arena-focus mb-1 flex w-full gap-3 rounded-md border border-transparent p-3 text-left transition-colors hover:border-primary/25 hover:bg-[#161B22]",
                     !item.read && "border-primary/25 bg-[#0F1B24]",
                   )}
                 >
-                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-[#101620]">
+                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-glass-border bg-[#101620]">
                     <Icon className={cn("h-4 w-4", typeColor[item.type] ?? "text-primary")} />
                   </span>
                   <span className="min-w-0 flex-1">

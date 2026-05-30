@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  BellRing,
   ChevronRight,
   Crown,
   Flame,
   Search,
   Shield,
+  SlidersHorizontal,
   Sparkles,
-  Star,
-  Trophy,
   Users,
 } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
@@ -150,6 +148,7 @@ const SubscriptionsScreen = () => {
   const debouncedSearch = useDebouncedValue(search);
   const [activeFilter, setActiveFilter] = useState<FilterKey>("All");
   const [activeSort, setActiveSort] = useState<SortKey>("Trending");
+  const [showFilters, setShowFilters] = useState(false);
   const [creators, setCreators] = useState<(CreatorChannel & { tournamentCount?: number })[]>([]);
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [followLoadingId, setFollowLoadingId] = useState<string | null>(null);
@@ -250,6 +249,7 @@ const SubscriptionsScreen = () => {
   const followingCount = followingIds.size;
   const liveCreators = creators.filter((creator) => creator.isActive).length;
   const verifiedCreators = creators.filter((creator) => !creator.virtual).length;
+  const hasActiveFilters = activeFilter !== "All" || activeSort !== "Trending";
 
   return (
     <PageShell wide contentClassName="max-w-7xl space-y-4 pb-4">
@@ -259,78 +259,80 @@ const SubscriptionsScreen = () => {
         onBack={() => navigate(-1)}
       />
 
-      <Surface neon className="overflow-hidden p-0">
-        <div className="relative p-3 sm:p-4 lg:p-5">
-          <div className="absolute inset-x-0 top-0 h-px gradient-neon" />
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
-            <div className="min-w-0">
-              <div className="inline-flex items-center gap-1.5 rounded-full border border-secondary/25 bg-secondary/10 px-3 py-1 font-heading text-[10px] font-bold text-secondary">
-                <Crown className="h-3.5 w-3.5" />
-                CREATOR DISCOVERY
-              </div>
-              <h1 className="mt-3 font-heading text-2xl font-black leading-tight sm:text-4xl">
-                Follow trusted esports organizers.
-              </h1>
-              <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                Discover channels by followers, live activity, ratings, and tournament consistency.
-              </p>
-            </div>
-            <div className="arena-data-grid grid-cols-3">
-              <div className="arena-data-tile text-center">
-                <p className="font-heading text-lg font-black text-primary">{creators.length}</p>
-                <p className="text-[10px] text-muted-foreground">Creators</p>
-              </div>
-              <div className="arena-data-tile text-center">
-                <p className="font-heading text-lg font-black text-accent">{liveCreators}</p>
-                <p className="text-[10px] text-muted-foreground">Live</p>
-              </div>
-              <div className="arena-data-tile text-center">
-                <p className="font-heading text-lg font-black text-secondary">{followingCount}</p>
-                <p className="text-[10px] text-muted-foreground">Following</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Surface>
-
-      <div className="grid gap-2.5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <div className="flex min-w-0 items-center gap-2">
         <SearchBox
           value={search}
           onChange={setSearch}
           placeholder="Search creators, handles, communities..."
+          className="min-w-0 flex-1"
         />
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-          {[
-            { icon: Shield, label: `${verifiedCreators} verified` },
-            { icon: Flame, label: `${liveCreators} live` },
-            { icon: BellRing, label: "Room alerts" },
-          ].map((item) => {
-            const Icon = item.icon;
-            return (
-              <span
-                key={item.label}
-                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-glass-border bg-card/80 px-3 text-xs text-muted-foreground"
-              >
-                <Icon className="h-3.5 w-3.5 text-primary" />
-                {item.label}
-              </span>
-            );
-          })}
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowFilters((value) => !value)}
+          className={cn(
+            "arena-focus inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-md border border-glass-border bg-card/80 px-3 font-heading text-[10px] font-bold transition-colors hover:border-primary/45 min-[420px]:gap-2 min-[420px]:px-4 min-[420px]:text-xs",
+            showFilters || hasActiveFilters ? "neon-border text-primary" : "text-muted-foreground",
+          )}
+          aria-label="Toggle creator filters"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          <span className="hidden min-[360px]:inline">Filters</span>
+        </button>
       </div>
 
-      <div className="space-y-2.5">
-        <SegmentedControl
-          value={activeFilter}
-          onChange={setActiveFilter}
-          options={filterOptions.map((filter) => ({ label: filter, value: filter }))}
-        />
-        <SegmentedControl
-          value={activeSort}
-          onChange={setActiveSort}
-          options={sortOptions.map((sort) => ({ label: sort, value: sort }))}
-        />
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+        {[
+          { icon: Crown, label: `${creators.length} creators` },
+          { icon: Shield, label: `${verifiedCreators} verified` },
+          { icon: Flame, label: `${liveCreators} live` },
+          { icon: Users, label: `${followingCount} following` },
+        ].map((item) => {
+          const Icon = item.icon;
+          return (
+            <span
+              key={item.label}
+              className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md border border-glass-border bg-card/75 px-2.5 text-[11px] text-muted-foreground"
+            >
+              <Icon className="h-3.5 w-3.5 text-primary" />
+              {item.label}
+            </span>
+          );
+        })}
       </div>
+
+      {showFilters && (
+        <Surface className="space-y-2.5 p-2.5 sm:p-3">
+          <div className="grid gap-2.5 lg:grid-cols-2">
+            <SegmentedControl
+              value={activeFilter}
+              onChange={setActiveFilter}
+              options={filterOptions.map((filter) => ({ label: filter, value: filter }))}
+            />
+            <SegmentedControl
+              value={activeSort}
+              onChange={setActiveSort}
+              options={sortOptions.map((sort) => ({ label: sort, value: sort }))}
+            />
+          </div>
+          {hasActiveFilters && (
+            <div className="flex items-center justify-between gap-3 border-t border-glass-border pt-2 text-[11px] text-muted-foreground">
+              <span>
+                Showing {activeFilter.toLowerCase()} creators sorted by {activeSort.toLowerCase()}.
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveFilter("All");
+                  setActiveSort("Trending");
+                }}
+                className="arena-focus shrink-0 rounded-sm font-heading font-bold text-primary"
+              >
+                Reset
+              </button>
+            </div>
+          )}
+        </Surface>
+      )}
 
       {filteredCreators.length > 0 && (
         <Surface className="p-3 sm:p-4">

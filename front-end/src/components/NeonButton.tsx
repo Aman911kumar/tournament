@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 interface NeonButtonProps {
   children: React.ReactNode;
   onClick?: () => void;
-  variant?: "purple" | "blue" | "green" | "ghost";
+  variant?: "purple" | "blue" | "green" | "danger" | "ghost";
   className?: string;
   full?: boolean;
   type?: "button" | "submit";
@@ -16,6 +16,8 @@ const glowMap = {
   blue: "border-primary/35 bg-primary text-primary-foreground hover:bg-[hsl(195_100%_60%)] shadow-[0_8px_22px_hsl(var(--primary)/0.13)]",
   green:
     "border-accent/35 bg-accent text-accent-foreground hover:bg-accent/90 shadow-[0_8px_22px_hsl(var(--accent)/0.12)]",
+  danger:
+    "border-destructive/40 bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-[0_8px_22px_hsl(var(--destructive)/0.14)]",
   ghost:
     "border-glass-border bg-card/70 text-foreground hover:border-primary/35 hover:bg-muted/80",
 };

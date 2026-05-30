@@ -63,7 +63,7 @@
     --neon-pink: 330 90% 60%;
 
     --glass-bg: 216 18% 11%;
-    --glass-border: 0 0% 100% / 0.06;
+    --glass-border: 215 28% 25% / 0.74;
 
     --sidebar-background: 230 25% 7%;
     --sidebar-foreground: 220 20% 95%;
@@ -161,7 +161,7 @@
     --foreground: 0 0% 98%;
     --card-foreground: 0 0% 98%;
     --muted-foreground: 220 14% 78%;
-    --glass-border: 0 0% 100% / 0.13;
+    --glass-border: 195 66% 38% / 0.38;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -553,6 +553,93 @@
   .arena-scrollbar::-webkit-scrollbar-thumb {
     background: hsl(var(--border));
     border-radius: 999px;
+  }
+
+  .b4a-star-rating {
+    display: inline-flex;
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    min-height: 2.5rem;
+  }
+
+  .b4a-star-rating > input {
+    display: none;
+  }
+
+  .b4a-star-rating > label {
+    cursor: pointer;
+    color: #666;
+    line-height: 1;
+  }
+
+  .b4a-star-rating > label > svg {
+    display: block;
+    height: 1.85rem;
+    width: 1.85rem;
+    fill: #666;
+    transition: fill var(--ui-motion-duration) ease, transform var(--ui-motion-duration) ease;
+  }
+
+  .b4a-star-rating > input:checked ~ label > svg {
+    fill: #ffa723;
+  }
+
+  .b4a-star-rating:not(.is-disabled) > label:hover ~ label > svg,
+  .b4a-star-rating:not(.is-disabled) > label:hover > svg {
+    fill: #ff9e0b;
+    transform: translateY(-1px);
+  }
+
+  .b4a-star-rating:not(.is-disabled) > label[data-rating="1"]:hover ~ label > svg,
+  .b4a-star-rating:not(.is-disabled) > label[data-rating="1"]:hover > svg {
+    fill: #a23c3c !important;
+  }
+
+  .b4a-star-rating:not(.is-disabled) > label[data-rating="2"]:hover ~ label > svg,
+  .b4a-star-rating:not(.is-disabled) > label[data-rating="2"]:hover > svg {
+    fill: #99542d !important;
+  }
+
+  .b4a-star-rating:not(.is-disabled) > label[data-rating="3"]:hover ~ label > svg,
+  .b4a-star-rating:not(.is-disabled) > label[data-rating="3"]:hover > svg {
+    fill: #9f7e18 !important;
+  }
+
+  .b4a-star-rating:not(.is-disabled) > label[data-rating="4"]:hover ~ label > svg,
+  .b4a-star-rating:not(.is-disabled) > label[data-rating="4"]:hover > svg {
+    fill: #22885e !important;
+  }
+
+  .b4a-star-rating:not(.is-disabled) > label[data-rating="5"]:hover ~ label > svg,
+  .b4a-star-rating:not(.is-disabled) > label[data-rating="5"]:hover > svg {
+    fill: #7951ac !important;
+  }
+
+  .b4a-star-rating > input[value="1"]:checked ~ label > svg {
+    fill: #ef4444;
+  }
+
+  .b4a-star-rating > input[value="2"]:checked ~ label > svg {
+    fill: #e06c2b;
+  }
+
+  .b4a-star-rating > input[value="3"]:checked ~ label > svg {
+    fill: #eab308;
+  }
+
+  .b4a-star-rating > input[value="4"]:checked ~ label > svg {
+    fill: #19c37d;
+  }
+
+  .b4a-star-rating > input[value="5"]:checked ~ label > svg {
+    fill: #ab68ff;
+  }
+
+  .b4a-star-rating.is-disabled {
+    opacity: 0.52;
+    pointer-events: none;
   }
 }
 

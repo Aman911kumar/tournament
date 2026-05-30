@@ -46,7 +46,7 @@ const iconColorMap: Record<string, string> = {
   tournament: "text-secondary",
   reward: "text-accent",
   security: "text-destructive",
-  report: "text-secondary",
+  report: "text-destructive",
   moderation: "text-destructive",
   system: "text-neon-pink",
 };

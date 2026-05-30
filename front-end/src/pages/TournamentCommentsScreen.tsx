@@ -270,7 +270,7 @@ const AttachmentPreview = ({ attachment }: { attachment: ChatAttachment }) => {
         href={attachment.url}
         target="_blank"
         rel="noreferrer"
-        className="mt-2 block overflow-hidden rounded-lg border border-white/10 bg-background/35"
+        className="mt-2 block overflow-hidden rounded-lg border border-glass-border bg-background/35"
       >
         <img
           src={attachment.url}
@@ -288,7 +288,7 @@ const AttachmentPreview = ({ attachment }: { attachment: ChatAttachment }) => {
       href={attachment.url}
       target="_blank"
       rel="noreferrer"
-      className="mt-2 flex items-center gap-2 rounded-lg border border-white/10 bg-background/40 px-3 py-2 text-xs"
+      className="mt-2 flex items-center gap-2 rounded-lg border border-glass-border bg-background/40 px-3 py-2 text-xs"
     >
       <File className="h-4 w-4 text-primary" />
       <span className="min-w-0 flex-1 truncate">{attachment.name}</span>
@@ -314,7 +314,7 @@ const RoomCard = ({ message }: { message: ChatMessage }) => {
         <button
           type="button"
           onClick={() => copyText("Room ID", roomId)}
-          className="flex items-center justify-between rounded-lg border border-white/10 bg-background/40 px-3 py-2 text-left"
+          className="flex items-center justify-between rounded-lg border border-glass-border bg-background/40 px-3 py-2 text-left"
         >
           <span className="min-w-0">
             <span className="block text-[10px] text-muted-foreground">
@@ -329,7 +329,7 @@ const RoomCard = ({ message }: { message: ChatMessage }) => {
         <button
           type="button"
           onClick={() => copyText("Room password", roomPass)}
-          className="flex items-center justify-between rounded-lg border border-white/10 bg-background/40 px-3 py-2 text-left"
+          className="flex items-center justify-between rounded-lg border border-glass-border bg-background/40 px-3 py-2 text-left"
         >
           <span className="min-w-0">
             <span className="block text-[10px] text-muted-foreground">
@@ -402,7 +402,7 @@ const MessageBubble = memo(
             className={`rounded-full border px-3 py-1 text-center text-[11px] ${
               message.type === "announcement"
                 ? "border-primary/30 bg-primary/10 text-primary"
-                : "border-white/10 bg-white/5 text-muted-foreground"
+                : "border-glass-border bg-card/70 text-muted-foreground"
             }`}
           >
             {message.type === "announcement" && (
@@ -446,7 +446,7 @@ const MessageBubble = memo(
               className={`chat-bubble group relative rounded-2xl border px-3 py-2 ${
                 own
                   ? "rounded-br-md border-primary/30 bg-primary/20"
-                  : "rounded-bl-md border-white/10 bg-card/90"
+                  : "rounded-bl-md border-glass-border bg-card/90"
               } ${message.status === "deleted" ? "opacity-70" : ""} ${optimistic ? "opacity-80" : ""}`}
             >
               {message.replyTo && (
@@ -502,7 +502,7 @@ const MessageBubble = memo(
                       type="button"
                       onClick={() => onReact(message, reaction.emoji)}
                       disabled={optimistic}
-                      className="rounded-full border border-white/10 bg-background/50 px-2 py-0.5 text-xs disabled:opacity-50"
+                      className="rounded-full border border-glass-border bg-background/50 px-2 py-0.5 text-xs disabled:opacity-50"
                     >
                       {reaction.emoji} {reaction.users.length}
                     </button>
@@ -570,7 +570,7 @@ const MessageBubble = memo(
                   <button
                     type="button"
                     onClick={() => onReport(message)}
-                    className="chat-action text-amber-300"
+                    className="chat-action text-destructive"
                   >
                     <Flag className="h-3.5 w-3.5" />
                   </button>
@@ -1791,7 +1791,7 @@ const TournamentCommentsScreen = () => {
                   {attachments.map((attachment) => (
                     <span
                       key={attachment.url}
-                      className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-background/50 px-3 py-1 text-xs"
+                      className="inline-flex max-w-full items-center gap-2 rounded-full border border-glass-border bg-background/50 px-3 py-1 text-xs"
                     >
                       {attachment.type === "image" ? (
                         <Image className="h-3.5 w-3.5" />
@@ -1827,7 +1827,7 @@ const TournamentCommentsScreen = () => {
                   key={emoji}
                   type="button"
                   onClick={() => setInput((value) => `${value}${emoji}`)}
-                  className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-background/50 text-lg transition-colors hover:bg-primary/10"
+                  className="grid h-9 w-9 place-items-center rounded-lg border border-glass-border bg-background/50 text-lg transition-colors hover:bg-primary/10"
                 >
                   {emoji}
                 </button>

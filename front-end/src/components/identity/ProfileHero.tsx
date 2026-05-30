@@ -54,7 +54,7 @@ export const ProfileHero = ({
           <div className="h-full w-full bg-[linear-gradient(180deg,hsl(var(--primary)/0.12),transparent_54%),linear-gradient(90deg,hsl(var(--foreground)/0.04)_1px,transparent_1px),linear-gradient(0deg,hsl(var(--foreground)/0.03)_1px,transparent_1px)] bg-[size:auto,32px_32px,32px_32px]" />
         )}
         <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent_0%,hsl(var(--background)/0.2)_44%,hsl(var(--card))_100%)]" />
-        <div className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-sm border border-white/10 bg-background/80 px-2.5 py-1.5 text-[10px] font-heading font-bold uppercase tracking-[0.08em] text-primary sm:left-4 sm:top-4">
+        <div className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-sm border border-glass-border bg-background/80 px-2.5 py-1.5 text-[10px] font-heading font-bold uppercase tracking-[0.08em] text-primary sm:left-4 sm:top-4">
           <Sparkles className="h-3.5 w-3.5 text-cyan-300" />
           BATTLE IDENTITY
         </div>
@@ -62,7 +62,7 @@ export const ProfileHero = ({
           <button
             type="button"
             onClick={onEditImages}
-            className="arena-focus absolute right-3 top-3 inline-flex h-9 items-center gap-2 rounded-sm border border-white/10 bg-background/80 px-3 text-[10px] font-heading font-bold uppercase tracking-[0.06em] text-white transition-colors hover:bg-card sm:right-4 sm:top-4"
+            className="arena-focus absolute right-3 top-3 inline-flex h-9 items-center gap-2 rounded-sm border border-glass-border bg-background/80 px-3 text-[10px] font-heading font-bold uppercase tracking-[0.06em] text-white transition-colors hover:bg-card sm:right-4 sm:top-4"
           >
             <Camera className="h-3.5 w-3.5" />
             Edit visuals

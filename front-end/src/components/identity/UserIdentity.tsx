@@ -74,7 +74,7 @@ export const UserIdentity = ({
         type="button"
         onClick={onClick}
         className={cn(
-          "arena-focus flex w-full min-w-0 items-center gap-3 rounded-md text-left transition-colors hover:bg-white/[0.03]",
+          "arena-focus flex w-full min-w-0 items-center gap-3 rounded-md text-left transition-colors hover:bg-primary/[0.04]",
           className,
         )}
       >
