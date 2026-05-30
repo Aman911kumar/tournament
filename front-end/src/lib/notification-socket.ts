@@ -1,6 +1,5 @@
-import { io, Socket } from "socket.io-client";
-import { getRealtimeServerUrl, warmRealtimeBackend } from "@/api/client";
-import { getAccessToken } from "@/lib/auth-storage";
+import type { Socket } from "socket.io-client";
+import { closeRealtimeSocket, getRealtimeSocket } from "@/lib/realtime-socket";
 import type { AdminMonitoringData } from "@/api/admin";
 import type { NotificationItem } from "@/api/notifications";
 import type { ChatMessage } from "@/api/chat";
@@ -20,31 +19,11 @@ type NotificationEvents = {
 let socket: Socket<NotificationEvents> | null = null;
 
 export const getNotificationSocket = (): Socket<NotificationEvents> | null => {
-  const token = getAccessToken();
-  if (!token) return null;
-  void warmRealtimeBackend("notification-socket");
-
-  if (socket?.connected || socket?.active) {
-    socket.auth = { token };
-    return socket;
-  }
-
-  socket = io(getRealtimeServerUrl(), {
-    auth: { token },
-    transports: ["websocket", "polling"],
-    withCredentials: true,
-    autoConnect: true,
-    multiplex: true,
-    timeout: 8_000,
-    reconnectionDelay: 700,
-    reconnectionDelayMax: 4_000,
-    randomizationFactor: 0.35,
-  });
-
+  socket = getRealtimeSocket<NotificationEvents>("notification-socket");
   return socket;
 };
 
 export const closeNotificationSocket = () => {
-  socket?.disconnect();
+  closeRealtimeSocket();
   socket = null;
 };

@@ -202,6 +202,11 @@ export const getMonitoringSnapshot = () => {
             onlineUsers: socket.onlineUsers,
             connectedSockets: socket.sockets,
             redisAdapter: socket.redisAdapter,
+            rooms: socket.appRooms || 0,
+            chatRooms: socket.chatRooms || 0,
+            voiceRooms: socket.voiceRooms || 0,
+            userRooms: socket.userRooms || 0,
+            topEvents: socket.topEvents || [],
         },
         backend: {
             requests: {

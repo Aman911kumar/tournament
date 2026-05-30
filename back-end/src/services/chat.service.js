@@ -15,7 +15,12 @@ const MESSAGE_LIMIT_MAX = 60;
 const MESSAGE_LIMIT_DEFAULT = 30;
 const MAX_ATTACHMENTS = 4;
 const MAX_MESSAGE_LENGTH = 2000;
+const MAX_METADATA_LENGTH = 1500;
+const CHAT_PARTICIPANT_CACHE_TTL_MS = Number(process.env.CHAT_PARTICIPANT_CACHE_TTL_MS || 15_000);
+const CHAT_PARTICIPANT_CACHE_MAX = Number(process.env.CHAT_PARTICIPANT_CACHE_MAX || 500);
 const ALLOWED_REACTIONS = new Set(["👍", "❤️", "😂", "🔥", "😮", "😢", "👏", "👀", "🏆", "🎯"]);
+
+const participantCache = new Map();
 
 const asId = (value) => value?._id?.toString?.() || value?.toString?.() || "";
 const sameId = (a, b) => asId(a) === asId(b);
@@ -33,6 +38,59 @@ const sanitizeText = (value = "", maxLength = MAX_MESSAGE_LENGTH) =>
         .replace(/\s{5,}/g, "    ")
         .trim()
         .slice(0, maxLength);
+
+const getCachedParticipantIds = (tournamentId) => {
+    if (!CHAT_PARTICIPANT_CACHE_TTL_MS) return null;
+    const key = asId(tournamentId);
+    const cached = participantCache.get(key);
+    if (!cached || cached.expiresAt <= Date.now()) {
+        participantCache.delete(key);
+        return null;
+    }
+    return cached.ids;
+};
+
+const setCachedParticipantIds = (tournamentId, ids = []) => {
+    if (!CHAT_PARTICIPANT_CACHE_TTL_MS) return;
+    const key = asId(tournamentId);
+    if (!key) return;
+    participantCache.set(key, {
+        ids,
+        expiresAt: Date.now() + CHAT_PARTICIPANT_CACHE_TTL_MS,
+    });
+    if (participantCache.size > CHAT_PARTICIPANT_CACHE_MAX) {
+        const oldestKey = participantCache.keys().next().value;
+        if (oldestKey) participantCache.delete(oldestKey);
+    }
+};
+
+export const invalidateChatParticipantCache = (tournamentId) => {
+    participantCache.delete(asId(tournamentId));
+};
+
+const normalizeMetadata = (metadata = {}) => {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return {};
+
+    const allowedKeys = [
+        "clientRequestId",
+        "roomId",
+        "roomPass",
+        "roomJoinTime",
+        "action",
+        "targetUser",
+        "slowModeSeconds",
+    ];
+    const next = {};
+    for (const key of allowedKeys) {
+        const value = metadata[key];
+        if (value === undefined || value === null) continue;
+        if (typeof value === "boolean" || typeof value === "number") next[key] = value;
+        else next[key] = sanitizeText(value, key === "clientRequestId" ? 100 : 500);
+    }
+
+    if (JSON.stringify(next).length <= MAX_METADATA_LENGTH) return next;
+    return next.clientRequestId ? { clientRequestId: next.clientRequestId } : {};
+};
 
 const isActiveModerationEntry = (entry) => {
     if (!entry) return false;
@@ -58,6 +116,9 @@ export const getOrCreateChatRoomState = async (tournamentId) =>
 
 export const getChatParticipantIds = async (tournament) => {
     const tournamentId = asId(tournament);
+    const cached = getCachedParticipantIds(tournamentId);
+    if (cached) return cached;
+
     const ids = new Set();
     if (tournament?.organizer) ids.add(asId(tournament.organizer));
     (tournament?.joinedPlayers || []).forEach((userId) => ids.add(asId(userId)));
@@ -72,7 +133,9 @@ export const getChatParticipantIds = async (tournament) => {
         (registration.team || []).forEach((userId) => ids.add(asId(userId)));
     });
 
-    return [...ids].filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const participantIds = [...ids].filter((id) => mongoose.Types.ObjectId.isValid(id));
+    setCachedParticipantIds(tournamentId, participantIds);
+    return participantIds;
 };
 
 const canAccessTournamentChat = async (user, tournament) => {
@@ -340,6 +403,27 @@ export const createChatMessage = async ({ user, tournamentId, body, attachments 
 
     const cleanBody = sanitizeText(body);
     const cleanAttachments = normalizeAttachments(attachments);
+    const cleanMetadata = normalizeMetadata(metadata);
+    const clientRequestId = cleanMetadata.clientRequestId;
+
+    if (clientRequestId) {
+        const existing = await populateMessageQuery(
+            ChatMessage.findOne({
+                tournament: tournamentId,
+                sender: user._id,
+                "metadata.clientRequestId": clientRequestId,
+            }).lean()
+        );
+        if (existing) {
+            return {
+                message: serializeMessage(existing),
+                participantIds: await getChatParticipantIds(context.tournament),
+                context,
+                duplicate: true,
+            };
+        }
+    }
+
     if (type === "room_card" && !context.permissions.canShareRoomCard) {
         throw new ApiError(403, "Only creator or admin can share room details");
     }
@@ -371,7 +455,7 @@ export const createChatMessage = async ({ user, tournamentId, body, attachments 
         replyTo: replyTo || null,
         mentions: await resolveMentions(cleanBody, mentions),
         seenBy: [{ user: user._id, seenAt: new Date() }],
-        metadata,
+        metadata: cleanMetadata,
     });
 
     await ChatRoomState.updateOne(

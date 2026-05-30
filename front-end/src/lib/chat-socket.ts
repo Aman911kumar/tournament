@@ -1,6 +1,5 @@
-import { io, Socket } from "socket.io-client";
-import { getRealtimeServerUrl, warmRealtimeBackend } from "@/api/client";
-import { getAccessToken } from "@/lib/auth-storage";
+import type { Socket } from "socket.io-client";
+import { closeRealtimeSocket, getRealtimeSocket } from "@/lib/realtime-socket";
 import type { ChatAccess, ChatMessage, SendChatPayload } from "@/api/chat";
 
 export type ChatPresencePayload = {
@@ -86,33 +85,12 @@ type ClientToServerEvents = {
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
 
 export const getChatSocket = (): Socket<ServerToClientEvents, ClientToServerEvents> | null => {
-  const token = getAccessToken();
-  if (!token) return null;
-  void warmRealtimeBackend("chat-socket");
-
-  if (socket?.connected || socket?.active) {
-    socket.auth = { token };
-    return socket;
-  }
-
-  socket = io(getRealtimeServerUrl(), {
-    auth: { token },
-    transports: ["websocket", "polling"],
-    withCredentials: true,
-    autoConnect: true,
-    multiplex: true,
-    timeout: 8_000,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 700,
-    reconnectionDelayMax: 4000,
-    randomizationFactor: 0.35,
-  });
-
+  socket = getRealtimeSocket<ServerToClientEvents, ClientToServerEvents>("chat-socket");
   return socket;
 };
 
 export const closeChatSocket = () => {
-  socket?.disconnect();
+  closeRealtimeSocket();
   socket = null;
 };
 

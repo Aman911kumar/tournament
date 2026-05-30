@@ -19,8 +19,17 @@ const voiceByRoom = new Map();
 const socketRooms = new WeakMap();
 const voiceSocketRooms = new WeakMap();
 const sendBuckets = new WeakMap();
+const eventBuckets = new WeakMap();
 const EVENT_RATE_WINDOW_MS = 10_000;
 const EVENT_RATE_MAX = 12;
+const PRESENCE_USER_LIMIT = Number(process.env.CHAT_PRESENCE_USER_LIMIT || 50);
+const EVENT_RATE_LIMITS = {
+    "chat:message": { windowMs: EVENT_RATE_WINDOW_MS, max: EVENT_RATE_MAX },
+    "chat:typing": { windowMs: 5_000, max: 8 },
+    "chat:read": { windowMs: 10_000, max: 8 },
+    "voice:state": { windowMs: 2_000, max: 10 },
+    "voice:signal": { windowMs: 10_000, max: 80 },
+};
 
 const asId = (value) => value?._id?.toString?.() || value?.toString?.() || "";
 const getUserRoomName = (userId) => `user:${userId}`;
@@ -48,13 +57,35 @@ const toSocketError = (error) => ({
     message: error?.message || "Chat action failed",
 });
 
-const assertEventRate = (socket) => {
+const assertEventRate = (socket, event = "chat:message") => {
+    const config = EVENT_RATE_LIMITS[event] || EVENT_RATE_LIMITS["chat:message"];
     const now = Date.now();
-    const bucket = (sendBuckets.get(socket) || []).filter((time) => now - time < EVENT_RATE_WINDOW_MS);
+    if (event === "chat:message") {
+        const bucket = (sendBuckets.get(socket) || []).filter((time) => now - time < config.windowMs);
+        bucket.push(now);
+        sendBuckets.set(socket, bucket);
+        if (bucket.length > config.max) {
+            throw new ApiError(429, "You are sending messages too fast");
+        }
+        return;
+    }
+
+    const allBuckets = eventBuckets.get(socket) || new Map();
+    const bucket = (allBuckets.get(event) || []).filter((time) => now - time < config.windowMs);
     bucket.push(now);
-    sendBuckets.set(socket, bucket);
-    if (bucket.length > EVENT_RATE_MAX) {
-        throw new ApiError(429, "You are sending messages too fast");
+    allBuckets.set(event, bucket);
+    eventBuckets.set(socket, allBuckets);
+    if (bucket.length > config.max) {
+        throw new ApiError(429, "Realtime action rate limit exceeded");
+    }
+};
+
+const allowEvent = (socket, event) => {
+    try {
+        assertEventRate(socket, event);
+        return true;
+    } catch {
+        return false;
     }
 };
 
@@ -84,7 +115,8 @@ const getPresencePayload = (tournamentId) => {
     return {
         tournamentId: asId(tournamentId),
         onlineCount: users.length,
-        users,
+        users: users.slice(0, PRESENCE_USER_LIMIT),
+        usersTruncated: users.length > PRESENCE_USER_LIMIT,
     };
 };
 
@@ -126,6 +158,11 @@ const getVoiceParticipants = (tournamentId) => {
         .sort((a, b) => new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime());
 };
 
+const getVoiceParticipant = (socket, tournamentId) => {
+    const participant = voiceByRoom.get(getVoiceRoomName(tournamentId))?.get(socket.userId);
+    return participant ? serializeVoiceParticipant(participant) : null;
+};
+
 const upsertVoiceParticipant = (socket, tournamentId, muted = false) => {
     const roomName = getVoiceRoomName(tournamentId);
     const userId = socket.userId;
@@ -159,6 +196,17 @@ const updateVoiceParticipant = (socket, tournamentId, patch = {}) => {
         muted: typeof patch.muted === "boolean" ? patch.muted : participant.muted,
         speaking: typeof patch.speaking === "boolean" ? patch.speaking : participant.speaking,
     };
+    const roleChanged = JSON.stringify(next.role || []) !== JSON.stringify(participant.role || []);
+    const avatarChanged = JSON.stringify(next.avatar || {}) !== JSON.stringify(participant.avatar || {});
+    if (
+        next.username === participant.username &&
+        next.muted === participant.muted &&
+        next.speaking === participant.speaking &&
+        !roleChanged &&
+        !avatarChanged
+    ) {
+        return null;
+    }
     roomVoice.set(socket.userId, next);
     return serializeVoiceParticipant(next);
 };
@@ -292,6 +340,7 @@ export const registerChatSocketHandlers = (io, socket) => {
     });
 
     socket.on("chat:typing", (payload = {}) => {
+        if (!allowEvent(socket, "chat:typing")) return;
         const tournamentId = payload.tournamentId;
         if (!tournamentId) return;
         if (!getJoinedRooms(socket).has(asId(tournamentId))) return;
@@ -305,7 +354,7 @@ export const registerChatSocketHandlers = (io, socket) => {
 
     socket.on("chat:message", (payload = {}, callback) => {
         runSocketAction(socket, callback, async () => {
-            assertEventRate(socket);
+            assertEventRate(socket, "chat:message");
             const result = await createChatMessage({
                 user: getSocketUser(socket),
                 tournamentId: payload.tournamentId,
@@ -387,6 +436,7 @@ export const registerChatSocketHandlers = (io, socket) => {
 
     socket.on("chat:read", (payload = {}, callback) => {
         runSocketAction(socket, callback, async () => {
+            assertEventRate(socket, "chat:read");
             const data = await markChatRead({
                 user: getSocketUser(socket),
                 tournamentId: payload.tournamentId,
@@ -469,7 +519,8 @@ export const registerChatSocketHandlers = (io, socket) => {
 
             socket.join(roomName);
             upsertVoiceParticipant(socket, normalizedTournamentId, Boolean(payload.muted));
-            const participant = updateVoiceParticipant(socket, normalizedTournamentId, { muted: Boolean(payload.muted), speaking: false });
+            const participant = updateVoiceParticipant(socket, normalizedTournamentId, { muted: Boolean(payload.muted), speaking: false })
+                || getVoiceParticipant(socket, normalizedTournamentId);
             const participants = getVoiceParticipants(normalizedTournamentId);
 
             socket.emit("voice:snapshot", { tournamentId: normalizedTournamentId, participants });
@@ -502,6 +553,7 @@ export const registerChatSocketHandlers = (io, socket) => {
     });
 
     socket.on("voice:state", (payload = {}) => {
+        if (!allowEvent(socket, "voice:state")) return;
         const tournamentId = asId(payload.tournamentId);
         if (!tournamentId || !getJoinedVoiceRooms(socket).has(tournamentId)) return;
         const participant = updateVoiceParticipant(socket, tournamentId, {
@@ -516,6 +568,7 @@ export const registerChatSocketHandlers = (io, socket) => {
     });
 
     socket.on("voice:signal", (payload = {}) => {
+        if (!allowEvent(socket, "voice:signal")) return;
         const tournamentId = asId(payload.tournamentId);
         const to = asId(payload.to);
         if (!tournamentId || !to || !getJoinedVoiceRooms(socket).has(tournamentId)) return;

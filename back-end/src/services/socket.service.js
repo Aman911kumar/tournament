@@ -11,8 +11,10 @@ let redisAdapterReady = false;
 const onlineUsers = new Map();
 const ADMIN_SOCKET_ROLES = ["super_admin", "admin", "moderator", "support", "finance_manager", "tournament_manager"];
 const connectionAttempts = new Map();
+const eventCounters = new Map();
 const SOCKET_WINDOW_MS = Number(process.env.SOCKET_RATE_LIMIT_WINDOW_MS || 60_000);
 const SOCKET_MAX_CONNECTIONS = Number(process.env.SOCKET_RATE_LIMIT_MAX || 60);
+const MAX_SOCKET_EVENT_COUNTERS = Number(process.env.SOCKET_EVENT_COUNTER_MAX || 80);
 let cleanupTimer = null;
 
 const cleanupConnectionAttempts = () => {
@@ -39,6 +41,41 @@ const hasAdminSocketRole = (roles = []) => roles.some((role) => ADMIN_SOCKET_ROL
 const emitAdminPresence = () => {
     if (!io) return;
     io.to(ADMIN_ROOM).emit("admin:presence", getSocketStats());
+};
+
+const recordSocketEvent = (event) => {
+    if (!event) return;
+    const current = eventCounters.get(event) || {
+        event,
+        count: 0,
+        lastSeen: "",
+    };
+    current.count += 1;
+    current.lastSeen = new Date().toISOString();
+    eventCounters.set(event, current);
+
+    if (eventCounters.size > MAX_SOCKET_EVENT_COUNTERS) {
+        const oldestKey = [...eventCounters.entries()]
+            .sort(([, a], [, b]) => new Date(a.lastSeen).getTime() - new Date(b.lastSeen).getTime())[0]?.[0];
+        if (oldestKey) eventCounters.delete(oldestKey);
+    }
+};
+
+const getRoomStats = () => {
+    if (!io?.sockets?.adapter?.rooms) {
+        return { rooms: 0, appRooms: 0, chatRooms: 0, voiceRooms: 0, userRooms: 0 };
+    }
+
+    const roomNames = [...io.sockets.adapter.rooms.keys()];
+    const socketIds = io.sockets.sockets;
+    const appRooms = roomNames.filter((room) => !socketIds.has(room));
+    return {
+        rooms: roomNames.length,
+        appRooms: appRooms.length,
+        chatRooms: appRooms.filter((room) => room.startsWith("chat:tournament:")).length,
+        voiceRooms: appRooms.filter((room) => room.startsWith("voice:tournament:")).length,
+        userRooms: appRooms.filter((room) => room.startsWith("user:")).length,
+    };
 };
 
 const setupRedisAdapter = async () => {
@@ -123,6 +160,7 @@ export const initSocket = (server, allowedOrigins = []) => {
     });
 
     io.on("connection", (socket) => {
+        socket.onAny((event) => recordSocketEvent(event));
         socket.join(getUserRoom(socket.userId));
         onlineUsers.set(socket.userId, (onlineUsers.get(socket.userId) || 0) + 1);
         if (hasAdminSocketRole(socket.userRoles)) {
@@ -155,6 +193,10 @@ export const getSocketStats = () => ({
     onlineUsers: onlineUsers.size,
     sockets: io?.engine?.clientsCount || 0,
     redisAdapter: redisAdapterReady,
+    ...getRoomStats(),
+    topEvents: [...eventCounters.values()]
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 12),
 });
 
 export const emitToAdmins = (event, payload) => {
