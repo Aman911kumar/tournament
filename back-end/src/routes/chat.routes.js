@@ -27,7 +27,7 @@ router.post(
     "/tournaments/:tournamentId/attachments",
     chatLimiter,
     express.raw({
-        type: ["image/*", "application/pdf", "text/plain", "application/zip", "application/octet-stream"],
+        type: ["image/*", "application/pdf", "text/plain", "application/zip"],
         limit: process.env.CHAT_UPLOAD_MAX_SIZE || "5mb",
     }),
     uploadChatAttachment

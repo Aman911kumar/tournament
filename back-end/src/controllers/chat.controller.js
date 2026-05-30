@@ -36,7 +36,6 @@ const ALLOWED_UPLOAD_TYPES = new Map([
     ["application/pdf", "pdf"],
     ["text/plain", "txt"],
     ["application/zip", "zip"],
-    ["application/octet-stream", "bin"],
 ]);
 
 const socketUser = (req) => ({

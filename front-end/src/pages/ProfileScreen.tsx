@@ -46,6 +46,7 @@ import {
   setCurrentProfileCache,
   useCurrentProfile,
 } from "@/hooks/useCurrentProfile";
+import { clearAuthTokens } from "@/lib/auth-storage";
 import {
   EmptyState,
   PageHeader,
@@ -364,8 +365,7 @@ const ProfileScreen = () => {
       });
       toast.error(errorToast.title, { description: errorToast.description });
     } finally {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
+      clearAuthTokens();
       removeCache(CACHE_KEYS.profile);
       removeCache(CACHE_KEYS.gameAccounts);
       removeCache(CACHE_KEYS.walletSummary);

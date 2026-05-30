@@ -1,5 +1,6 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
+import crypto from "crypto";
 
 import asyncHandler from "../utils/AsyncHandler.js";
 import ApiError from "../utils/ApiError.js";
@@ -34,7 +35,12 @@ const assertInternalSecret = (req) => {
     if (!expected) {
         throw new ApiError(503, "Internal email secret is not configured");
     }
-    if (!received || received !== expected) {
+    const expectedBuffer = Buffer.from(expected);
+    const receivedBuffer = Buffer.from(received);
+    const matches =
+        receivedBuffer.length === expectedBuffer.length &&
+        crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
+    if (!received || !matches) {
         throw new ApiError(401, "Invalid internal email credentials");
     }
 };

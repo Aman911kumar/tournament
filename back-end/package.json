@@ -16,7 +16,7 @@
   "type": "module",
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
-    "axios": "^1.12.2",
+    "axios": "^1.16.1",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.76.6",
     "compression": "^1.8.1",
@@ -36,12 +36,14 @@
     "passport": "^0.7.0",
     "passport-google-oauth2": "^0.2.0",
     "prettier": "^3.6.2",
+    "qs": "^6.15.2",
     "razorpay": "^2.9.6",
     "redis": "^5.12.1",
     "resend": "^6.12.3",
     "socket.io": "^4.8.3",
     "twilio": "^5.10.2",
     "uuid": "^14.0.0",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "ws": "^8.21.0"
   }
 }

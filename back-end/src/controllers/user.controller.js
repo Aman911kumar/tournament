@@ -42,7 +42,7 @@ const generateAccessTokenAndRefreshToken = async (userId) => {
         const user = await User.findById(userId)
         const accessToken = user.generateAccessToken()
         const refreshToken = user.generateRefreshToken()
-        user.refreshToken = refreshToken
+        user.refreshToken = sha256Hex(refreshToken)
         await user.save({ validateBeforeSave: false })
         return { accessToken, refreshToken }
     } catch (error) {
@@ -107,6 +107,19 @@ const getPasswordStrengthScore = (value = "") => {
     if (/[0-9]/.test(password)) score += 1;
     if (/[^A-Za-z0-9]/.test(password)) score += 1;
     return score;
+};
+
+const assertStrongPassword = (value, label = "Password") => {
+    const password = String(value || "");
+    if (password.length < 8 || password.length > 128) {
+        throw new ApiError(400, `${label} must be 8-128 characters long`);
+    }
+    if (getPasswordStrengthScore(password) < 3) {
+        throw new ApiError(400, `${label} must include a stronger mix of letters, numbers, or symbols`);
+    }
+    if (/password|qwerty|123456|battle4arena/i.test(password)) {
+        throw new ApiError(400, `${label} is too easy to guess`);
+    }
 };
 
 const toPositiveNumber = (value, fallback) => {
@@ -737,6 +750,13 @@ const registerUser = asyncHandler(async (req, res) => {
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
         throw new ApiError(400, "Invalid email address");
     }
+    if (!/^[a-zA-Z0-9_]{4,30}$/.test(String(username || "").trim())) {
+        throw new ApiError(400, "Username must be 4-30 letters, numbers, or underscores");
+    }
+    if (!isValidIndianPhoneNumber(normalizedPhone)) {
+        throw new ApiError(400, "Enter a valid 10 digit Indian phone number");
+    }
+    assertStrongPassword(password);
 
     // Check if user already exists
     const existedUser = await User.findOne({
@@ -835,13 +855,13 @@ const loginUser = asyncHandler(async (req, res) => {
     // Find user
     const user = await findUserByIdentifier(loginIdentifier);
     if (!user) {
-        throw new ApiError(404, 'User not found');
+        throw new ApiError(401, 'Invalid username/email/phone or password');
     }
     // console.log(password)
     // Verify password
     const isPasswordValid = await user.isPasswordCorrect(password);
     if (!isPasswordValid) {
-        throw new ApiError(401, 'Incorrect password');
+        throw new ApiError(401, 'Invalid username/email/phone or password');
     }
 
     // Optional: update last login
@@ -1314,7 +1334,11 @@ const renewTokens = asyncHandler(async (req, res) => {
         }
 
         // Validate refresh token
-        if (user.refreshToken !== receivedRefreshToken) {
+        const receivedRefreshTokenHash = sha256Hex(receivedRefreshToken);
+        const refreshTokenMatches =
+            user.refreshToken === receivedRefreshTokenHash ||
+            user.refreshToken === receivedRefreshToken;
+        if (!refreshTokenMatches) {
             throw new ApiError(401, "Refresh token expired or already used");
         }
 
@@ -1324,6 +1348,7 @@ const renewTokens = asyncHandler(async (req, res) => {
 
         // Optional: update last token renewal time
         user.lastTokenRenewed = new Date();
+        user.refreshToken = receivedRefreshTokenHash;
         await user.save({ validateBeforeSave: false });
 
         return res.status(200)
@@ -1392,8 +1417,17 @@ const forgotPassword = asyncHandler(async (req, res) => {
     let devResetToken = "";
 
     if (!user) {
-        // User requested behavior: only proceed when an account exists.
-        throw new ApiError(404, "Account not found for the provided username/email/phone.");
+        return res.status(200).json(
+            new ApiResponse(200, {
+                delivery: "email",
+                requestId,
+                otpExpiresInSeconds: Math.ceil(otpExpiryMs / 1000),
+                otpExpiresAt: otpExpiresAt.toISOString(),
+                resendAvailableInSeconds: Math.ceil(resendCooldownMs / 1000),
+                resendAvailableAt: resendAvailableAt.toISOString(),
+                linkExpiresAt: resetLinkExpiresAt.toISOString(),
+            }, "If the account exists, password reset instructions have been sent to its email.")
+        );
     }
 
     if (!user.email || !isValidEmail(user.email)) {
@@ -1671,6 +1705,7 @@ const completeForgotPasswordReset = asyncHandler(async (req, res) => {
     if (!resetGrant || !newPassword) {
         throw new ApiError(400, "Reset grant and new password are required");
     }
+    assertStrongPassword(newPassword, "New password");
 
     const now = Date.now();
     const grantHash = sha256Hex(resetGrant);
@@ -1703,6 +1738,7 @@ const resetPassword = asyncHandler(async (req, res) => {
     if (!token || !newPassword || newPassword.trim() === '') {
         throw new ApiError(400, "Token and new password are required");
     }
+    assertStrongPassword(newPassword, "New password");
 
     if (!otp || String(otp).trim() === "") {
         throw new ApiError(400, "Reset code (OTP) is required");
@@ -1773,6 +1809,7 @@ const changePassword = asyncHandler(async (req, res) => {
     if (!newPassword || newPassword.trim() === '') {
         throw new ApiError(400, isSettingSocialPassword ? "New password is required" : "Current and new password are required");
     }
+    assertStrongPassword(newPassword, "New password");
 
     if (isSettingSocialPassword && !user.phone_number) {
         throw new ApiError(400, "Add a phone number before setting password login");
@@ -1978,9 +2015,7 @@ const completeUserOnboarding = asyncHandler(async (req, res) => {
     if (!onboardingPassword) {
         throw new ApiError(400, "Password is required to complete onboarding");
     }
-    if (getPasswordStrengthScore(onboardingPassword) < 2) {
-        throw new ApiError(400, "Password too weak. Try a stronger combination.");
-    }
+    assertStrongPassword(onboardingPassword);
 
     // Optional username customization
     const wantsUsernameUpdate = Boolean(username?.trim()) && username.trim() !== user.username;
@@ -2971,6 +3006,9 @@ const updateUser = asyncHandler(async (req, res) => {
     // Find user
     const user = await User.findById(id);
     if (!user) throw new ApiError(404, "User not found");
+    if (Object.prototype.hasOwnProperty.call(req.body, "role") && !hasRole(req.user, "super_admin")) {
+        throw new ApiError(403, "Only a super admin can change user roles");
+    }
 
     // Fields allowed to update
     const allowedFields = ["username", "phone_number", "role", "isActive"];
@@ -2981,9 +3019,10 @@ const updateUser = asyncHandler(async (req, res) => {
     });
 
     const updatedUser = await user.save();
+    const safeUser = await User.findById(updatedUser._id).select("-password -refreshToken -transferPinHash");
 
     return res.status(200).json(
-        new ApiResponse(200, updatedUser, "User updated successfully")
+        new ApiResponse(200, safeUser, "User updated successfully")
     );
 });
 

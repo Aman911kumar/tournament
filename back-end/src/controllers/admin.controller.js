@@ -27,6 +27,8 @@ import { createNotification } from "../services/notification.service.js";
 import { getSocketStats } from "../services/socket.service.js";
 import { deleteCacheByPrefix, getCache, setCache } from "../services/cache.service.js";
 
+const escapeRegex = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const adminCollections = {
     users: { model: User, label: "Users", sort: { createdAt: -1 } },
     wallets: { model: Wallet, label: "Wallets", sort: { updatedAt: -1 } },
@@ -1378,28 +1380,29 @@ const getAdminCollectionRecords = asyncHandler(async (req, res) => {
     const page = Math.max(Number(req.query.page) || 1, 1);
     const skip = (page - 1) * limit;
     const search = String(req.query.search || "").trim();
+    const searchPattern = escapeRegex(search).slice(0, 80);
     const creatorRequestStatus = String(req.query.creatorRequestStatus || "").trim();
 
     const query = search
         ? {
             $or: [
-                { username: { $regex: search, $options: "i" } },
-                { title: { $regex: search, $options: "i" } },
-                { name: { $regex: search, $options: "i" } },
-                { email: { $regex: search, $options: "i" } },
-                { phone_number: { $regex: search, $options: "i" } },
-                { status: { $regex: search, $options: "i" } },
-                { accountStatus: { $regex: search, $options: "i" } },
-                { type: { $regex: search, $options: "i" } },
-                { game: { $regex: search, $options: "i" } },
-                { gameId: { $regex: search, $options: "i" } },
-                { handle: { $regex: search, $options: "i" } },
-                { category: { $regex: search, $options: "i" } },
-                { action: { $regex: search, $options: "i" } },
-                { transactionId: { $regex: search, $options: "i" } },
-                { providerOrderId: { $regex: search, $options: "i" } },
-                { providerPaymentId: { $regex: search, $options: "i" } },
-                { "meta.purpose": { $regex: search, $options: "i" } },
+                { username: { $regex: searchPattern, $options: "i" } },
+                { title: { $regex: searchPattern, $options: "i" } },
+                { name: { $regex: searchPattern, $options: "i" } },
+                { email: { $regex: searchPattern, $options: "i" } },
+                { phone_number: { $regex: searchPattern, $options: "i" } },
+                { status: { $regex: searchPattern, $options: "i" } },
+                { accountStatus: { $regex: searchPattern, $options: "i" } },
+                { type: { $regex: searchPattern, $options: "i" } },
+                { game: { $regex: searchPattern, $options: "i" } },
+                { gameId: { $regex: searchPattern, $options: "i" } },
+                { handle: { $regex: searchPattern, $options: "i" } },
+                { category: { $regex: searchPattern, $options: "i" } },
+                { action: { $regex: searchPattern, $options: "i" } },
+                { transactionId: { $regex: searchPattern, $options: "i" } },
+                { providerOrderId: { $regex: searchPattern, $options: "i" } },
+                { providerPaymentId: { $regex: searchPattern, $options: "i" } },
+                { "meta.purpose": { $regex: searchPattern, $options: "i" } },
             ],
         }
         : {};

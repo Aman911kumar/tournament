@@ -111,7 +111,7 @@ const protect = asyncHandler(async (req, res, next) => {
         const user = await getAuthUser(decodedToken?._id);
 
         if (!user) {
-            throw new ApiError(402, "Invalid access token");
+            throw new ApiError(401, "Invalid access token");
         }
 
         assertUsableAccount(user);

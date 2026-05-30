@@ -255,7 +255,6 @@ const refreshAuthSession = async (): Promise<boolean> => {
 
   refreshPromise = (async () => {
     const refreshToken = getRefreshToken();
-    if (!refreshToken && !hasAuthSession()) return false;
 
     try {
       const res = await fetch(`${API_BASE_URL}${REFRESH_ENDPOINT}`, {
