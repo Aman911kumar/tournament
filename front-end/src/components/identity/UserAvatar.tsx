@@ -67,7 +67,7 @@ export const UserAvatar = ({
       <Avatar
         className={cn(
           sizeClass[size],
-          "border-white/10 bg-[radial-gradient(circle_at_30%_20%,hsl(var(--primary)/0.24),hsl(var(--card))_62%)] shadow-[0_0_0_1px_hsl(var(--primary)/0.08)]",
+          "border-glass-border bg-[radial-gradient(circle_at_30%_20%,hsl(var(--primary)/0.24),hsl(var(--card))_62%)] shadow-[0_0_0_1px_hsl(var(--primary)/0.08)]",
           isCreator && "border-secondary/35 shadow-[0_0_0_1px_hsl(var(--secondary)/0.18)]",
           isAdmin && "border-accent/40 shadow-[0_0_0_1px_hsl(var(--accent)/0.2)]",
         )}

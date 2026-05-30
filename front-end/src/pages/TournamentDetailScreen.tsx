@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Award,
   Calendar,
+  ChevronRight,
   Clock3,
   Copy,
   Crosshair,
@@ -188,6 +189,7 @@ const TournamentDetailScreen = () => {
     verified: Boolean(tournament?.channel || tournament?.organizer),
     rating: tournament?.organizer?.stats?.rating ?? 4.5,
   };
+  const creatorProfilePath = creator.id ? `/creator/${creator.id}` : "";
 
   const rules = tournament?.rules
     ? tournament.rules.split("\n").filter(Boolean)
@@ -362,20 +364,23 @@ const TournamentDetailScreen = () => {
   };
 
   return (
-    <div className="arena-shell min-h-screen pb-8">
+    <div className="arena-shell min-h-screen pb-[calc(5.75rem_+_env(safe-area-inset-bottom))]">
       <style>{`
         .tournament-section {
           border: 1px solid hsl(var(--border) / 0.72);
-          background:
-            linear-gradient(135deg, hsl(var(--card) / 0.88), hsl(var(--background) / 0.96)),
-            radial-gradient(circle at 100% 0%, hsl(var(--primary) / 0.08), transparent 34%);
-          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.045), 0 12px 28px rgb(0 0 0 / 0.18);
+          background: linear-gradient(135deg, hsl(var(--card) / 0.78), hsl(var(--background) / 0.92));
+          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.035);
+          padding: 0.9rem !important;
         }
         .detail-tile {
-          border: 1px solid hsl(var(--border) / 0.68);
-          background: hsl(var(--background) / 0.46);
-          transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+          border: 0;
+          border-top: 1px solid hsl(var(--border) / 0.62);
+          background: transparent;
+          border-radius: 0 !important;
+          padding: 0.65rem 0 !important;
+          transition: color 150ms ease, transform 150ms ease;
         }
+        .detail-tile:first-child { border-top: 0; padding-top: 0 !important; }
         .detail-tile:active { transform: scale(0.99); }
         .status-pulse {
           box-shadow: 0 0 0 0 hsl(var(--accent) / 0.36);
@@ -387,6 +392,9 @@ const TournamentDetailScreen = () => {
         }
         @media (prefers-reduced-motion: reduce) {
           .status-pulse { animation: none; }
+        }
+        @media (max-width: 640px) {
+          .tournament-section { padding: 0.75rem !important; }
         }
       `}</style>
 
@@ -468,11 +476,11 @@ const TournamentDetailScreen = () => {
                     <span className={`h-2 w-2 rounded-full ${statusMeta.dot} ${tournament.status === "running" ? "status-pulse" : ""}`} />
                     {statusMeta.label}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/28 px-3 py-1 font-heading text-[11px] text-white">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-black/28 px-3 py-1 font-heading text-[11px] text-white">
                     <Gamepad2 className="h-3.5 w-3.5 text-cyan-200" />
                     {gameLabels[tournament.game] ?? tournament.game}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/28 px-3 py-1 font-heading text-[11px] text-white">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-black/28 px-3 py-1 font-heading text-[11px] text-white">
                     <Eye className="h-3.5 w-3.5 text-primary" />
                     {Number(tournament.views || 0).toLocaleString("en-IN")} views
                   </span>
@@ -494,7 +502,7 @@ const TournamentDetailScreen = () => {
                     <button
                       type="button"
                       onClick={() => creator.id && navigate(`/creator/${creator.id}`)}
-                      className="arena-focus inline-flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-black/32 px-2.5 py-2 text-left"
+                      className="arena-focus inline-flex max-w-full items-center gap-2 rounded-full border border-primary/25 bg-black/32 px-2.5 py-2 text-left"
                     >
                       <UserAvatar
                         user={{
@@ -524,7 +532,7 @@ const TournamentDetailScreen = () => {
                     { icon: Timer, label: countdownLabel, value: countdownValue, tone: "text-primary" },
                     { icon: Wallet, label: "Entry Fee", value: entryFee === 0 ? "Free" : formatCurrency(entryFee), tone: "text-emerald-200" },
                   ].map((item) => (
-                    <div key={item.label} className="rounded-lg border border-white/12 bg-black/34 p-3">
+                    <div key={item.label} className="rounded-lg border border-glass-border bg-black/34 p-3">
                       <item.icon className={`mb-2 h-4 w-4 ${item.tone}`} />
                       <p className="text-[10px] uppercase tracking-[0.14em] text-white/48">{item.label}</p>
                       <p className="mt-1 truncate font-heading text-lg font-black text-white">{item.value}</p>
@@ -628,6 +636,41 @@ const TournamentDetailScreen = () => {
                       className="min-w-0 flex-1"
                     />
                     {creator.verified && <Shield className="h-4 w-4 fill-accent text-accent" />}
+                  </div>
+                  {creatorProfilePath && (
+                    <div className="mt-3 border-t border-glass-border/70 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => navigate(creatorProfilePath)}
+                        className="arena-focus flex w-full items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-left transition-colors hover:border-primary/45 hover:bg-primary/15"
+                      >
+                        <span className="min-w-0">
+                          <span className="block font-heading text-xs font-bold text-primary">Open creator profile</span>
+                          <span className="block truncate text-[11px] text-muted-foreground">
+                            View tournaments, ratings, and creator details
+                          </span>
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
+                      </button>
+                    </div>
+                  )}
+                </section>
+
+                <section className="tournament-section rounded-xl p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="flex items-center gap-2 font-heading text-sm font-bold text-destructive">
+                        <Flag className="h-4 w-4" />
+                        Report Match Issue
+                      </h3>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Cheating, room issues, fake results, abuse, or payout disputes.
+                      </p>
+                    </div>
+                    <NeonButton variant="danger" className="min-h-9 shrink-0 px-3 text-xs" onClick={() => setReportOpen(true)}>
+                      <Flag className="h-3.5 w-3.5" />
+                      Report
+                    </NeonButton>
                   </div>
                 </section>
               </aside>
@@ -890,22 +933,6 @@ const TournamentDetailScreen = () => {
                   </div>
                 </section>
 
-                <section className="tournament-section rounded-xl p-4 sm:p-5">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <h3 className="flex items-center gap-2 font-heading text-base font-bold">
-                        <Flag className="h-5 w-5 text-destructive" />
-                        Report Match Issue
-                      </h3>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Report cheating, fake results, room problems, abusive behavior, or missing prize distribution.
-                      </p>
-                    </div>
-                    <NeonButton variant="blue" className="shrink-0 text-xs" onClick={() => setReportOpen(true)}>
-                      Report
-                    </NeonButton>
-                  </div>
-                </section>
               </div>
             </div>
           </>
@@ -991,7 +1018,7 @@ const TournamentDetailScreen = () => {
 
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <NeonButton variant="blue" onClick={() => setReportOpen(false)} disabled={submittingReport}>Cancel</NeonButton>
-                <NeonButton variant="purple" onClick={submitReport} disabled={submittingReport}>
+                <NeonButton variant="danger" onClick={submitReport} disabled={submittingReport}>
                   {submittingReport ? "Submitting..." : "Submit"}
                 </NeonButton>
               </div>

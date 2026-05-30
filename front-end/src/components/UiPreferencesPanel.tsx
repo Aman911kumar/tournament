@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   Gauge,
   MonitorSmartphone,
@@ -18,33 +19,39 @@ import {
 import { Surface } from "@/components/design-system";
 import { cn } from "@/lib/utils";
 
-const ChoiceButton = <T extends string>({
-  active,
-  label,
-  value,
-  onClick,
+type PreferenceOption<T extends string> = { label: string; value: T };
+
+const selectClassName =
+  "arena-focus h-9 w-full rounded-sm border border-glass-border bg-[#0D1117] px-2.5 font-heading text-xs font-bold text-foreground outline-none transition-colors hover:border-primary/35 focus:border-primary/55";
+
+const rangeClassName =
+  "h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary";
+
+const getOptionLabel = <T extends string>(
+  options: Array<PreferenceOption<T>>,
+  value: T,
+) => options.find((option) => option.value === value)?.label ?? value;
+
+const PreferenceShell = ({
+  icon: Icon,
+  title,
+  children,
 }: {
-  active: boolean;
-  label: string;
-  value: T;
-  onClick: (value: T) => void;
+  icon: typeof Type;
+  title: string;
+  children: ReactNode;
 }) => (
-  <button
-    type="button"
-    onClick={() => onClick(value)}
-    className={cn(
-      "arena-focus min-h-9 rounded-md border px-2.5 font-heading text-[11px] font-bold transition-colors",
-      active
-        ? "border-primary/45 bg-primary/15 text-primary"
-        : "border-glass-border bg-background/38 text-muted-foreground hover:border-primary/35 hover:text-foreground",
-    )}
-  >
-    {label}
-  </button>
+  <div className="grid gap-2 border-t border-glass-border/70 px-3 py-2.5 sm:grid-cols-[116px_1fr] sm:items-center">
+    <div className="flex items-center gap-2">
+      <Icon className="h-4 w-4 text-primary" />
+      <p className="font-heading text-xs font-bold">{title}</p>
+    </div>
+    {children}
+  </div>
 );
 
-const PreferenceRow = <T extends string>({
-  icon: Icon,
+const SelectPreference = <T extends string>({
+  icon,
   title,
   options,
   value,
@@ -52,39 +59,87 @@ const PreferenceRow = <T extends string>({
 }: {
   icon: typeof Type;
   title: string;
-  options: Array<{ label: string; value: T }>;
+  options: Array<PreferenceOption<T>>;
   value: T;
   onChange: (value: T) => void;
 }) => (
-  <div className="grid gap-2 sm:grid-cols-[140px_1fr] sm:items-center">
-    <div className="flex items-center gap-2">
-      <Icon className="h-4 w-4 text-primary" />
-      <p className="font-heading text-xs font-bold">{title}</p>
-    </div>
-    <div className="grid grid-cols-2 gap-1.5 min-[420px]:grid-cols-3">
+  <PreferenceShell icon={icon} title={title}>
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value as T)}
+      className={selectClassName}
+    >
       {options.map((option) => (
-        <ChoiceButton
-          key={option.value}
-          active={value === option.value}
-          label={option.label}
-          value={option.value}
-          onClick={onChange}
-        />
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
       ))}
-    </div>
-  </div>
+    </select>
+  </PreferenceShell>
 );
+
+const RangePreference = <T extends string>({
+  icon,
+  title,
+  options,
+  value,
+  onChange,
+}: {
+  icon: typeof Type;
+  title: string;
+  options: Array<PreferenceOption<T>>;
+  value: T;
+  onChange: (value: T) => void;
+}) => {
+  const activeIndex = Math.max(
+    0,
+    options.findIndex((option) => option.value === value),
+  );
+
+  return (
+    <PreferenceShell icon={icon} title={title}>
+      <div className="min-w-0">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-heading text-[11px] text-muted-foreground">
+            {options[0]?.label}
+          </span>
+          <span className="rounded-sm border border-primary/25 bg-primary/10 px-2 py-0.5 font-heading text-[10px] font-bold uppercase tracking-wide text-primary">
+            {getOptionLabel(options, value)}
+          </span>
+          <span className="font-heading text-[11px] text-muted-foreground">
+            {options[options.length - 1]?.label}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={Math.max(0, options.length - 1)}
+          step={1}
+          value={activeIndex}
+          onChange={(event) => {
+            const option = options[Number(event.target.value)];
+            if (option) onChange(option.value);
+          }}
+          className={cn(rangeClassName, "mt-2")}
+          aria-label={title}
+        />
+      </div>
+    </PreferenceShell>
+  );
+};
 
 export const UiPreferencesPanel = () => {
   const { preferences, setPreferences, resetPreferences } = useUiPreferences();
 
   return (
-    <Surface className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
+    <Surface className="overflow-hidden bg-[#101620]/90 p-0">
+      <div className="flex items-center justify-between gap-3 px-3 py-2.5">
         <div className="min-w-0">
-          <p className="font-heading text-sm font-black">Interface</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            Tune density, text, contrast, and motion for your device.
+          <p className="font-heading text-xs font-black uppercase tracking-[0.08em]">
+            Interface
+          </p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">
+            Compact display controls
           </p>
         </div>
         <button
@@ -97,7 +152,7 @@ export const UiPreferencesPanel = () => {
         </button>
       </div>
 
-      <PreferenceRow<UiDensity>
+      <SelectPreference<UiDensity>
         icon={Gauge}
         title="Density"
         value={preferences.density}
@@ -108,7 +163,7 @@ export const UiPreferencesPanel = () => {
         ]}
       />
 
-      <PreferenceRow<UiTextScale>
+      <RangePreference<UiTextScale>
         icon={Type}
         title="Text"
         value={preferences.textScale}
@@ -120,7 +175,7 @@ export const UiPreferencesPanel = () => {
         ]}
       />
 
-      <PreferenceRow<UiScale>
+      <RangePreference<UiScale>
         icon={MonitorSmartphone}
         title="UI scale"
         value={preferences.uiScale}
@@ -132,7 +187,7 @@ export const UiPreferencesPanel = () => {
         ]}
       />
 
-      <PreferenceRow<UiMotion>
+      <SelectPreference<UiMotion>
         icon={Zap}
         title="Motion"
         value={preferences.motion}
@@ -143,7 +198,7 @@ export const UiPreferencesPanel = () => {
         ]}
       />
 
-      <PreferenceRow<UiAnimationIntensity>
+      <RangePreference<UiAnimationIntensity>
         icon={Sparkles}
         title="Animation"
         value={preferences.animationIntensity}
@@ -155,7 +210,7 @@ export const UiPreferencesPanel = () => {
         ]}
       />
 
-      <PreferenceRow<UiContrast>
+      <SelectPreference<UiContrast>
         icon={Gauge}
         title="Contrast"
         value={preferences.contrast}

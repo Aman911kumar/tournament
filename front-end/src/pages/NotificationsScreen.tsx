@@ -34,6 +34,7 @@ import {
   StatusPill,
   Surface,
 } from "@/components/design-system";
+import { getNotificationSocket } from "@/lib/notification-socket";
 import { cn } from "@/lib/utils";
 
 const iconColorMap: Record<string, string> = {
@@ -45,7 +46,7 @@ const iconColorMap: Record<string, string> = {
   tournament: "text-secondary",
   reward: "text-accent",
   security: "text-destructive",
-  report: "text-secondary",
+  report: "text-destructive",
   moderation: "text-destructive",
   system: "text-neon-pink",
 };
@@ -115,6 +116,23 @@ const NotificationsScreen = () => {
 
   useEffect(() => {
     loadNotifications();
+  }, []);
+
+  useEffect(() => {
+    const socket = getNotificationSocket();
+    if (!socket) return;
+
+    const handleNewNotification = (notification: NotificationItem) => {
+      setNotifications((prev) => [
+        notification,
+        ...prev.filter((item) => item._id !== notification._id),
+      ].slice(0, 50));
+    };
+
+    socket.on("notification:new", handleNewNotification);
+    return () => {
+      socket.off("notification:new", handleNewNotification);
+    };
   }, []);
 
   const handleMarkAllRead = async () => {
@@ -233,14 +251,14 @@ const NotificationsScreen = () => {
           <button
             type="button"
             onClick={handleMarkAllRead}
-            className="arena-focus rounded-xl border border-primary/25 bg-primary/10 px-3 py-2 font-heading text-xs font-bold text-primary"
+            className="arena-focus rounded-md border border-primary/30 bg-[#101620] px-3 py-2 font-heading text-xs font-bold text-primary transition-colors hover:bg-primary/10"
           >
             Mark read
           </button>
         }
       />
 
-      <Surface className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <Surface className="flex flex-col gap-3 bg-[#101620] sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <StatusPill tone="primary">Device alerts</StatusPill>
@@ -256,7 +274,7 @@ const NotificationsScreen = () => {
           type="button"
           onClick={enablePushNotifications}
           disabled={pushLoading}
-          className="arena-focus min-h-10 rounded-xl border border-primary/40 bg-primary/10 px-4 font-heading text-xs font-bold text-primary transition-colors hover:bg-primary/20 disabled:opacity-60"
+          className="arena-focus min-h-10 rounded-md border border-primary/40 bg-[#0D1117] px-4 font-heading text-xs font-bold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
         >
           {pushLoading ? "Enabling..." : "Enable"}
         </button>
@@ -285,7 +303,7 @@ const NotificationsScreen = () => {
             <button
               type="button"
               onClick={loadNotifications}
-              className="arena-focus inline-flex items-center gap-1.5 rounded-xl border border-primary/25 px-3 py-2 font-heading text-xs font-bold text-primary"
+              className="arena-focus inline-flex items-center gap-1.5 rounded-md border border-primary/25 bg-[#101620] px-3 py-2 font-heading text-xs font-bold text-primary"
             >
               <RefreshCcw className="h-3.5 w-3.5" /> Retry
             </button>
@@ -311,13 +329,16 @@ const NotificationsScreen = () => {
               interactive
               neon={!notification.read}
               onClick={() => handleOpenNotification(notification)}
-              className="p-3"
+              className={cn(
+                "p-3",
+                notification.read ? "bg-[#101620]" : "border-primary/35 bg-[#0F1B24]",
+              )}
             >
               <div className="flex gap-3">
                 <div
                   className={cn(
                     "grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-glass-border bg-background/45",
-                    !notification.read && "border-primary/30 bg-primary/10",
+                    !notification.read ? "border-primary/30 bg-primary/10" : "bg-[#0D1117]",
                   )}
                 >
                   <Icon

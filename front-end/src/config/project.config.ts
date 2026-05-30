@@ -8,7 +8,7 @@
 
 export const PROJECT_CONFIG = {
   api: {
-    localBaseUrl: "http://localhost:3000/api/v1",
+    localBaseUrl: "http://192.168.29.138:3000/api/v1",
     fastProductionBaseUrl: "https://api.battle4arena.fun/api/v1",
     realtimeProductionBaseUrl: "https://realtime.battle4arena.fun/api/v1",
     timeoutMs: {

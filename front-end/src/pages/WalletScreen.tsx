@@ -163,23 +163,25 @@ const WalletStat = ({
   note: string;
   tone?: string;
 }) => (
-  <div className="wallet-tile wallet-stat min-w-0 rounded-lg p-2 sm:rounded-xl sm:p-3">
-    <div className="mb-1.5 flex items-center gap-1.5 sm:mb-2 sm:gap-2">
+  <div className="wallet-tile wallet-stat arena-fluid-card flex min-w-0 items-center gap-2 rounded-lg p-2 sm:block sm:rounded-xl sm:p-3">
+    <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:mb-2 sm:gap-2">
       <span
-        className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border border-white/10 bg-background/45 sm:h-8 sm:w-8 sm:rounded-lg ${tone}`}
+        className={`arena-icon-cell grid shrink-0 place-items-center rounded-md border border-glass-border bg-background/45 sm:h-8 sm:w-8 sm:rounded-lg ${tone}`}
       >
         <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       </span>
-      <p className="min-w-0 truncate text-[10px] font-heading text-muted-foreground sm:text-[11px]">
+      <p className="arena-fluid-copy min-w-0 font-heading text-muted-foreground">
         {label}
       </p>
     </div>
-    <p className="truncate font-heading text-sm font-black sm:text-lg">
-      {value}
-    </p>
-    <p className="wallet-stat-note mt-0.5 truncate text-[10px] text-muted-foreground sm:mt-1">
-      {note}
-    </p>
+    <div className="min-w-0 shrink-0 text-right sm:text-left">
+      <p className="arena-fluid-title font-heading font-black sm:text-lg">
+        {value}
+      </p>
+      <p className="wallet-stat-note b4a-soft-copy arena-fluid-copy mt-0.5 text-muted-foreground sm:mt-1">
+        {note}
+      </p>
+    </div>
   </div>
 );
 
@@ -211,35 +213,38 @@ const TransactionRow = ({
         ease: "easeOut",
       }}
       onClick={onClick}
-      className="arena-focus wallet-transaction group w-full rounded-lg p-2 text-left sm:rounded-xl sm:p-3"
+      className="arena-focus wallet-transaction group w-full rounded-md p-2 text-left"
     >
-      <div className="wallet-transaction-grid grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[2.75rem_1fr_auto] sm:gap-3">
+      <div className="wallet-transaction-grid grid grid-cols-[2.25rem_minmax(0,1fr)_4.5rem] items-center gap-2 sm:grid-cols-[2.5rem_1fr_5.25rem] sm:gap-3">
         <span
-          className={`grid h-8 w-8 place-items-center rounded-lg border sm:h-11 sm:w-11 sm:rounded-xl ${credit ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200" : "border-primary/25 bg-primary/10 text-primary"}`}
+          className={`grid h-9 w-9 place-items-center rounded-sm border sm:h-10 sm:w-10 ${credit ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200" : "border-primary/25 bg-primary/10 text-primary"}`}
         >
-          <Icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
+          <Icon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
         </span>
         <span className="min-w-0">
-          <span className="block truncate font-heading text-xs font-bold sm:text-sm">
+          <span className="block truncate font-heading text-[12px] font-bold leading-tight sm:text-sm">
             {transaction.label}
           </span>
-          <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1 text-[10px] text-muted-foreground sm:mt-1 sm:gap-1.5">
-            <span className="truncate">{transaction.date}</span>
-            <span
-              className={`rounded-full border px-1.5 py-px font-heading sm:py-0.5 ${style.bg} ${style.text}`}
-            >
-              {formatTransactionStatus(transaction.status)}
+          <span className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] leading-none text-muted-foreground sm:text-[11px]">
+            <span className="truncate" title={transaction.date}>
+              {transaction.date}
+            </span>
+            <span className="wallet-transaction-separator h-1 w-1 shrink-0 rounded-full bg-muted-foreground/45" />
+            <span className="wallet-transaction-source shrink-0">
+              {transaction.kind === "PAYMENT" ? "Gateway" : "Wallet"}
             </span>
           </span>
         </span>
-        <span className="wallet-transaction-amount text-right">
+        <span className="wallet-transaction-amount min-w-0 text-right">
           <span
-            className={`block whitespace-nowrap font-heading text-xs font-black sm:text-sm ${credit ? "text-emerald-200" : "text-foreground"}`}
+            className={`block whitespace-nowrap font-heading text-[12px] font-black leading-tight sm:text-sm ${credit ? "text-emerald-200" : "text-foreground"}`}
           >
             {amountLabel}
           </span>
-          <span className="mt-0.5 block text-[10px] text-muted-foreground sm:mt-1">
-            {transaction.kind === "PAYMENT" ? "Gateway" : "Wallet"}
+          <span
+            className={`mt-1 inline-flex max-w-full items-center rounded-sm border px-1.5 py-0.5 font-heading text-[9px] font-bold uppercase leading-none ${style.bg} ${style.text}`}
+          >
+            {formatTransactionStatus(transaction.status)}
           </span>
         </span>
       </div>
@@ -429,22 +434,25 @@ const WalletScreen = () => {
   }, [activeTab, historyView]);
 
   return (
-    <div className="arena-shell min-h-[100dvh] overflow-x-hidden pb-[calc(5.75rem+env(safe-area-inset-bottom))] sm:pb-24">
+    <div className="arena-shell min-h-[100dvh] overflow-x-hidden pb-[calc(5.75rem_+_env(safe-area-inset-bottom))] sm:pb-24">
       <style>{`
         .wallet-hero {
           background:
-            radial-gradient(circle at 86% 8%, hsl(var(--accent) / 0.16), transparent 26%),
-            radial-gradient(circle at 8% 0%, hsl(var(--primary) / 0.18), transparent 30%),
-            linear-gradient(135deg, hsl(var(--card) / 0.94), hsl(var(--background) / 0.96));
-          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.045), 0 12px 28px rgb(0 0 0 / 0.18);
+            linear-gradient(180deg, hsl(var(--primary) / 0.08), transparent 44%),
+            hsl(var(--card) / 0.96);
+          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.08);
+        }
+        .wallet-panel {
+          border: 1px solid hsl(var(--border) / 0.72);
+          background: hsl(var(--card) / 0.96);
+          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.06);
         }
         .wallet-tile,
         .wallet-action-card,
-        .wallet-transaction,
-        .wallet-panel {
+        .wallet-transaction {
           border: 1px solid hsl(var(--border) / 0.72);
-          background: hsl(var(--card) / 0.74);
-          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.04);
+          background: hsl(var(--card) / 0.96);
+          box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.06);
         }
         .wallet-action-card {
           transition: transform 150ms ease, border-color 150ms ease, background-color 150ms ease;
@@ -470,22 +478,47 @@ const WalletScreen = () => {
           .live-dot { animation: none; }
         }
         @media (max-width: 420px) {
+          .wallet-transaction {
+            padding: 0.375rem 0.5rem;
+          }
           .wallet-transaction-grid {
-            grid-template-columns: 2rem minmax(0, 1fr);
+            grid-template-columns: 2rem minmax(0, 1fr) 3.875rem !important;
+            gap: 0.5rem;
           }
-          .wallet-transaction-amount {
-            grid-column: 2;
-            text-align: left;
+          .wallet-transaction-source {
+            display: none;
           }
+          .wallet-transaction-separator {
+            display: none;
+          }
+          .wallet-transaction-amount > span:first-child {
+            font-size: 0.6875rem;
+          }
+          .wallet-transaction-amount > span:last-child {
+            max-width: 100%;
+            padding-inline: 0.25rem;
+            font-size: 0.5rem;
+          }
+        }
+        .wallet-hero .wallet-tile,
+        .wallet-panel .wallet-tile,
+        .wallet-panel .wallet-action-card,
+        .wallet-panel .wallet-transaction {
+          border: 0;
+          border-radius: 0;
+          background: transparent;
+          box-shadow: none;
+        }
+        .wallet-panel .wallet-action-card + .wallet-action-card,
+        .wallet-panel .wallet-transaction + .wallet-transaction,
+        .wallet-hero .wallet-tile + .wallet-tile,
+        .wallet-panel .wallet-tile + .wallet-tile {
+          border-top: 1px solid hsl(var(--glass-border));
         }
         @media (max-width: 480px) {
           .wallet-hero,
           .wallet-panel {
-            border-radius: 1rem;
-          }
-          .wallet-stat-note,
-          .wallet-action-desc {
-            display: none;
+            border-radius: var(--radius-panel);
           }
         }
       `}</style>
@@ -523,16 +556,16 @@ const WalletScreen = () => {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            className="wallet-hero relative overflow-hidden rounded-2xl border border-glass-border p-3 sm:p-6"
+            className="wallet-hero relative overflow-hidden rounded-md border border-glass-border p-3 sm:p-5"
           >
-            <div className="absolute right-4 top-4 hidden h-24 w-24 rounded-full border border-white/10 bg-white/5 sm:block" />
+            <div className="absolute right-4 top-4 hidden h-16 w-16 border border-primary/15 bg-primary/5 sm:block" />
             <div className="relative">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-5 sm:gap-3">
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 font-heading text-[10px] font-bold text-emerald-200 sm:gap-2 sm:px-3 sm:text-[11px]">
                   <span className="live-dot h-2 w-2 rounded-full bg-emerald-300" />
                   Realtime wallet
                 </span>
-                <span className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-background/35 px-3 py-1 text-[11px] text-muted-foreground min-[430px]:inline-flex">
+                <span className="b4a-soft-copy hidden items-center gap-1.5 rounded-full border border-glass-border bg-background/35 px-3 py-1 text-[11px] text-muted-foreground min-[430px]:inline-flex">
                   <ShieldCheck className="h-3.5 w-3.5 text-accent" />
                   Protected by account security
                 </span>
@@ -578,7 +611,7 @@ const WalletScreen = () => {
                 </p>
               )}
 
-              <div className="mt-3 grid grid-cols-3 gap-1.5 sm:mt-6 sm:gap-2">
+              <div className="mt-3 grid grid-cols-1 gap-1.5 min-[560px]:grid-cols-3 sm:mt-6 sm:gap-2">
                 <WalletStat
                   icon={Trophy}
                   label="Player Winnings"
@@ -606,19 +639,19 @@ const WalletScreen = () => {
             </div>
           </motion.div>
 
-          <section className="wallet-panel rounded-2xl p-2.5 sm:p-4">
+          <section className="wallet-panel rounded-md p-2.5 sm:p-4">
             <div className="mb-2 flex items-center justify-between gap-3 sm:mb-3">
               <div>
                 <h2 className="font-heading text-sm font-black">
                   Quick Actions
                 </h2>
-                <p className="hidden text-[11px] text-muted-foreground min-[430px]:block">
+                <p className="b4a-soft-copy hidden text-[11px] text-muted-foreground min-[430px]:block">
                   Fast and secure wallet controls
                 </p>
               </div>
               <Zap className="h-4 w-4 text-primary" />
             </div>
-            <div className="grid grid-cols-4 gap-1.5 sm:gap-2 lg:grid-cols-1">
+            <div className="grid grid-cols-2 gap-1.5 min-[430px]:grid-cols-4 sm:gap-2 lg:grid-cols-1">
               {[
                 {
                   icon: Plus,
@@ -657,19 +690,19 @@ const WalletScreen = () => {
                   key={action.title}
                   type="button"
                   onClick={() => navigate(action.route)}
-                  className="arena-focus wallet-action-card rounded-lg p-2 text-center sm:rounded-xl sm:p-3 lg:text-left"
+                  className="arena-focus wallet-action-card arena-fluid-card rounded-lg p-2 text-left sm:rounded-xl sm:p-3"
                 >
-                  <span className="flex flex-col items-center gap-1.5 lg:flex-row lg:gap-3">
+                  <span className="flex items-center gap-2 lg:gap-3">
                     <span
-                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border sm:h-10 sm:w-10 sm:rounded-xl ${action.bg} ${action.tone}`}
+                      className={`arena-icon-cell grid shrink-0 place-items-center rounded-lg border sm:h-10 sm:w-10 sm:rounded-xl ${action.bg} ${action.tone}`}
                     >
                       <action.icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-heading text-[10px] font-bold sm:text-sm">
+                      <span className="arena-fluid-title block font-heading font-bold">
                         {action.title}
                       </span>
-                      <span className="wallet-action-desc block truncate text-[11px] text-muted-foreground">
+                      <span className="wallet-action-desc b4a-soft-copy arena-fluid-copy block text-muted-foreground">
                         {action.desc}
                       </span>
                     </span>
@@ -711,7 +744,7 @@ const WalletScreen = () => {
           />
         </section>
 
-        <section className="wallet-panel rounded-2xl p-2.5 sm:p-5">
+        <section className="wallet-panel rounded-md p-2.5 sm:p-5">
           <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <div>
               <h2 className="flex items-center gap-2 font-heading text-sm font-black sm:text-base">
@@ -724,7 +757,7 @@ const WalletScreen = () => {
                   ? "Wallet Ledger"
                   : "Payment Activity"}
               </h2>
-              <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground sm:mt-1 sm:text-xs">
+              <p className="b4a-soft-copy mt-0.5 line-clamp-1 text-[11px] text-muted-foreground sm:mt-1 sm:text-xs">
                 Clear status, amount direction, and source for every money
                 movement.
               </p>

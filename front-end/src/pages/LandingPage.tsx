@@ -33,11 +33,34 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
+import { hasAuthSession } from "@/lib/auth-storage";
 import heroBg from "@/assets/hero-bg.jpg";
 import gameFreefire from "@/assets/game-freefire.jpg";
 import gameBgmi from "@/assets/game-bgmi.jpg";
 import gameValorant from "@/assets/game-valorant.jpg";
 import gameCod from "@/assets/game-cod.jpg";
+
+const getJoinTournamentRoute = () => (hasAuthSession() ? "/tournaments" : "/login");
+
+const JoinTournamentLink = ({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) => {
+  const to = getJoinTournamentRoute();
+
+  return (
+    <Link
+      to={to}
+      state={to === "/login" ? { from: { pathname: "/tournaments" } } : undefined}
+      className={className}
+    >
+      {children}
+    </Link>
+  );
+};
 /* ---------- Reusable bits ---------- */
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -125,7 +148,7 @@ const ArenaBackground = () => (
       className="absolute inset-0 opacity-[0.04] mix-blend-overlay"
       style={{
         backgroundImage:
-          "repeating-linear-gradient(0deg, rgba(255,255,255,0.6) 0px, rgba(255,255,255,0.6) 1px, transparent 1px, transparent 4px)",
+          "repeating-linear-gradient(0deg, hsl(var(--primary)/0.4) 0px, hsl(var(--primary)/0.4) 1px, transparent 1px, transparent 4px)",
       }}
     />
   </div>
@@ -294,13 +317,12 @@ const Hero = () => {
             Download APK
             <ChevronRight className="w-4 h-4 -mr-1 transition-transform group-hover:translate-x-0.5" />
           </a>
-          <a
-            href="#tournaments"
+          <JoinTournamentLink
             className="inline-flex items-center gap-2 rounded-lg border border-glass-border bg-card/60 px-5 py-3 text-sm font-heading font-semibold uppercase tracking-wider text-foreground hover:bg-card/80 transition-colors"
           >
             <Trophy className="w-4 h-4 text-accent" />
             Join Tournament
-          </a>
+          </JoinTournamentLink>
         </div>
         {/* Stats row */}
         <motion.div
@@ -502,6 +524,14 @@ const CreatorSection = () => (
           A complete organizer dashboard with room ID/password management, moderation tools,
           revenue reporting and audience growth - without leaving the app.
         </motion.p>
+        <motion.div variants={fadeUp} className="mt-5 rounded-lg border border-primary/20 bg-primary/5 p-3">
+          <p className="font-heading text-xs font-bold uppercase tracking-[0.12em] text-primary">
+            Follow trusted esports organizers
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Discover verified creators by followers, live activity, ratings, and tournament consistency.
+          </p>
+        </motion.div>
         <motion.ul variants={stagger} className="mt-6 space-y-3">
           {[
             "Secure room code distribution to verified players",
@@ -733,9 +763,9 @@ const DownloadSection = () => (
                 </div>
               ))}
             </div>
-            <div className="mx-3 mt-3 p-2 rounded-lg bg-primary text-primary-foreground text-center text-[10px] font-heading uppercase tracking-wider">
+            <JoinTournamentLink className="mx-3 mt-3 block rounded-lg bg-primary p-2 text-center text-[10px] font-heading uppercase tracking-wider text-primary-foreground">
               Join Tournament
-            </div>
+            </JoinTournamentLink>
           </div>
         </motion.div>
       </div>

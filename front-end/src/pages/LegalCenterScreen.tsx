@@ -1231,7 +1231,7 @@ const LegalCenterScreen = () => {
       <div className="mx-auto grid w-full max-w-6xl gap-5 px-4 pb-16 pt-5 sm:px-5 lg:grid-cols-[320px_1fr]">
         <aside className="hidden lg:block">
           <div className="sticky top-[90px]">
-            <ScrollArea className="h-[calc(100vh-130px)] pr-3">
+            <ScrollArea className="h-[calc(100dvh-130px)] pr-3">
               <Sidebar />
             </ScrollArea>
           </div>

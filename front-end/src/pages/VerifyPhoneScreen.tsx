@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, LoaderCircle } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
 import { confirmPhoneVerification } from "@/api/profile";
 import { getErrorMessage } from "@/lib/page-utils";
 import { PageShell, StatusPill, Surface } from "@/components/design-system";
+import { setCurrentProfileCache } from "@/hooks/useCurrentProfile";
 
 const VerifyPhoneScreen = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("Verifying your phone...");
 
@@ -25,6 +28,7 @@ const VerifyPhoneScreen = () => {
     confirmPhoneVerification(token)
       .then((res) => {
         if (!active) return;
+        setCurrentProfileCache(queryClient, res.data.user, res);
         setStatus("success");
         setMessage(res.message || "Phone verified successfully.");
       })
@@ -37,7 +41,7 @@ const VerifyPhoneScreen = () => {
     return () => {
       active = false;
     };
-  }, [searchParams]);
+  }, [queryClient, searchParams]);
 
   return (
     <PageShell bottomNavPadding={false} contentClassName="flex min-h-[100dvh] max-w-md items-center py-8">
@@ -46,7 +50,7 @@ const VerifyPhoneScreen = () => {
           <StatusPill tone={status === "success" ? "accent" : status === "error" ? "danger" : "primary"}>
             Phone verification
           </StatusPill>
-          <div className="mx-auto mt-5 grid h-14 w-14 place-items-center rounded-2xl border border-white/10 bg-background/50">
+          <div className="mx-auto mt-5 grid h-14 w-14 place-items-center rounded-2xl border border-glass-border bg-background/50">
             {status === "loading" && <LoaderCircle className="h-7 w-7 animate-spin text-primary" />}
             {status === "success" && <CheckCircle2 className="h-7 w-7 text-accent" />}
             {status === "error" && <AlertCircle className="h-7 w-7 text-destructive" />}

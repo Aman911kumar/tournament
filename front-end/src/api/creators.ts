@@ -69,6 +69,7 @@ export const ENDPOINTS = {
   create: "/channels",
   mine: "/channels/me",
   joined: "/channels/joined",
+  joinedTournaments: "/channels/feed/tournaments",
   channelProfile: (id: string) => `/channels/${id}`,
   update: (id: string) => `/channels/${id}`,
   userProfile: (id: string) => `/channels/creator/${id}`,
@@ -85,6 +86,21 @@ export async function getCreators() {
 export async function getJoinedChannels() {
   const res = await apiFetch<ApiResponse<{ channels: CreatorChannel[]; total: number }>>(ENDPOINTS.joined);
   return res.data?.channels ?? [];
+}
+
+export async function getJoinedChannelTournaments(
+  params: { status?: Tournament["status"]; limit?: number; skip?: number } = {},
+) {
+  const searchParams = new URLSearchParams();
+  if (params.status) searchParams.set("status", params.status);
+  if (params.limit) searchParams.set("limit", String(params.limit));
+  if (params.skip) searchParams.set("skip", String(params.skip));
+
+  const query = searchParams.toString();
+  const res = await apiFetch<ApiResponse<{ tournaments: Tournament[]; total: number }>>(
+    `${ENDPOINTS.joinedTournaments}${query ? `?${query}` : ""}`,
+  );
+  return res.data ?? { tournaments: [], total: 0 };
 }
 
 export async function getCreatorProfile(id: string) {

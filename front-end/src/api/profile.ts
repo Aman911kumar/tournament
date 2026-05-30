@@ -89,6 +89,7 @@ export interface CompleteOnboardingPayload {
   phone_number: string;
   username?: string;
   dateOfBirth: string;
+  password: string;
   agreements: { terms: boolean; privacy: boolean; community: boolean };
   agreementsVersion?: string;
 }
@@ -102,6 +103,16 @@ export interface Stats {
 
 export interface Preferences {
   notifications: boolean;
+}
+
+export interface ProfileVerificationResponse {
+  user: User;
+  verification?: {
+    type: "email" | "phone";
+    delivery: "email";
+    expiresInSeconds: number;
+    resendCooldownSeconds: number;
+  };
 }
 
 export async function getMyProfile(): Promise<ApiResponse<{ user: User }>> {
@@ -147,7 +158,7 @@ export async function completeOnboarding(
   return apiFetch(ENDPOINTS.onboarding, { method: "POST", body: JSON.stringify(payload), credentials: "include", ...options });
 }
 
-export async function verifyEmail(): Promise<ApiResponse<{ user: User }>> {
+export async function verifyEmail(): Promise<ApiResponse<ProfileVerificationResponse>> {
   return apiFetch(ENDPOINTS.verifyEmail, { method: "POST", credentials: "include" });
 }
 
@@ -158,7 +169,7 @@ export async function confirmEmailVerification(token: string): Promise<ApiRespon
   });
 }
 
-export async function verifyPhone(): Promise<ApiResponse<{ user: User }>> {
+export async function verifyPhone(): Promise<ApiResponse<ProfileVerificationResponse>> {
   return apiFetch(ENDPOINTS.verifyPhone, { method: "POST", credentials: "include" });
 }
 

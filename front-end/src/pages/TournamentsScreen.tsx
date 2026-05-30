@@ -3,19 +3,14 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
   ChevronRight,
-  Flame,
-  Gamepad2,
   Radio,
   RefreshCcw,
-  Search,
   SlidersHorizontal,
   Sparkles,
   Trophy,
-  Users,
   WalletCards,
 } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
-import GameArtImage from "@/components/GameArtImage";
 import {
   EmptyState,
   PageHeader,
@@ -28,11 +23,11 @@ import {
 } from "@/components/design-system";
 import { formatCurrency, formatPrizeSummary, getErrorMessage, getPrizeSortValue } from "@/lib/page-utils";
 import { getMyTournamentRegistrations, getTournamentPage, Tournament } from "@/api/tournaments";
+import { getJoinedChannelTournaments } from "@/api/creators";
 import { CACHE_KEYS, readCache, stableCacheKey, writeAuthenticatedCache, writeCache } from "@/lib/offline-cache";
 import { getNotificationSocket } from "@/lib/notification-socket";
 import type { NotificationItem } from "@/api/notifications";
 import {
-  DISCOVERY_GAMES,
   formatCompactNumber,
   formatDateShort,
   gameLabels,
@@ -44,8 +39,9 @@ import { cn } from "@/lib/utils";
 
 const gameFilters = ["All", "Free Fire", "BGMI", "Valorant", "COD"];
 const feeFilters = ["All Fees", "Free", "Paid"];
-const statusFilters = ["All", "Live", "Upcoming", "Completed"];
+const statusFilters = ["All", "Upcoming", "Live", "Completed"];
 const sortOptions = ["Trending", "Latest", "Prize Up", "Prize Down"];
+const scopeFilters = ["All", "Joined", "Joined Creators"];
 const PAGE_SIZE = 12;
 
 const sortMap: Record<string, "trending" | "latest" | "prize_asc" | "prize_desc"> = {
@@ -63,6 +59,14 @@ const isPublicTournament = (tournament: Tournament) =>
 
 const getParticipants = (tournament: Tournament) =>
   Number(tournament.participantCount ?? tournament.registrationCount ?? 0);
+
+const mergeTournamentsById = (...groups: Tournament[][]) => {
+  const map = new Map<string, Tournament>();
+  groups.flat().forEach((tournament) => {
+    if (tournament?._id) map.set(tournament._id, { ...map.get(tournament._id), ...tournament });
+  });
+  return Array.from(map.values());
+};
 
 const useDebouncedValue = (value: string, delay = 280) => {
   const [debounced, setDebounced] = useState(value);
@@ -89,6 +93,22 @@ const getStatusLabel = (tournament: Tournament, joined?: boolean) => {
   return tournament.status;
 };
 
+const getStatusRank = (status: Tournament["status"]) => {
+  if (status === "open") return 0;
+  if (status === "running") return 1;
+  if (status === "completed") return 2;
+  return 3;
+};
+
+const FilterBlock = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div className="min-w-0 space-y-1.5">
+    <p className="font-heading text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+      {label}
+    </p>
+    {children}
+  </div>
+);
+
 const TournamentDiscoveryCard = ({
   tournament,
   joined,
@@ -107,40 +127,34 @@ const TournamentDiscoveryCard = ({
 
   return (
     <Surface interactive onClick={onClick} className="group overflow-hidden p-0">
-      <div className="relative h-32">
-        <GameArtImage
-          game={game.key}
-          variant="banner"
-          className="transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/35 to-transparent" />
-        <div className="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2">
+      <div className="border-b border-glass-border p-3">
+        <div className="mb-3 flex max-w-full flex-wrap gap-2">
           <StatusPill tone={getStatusTone(tournament.status, joined)}>
             {getStatusLabel(tournament, joined)}
           </StatusPill>
           <StatusPill tone="muted">{game.short}</StatusPill>
         </div>
-        <div className="absolute bottom-3 left-3 right-3">
-          <p className="truncate font-heading text-base font-black">{tournament.title}</p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {game.label} - {tournament.gameMode || tournament.type}
-          </p>
-        </div>
+        <p className="truncate font-display text-base font-extrabold uppercase tracking-tight">
+          {tournament.title}
+        </p>
+        <p className="mt-1 truncate text-xs text-muted-foreground">
+          {game.label} - {tournament.gameMode || tournament.type}
+        </p>
       </div>
 
       <div className="space-y-3 p-3">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="min-w-0 rounded-lg border border-glass-border bg-background/35 p-2">
+        <div className="arena-data-grid grid-cols-3">
+          <div className="arena-data-tile">
             <Trophy className="h-3.5 w-3.5 text-accent" />
             <p className="mt-1 truncate font-heading text-xs font-bold">{formatPrizeSummary(tournament, { killPrefix: true })}</p>
             <p className="text-[10px] text-muted-foreground">Prize</p>
           </div>
-          <div className="min-w-0 rounded-lg border border-glass-border bg-background/35 p-2">
+          <div className="arena-data-tile">
             <CalendarDays className="h-3.5 w-3.5 text-primary" />
             <p className="mt-1 truncate font-heading text-xs font-bold">{formatDateShort(tournament.startAt)}</p>
             <p className="text-[10px] text-muted-foreground">Starts</p>
           </div>
-          <div className="min-w-0 rounded-lg border border-glass-border bg-background/35 p-2">
+          <div className="arena-data-tile">
             <WalletCards className="h-3.5 w-3.5 text-secondary" />
             <p className="mt-1 truncate font-heading text-xs font-bold">
               {Number(tournament.entryFee || 0) === 0 ? "Free" : formatCurrency(tournament.entryFee)}
@@ -188,6 +202,7 @@ const TournamentsScreen = () => {
   const initialGame = gameQueryLabels[String(searchParams.get("game") || "").toLowerCase()] || "All";
   const initialFee = searchParams.get("type") === "free" ? "Free" : searchParams.get("type") === "paid" ? "Paid" : "All Fees";
   const initialSort = searchParams.get("sort") === "trending" ? "Trending" : "Latest";
+  const [activeScope, setActiveScope] = useState("All");
   const [activeGame, setActiveGame] = useState(initialGame);
   const [activeFee, setActiveFee] = useState(initialFee);
   const [activeStatus, setActiveStatus] = useState("All");
@@ -198,6 +213,7 @@ const TournamentsScreen = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [joinedTournamentIds, setJoinedTournamentIds] = useState<Set<string>>(new Set());
+  const [joinedCreatorTournamentIds, setJoinedCreatorTournamentIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
@@ -220,6 +236,7 @@ const TournamentsScreen = () => {
       activeGame,
       activeSort,
       activeStatus,
+      activeScope,
       searchQuery: debouncedSearch.trim(),
       page: nextPage,
     }));
@@ -247,7 +264,7 @@ const TournamentsScreen = () => {
         setLoadingMore(true);
       }
       setError(null);
-      const [data, registrations] = await Promise.all([
+      const [data, registrations, joinedCreatorFeed] = await Promise.all([
         getTournamentPage({
           game: gameFilter,
           type: feeFilter,
@@ -259,16 +276,30 @@ const TournamentsScreen = () => {
           limit: PAGE_SIZE,
         }),
         getMyTournamentRegistrations().catch(() => []),
+        activeScope === "Joined Creators"
+          ? getJoinedChannelTournaments({ status: statusFilter as Tournament["status"] | undefined, limit: 80 }).catch(() => ({ tournaments: [], total: 0 }))
+          : Promise.resolve({ tournaments: [], total: 0 }),
       ]);
       const publicTournaments = data.tournaments.filter(isPublicTournament);
-      setTournaments((previous) => nextPage === 1 ? publicTournaments : [...previous, ...publicTournaments]);
-      setPage(data.page ?? nextPage);
-      setHasMore(Boolean(data.hasMore));
       const joinedIds = registrations
         .filter((registration) => registration.status !== "cancelled")
         .map(getRegistrationTournamentId)
         .filter(Boolean);
+      const registeredTournaments = registrations
+        .filter((registration) => registration.status !== "cancelled" && typeof registration.tournament !== "string")
+        .map((registration) => registration.tournament as Tournament)
+        .filter(isPublicTournament);
+      const joinedCreatorTournaments = joinedCreatorFeed.tournaments.filter(isPublicTournament);
+      const joinedCreatorIds = joinedCreatorTournaments.map((tournament) => tournament._id).filter(Boolean);
+      const nextTournaments = mergeTournamentsById(publicTournaments, registeredTournaments, joinedCreatorTournaments);
+
+      setTournaments((previous) => nextPage === 1 ? nextTournaments : mergeTournamentsById(previous, nextTournaments));
+      setPage(data.page ?? nextPage);
+      setHasMore(Boolean(data.hasMore));
       setJoinedTournamentIds(new Set(joinedIds));
+      if (activeScope === "Joined Creators") {
+        setJoinedCreatorTournamentIds(new Set(joinedCreatorIds));
+      }
       if (nextPage === 1) {
         writeCache(cacheKey, {
           tournaments: publicTournaments,
@@ -284,7 +315,7 @@ const TournamentsScreen = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [activeFee, activeGame, activeSort, activeStatus, debouncedSearch]);
+  }, [activeFee, activeGame, activeScope, activeSort, activeStatus, debouncedSearch]);
 
   useEffect(() => {
     setTournaments([]);
@@ -326,6 +357,8 @@ const TournamentsScreen = () => {
     }
     if (activeFee === "Free") list = list.filter((t) => Number(t.entryFee || 0) === 0);
     if (activeFee === "Paid") list = list.filter((t) => Number(t.entryFee || 0) > 0);
+    if (activeScope === "Joined") list = list.filter((t) => joinedTournamentIds.has(t._id));
+    if (activeScope === "Joined Creators") list = list.filter((t) => joinedCreatorTournamentIds.has(t._id));
     if (activeStatus === "Live") list = list.filter((t) => t.status === "running");
     if (activeStatus === "Upcoming") list = list.filter((t) => t.status === "open");
     if (activeStatus === "Completed") list = list.filter((t) => t.status === "completed");
@@ -340,19 +373,42 @@ const TournamentsScreen = () => {
       );
     }
 
-    if (activeSort === "Prize Up") return [...list].sort((a, b) => getPrizeSortValue(a) - getPrizeSortValue(b));
-    if (activeSort === "Prize Down") return [...list].sort((a, b) => getPrizeSortValue(b) - getPrizeSortValue(a));
-    if (activeSort === "Latest") return [...list].sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
-    return [...list].sort((a, b) => getParticipants(b) - getParticipants(a));
-  }, [activeFee, activeGame, activeMode, activeSort, activeStatus, searchQuery, tournaments]);
+    return [...list].sort((a, b) => {
+      if (activeStatus === "All") {
+        const statusDifference = getStatusRank(a.status) - getStatusRank(b.status);
+        if (statusDifference !== 0) return statusDifference;
+      }
+
+      if (activeSort === "Prize Up") return getPrizeSortValue(a) - getPrizeSortValue(b);
+      if (activeSort === "Prize Down") return getPrizeSortValue(b) - getPrizeSortValue(a);
+      if (activeSort === "Latest") return new Date(b.startAt).getTime() - new Date(a.startAt).getTime();
+      return getParticipants(b) - getParticipants(a);
+    });
+  }, [activeFee, activeGame, activeMode, activeScope, activeSort, activeStatus, joinedCreatorTournamentIds, joinedTournamentIds, searchQuery, tournaments]);
 
   const liveCount = tournaments.filter((t) => t.status === "running").length;
   const playerCount = tournaments.reduce((sum, tournament) => sum + getParticipants(tournament), 0);
+  const hasActiveFilters =
+    activeScope !== "All" ||
+    activeGame !== "All" ||
+    activeFee !== "All Fees" ||
+    activeStatus !== "All" ||
+    activeSort !== "Latest" ||
+    activeMode !== "All Modes";
+
+  const resetFilters = () => {
+    setActiveScope("All");
+    setActiveGame("All");
+    setActiveFee("All Fees");
+    setActiveStatus("All");
+    setActiveSort("Latest");
+    setActiveMode("All Modes");
+  };
 
   return (
     <PageShell wide contentClassName="max-w-7xl space-y-4 pb-4">
       <PageHeader title="Tournaments" subtitle="Discover live rooms, upcoming events, and prize battles" />
-
+      {/* 
       <Surface neon className="overflow-hidden p-0">
         <div className="relative p-3 sm:p-4 lg:p-5">
           <div className="absolute inset-x-0 top-0 h-px gradient-neon" />
@@ -369,98 +425,110 @@ const TournamentsScreen = () => {
                 Search by game, mode, creator, fee, prize, and live status. Results stay cached and update from tournament notifications.
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+            <div className="arena-data-grid grid-cols-3">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-lg font-black text-accent">{liveCount}</p>
                 <p className="text-[10px] text-muted-foreground">Live</p>
               </div>
-              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-lg font-black text-secondary">{formatCompactNumber(playerCount)}</p>
                 <p className="text-[10px] text-muted-foreground">Players</p>
               </div>
-              <div className="rounded-xl border border-glass-border bg-background/45 p-2.5 text-center">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-lg font-black text-primary">{filtered.length}</p>
                 <p className="text-[10px] text-muted-foreground">Shown</p>
               </div>
             </div>
           </div>
         </div>
-      </Surface>
+      </Surface> */}
 
-      <div className="grid gap-2.5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <div className="flex min-w-0 items-center gap-2">
         <SearchBox
           value={searchQuery}
           onChange={setSearchQuery}
           placeholder="Search tournament, creator, mode..."
-          className="flex-1"
+          className="min-w-0 flex-1"
         />
         <button
           type="button"
           onClick={() => setShowFilters((value) => !value)}
           className={cn(
-            "arena-focus inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-glass-border bg-card/80 px-4 font-heading text-xs font-bold transition-colors hover:border-primary/45",
-            showFilters ? "neon-border text-primary" : "text-muted-foreground",
+            "arena-focus inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-md border border-glass-border bg-card/80 px-3 font-heading text-[10px] font-bold transition-colors hover:border-primary/45 min-[420px]:gap-2 min-[420px]:px-4 min-[420px]:text-xs",
+            showFilters || hasActiveFilters ? "neon-border text-primary" : "text-muted-foreground",
           )}
           aria-label="Toggle tournament filters"
         >
           <SlidersHorizontal className="h-4 w-4" />
-          Filters
+          <span className="hidden min-[360px]:inline">Filters</span>
         </button>
       </div>
 
-      <div className="space-y-2.5">
-        <SegmentedControl
-          value={activeStatus}
-          onChange={setActiveStatus}
-          options={statusFilters.map((filter) => ({ label: filter, value: filter }))}
-        />
-        <SegmentedControl
-          value={activeGame}
-          onChange={setActiveGame}
-          options={gameFilters.map((filter) => ({ label: filter, value: filter }))}
-        />
-        {showFilters && (
-          <div className="grid gap-2.5 lg:grid-cols-3">
-            <SegmentedControl
-              value={activeFee}
-              onChange={setActiveFee}
-              options={feeFilters.map((filter) => ({ label: filter, value: filter }))}
-            />
-            <SegmentedControl
-              value={activeSort}
-              onChange={setActiveSort}
-              options={sortOptions.map((filter) => ({ label: filter, value: filter }))}
-            />
-            <SegmentedControl
-              value={activeMode}
-              onChange={setActiveMode}
-              options={modeOptions.map((filter) => ({ label: filter.replace(/_/g, " "), value: filter }))}
-            />
+      {showFilters && (
+        <Surface className="space-y-3 p-3">
+          <div className="flex items-center justify-between gap-3 border-b border-glass-border/70 pb-2">
+            <p className="font-heading text-xs font-black uppercase tracking-[0.08em] text-primary">Filters</p>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="arena-focus rounded-md px-2 py-1 font-heading text-[10px] font-bold text-muted-foreground hover:text-primary"
+              >
+                Reset
+              </button>
+            )}
           </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {DISCOVERY_GAMES.map((game) => (
-          <button
-            key={game.key}
-            type="button"
-            onClick={() => setActiveGame(game.label === "Call of Duty" ? "COD" : game.label)}
-            className="arena-focus group overflow-hidden rounded-xl border border-glass-border bg-card/82 text-left transition-colors hover:border-primary/45"
-          >
-            <div className="relative h-20">
-              <GameArtImage game={game.key} alt={game.label} variant="banner" />
-              <div className="absolute inset-0 bg-gradient-to-t from-background to-transparent" />
-              <p className="absolute bottom-2 left-2 right-2 truncate font-heading text-xs font-black">{game.label}</p>
-            </div>
-          </button>
-        ))}
-      </div>
+          <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <FilterBlock label="View">
+              <SegmentedControl
+                value={activeScope}
+                onChange={setActiveScope}
+                options={scopeFilters.map((filter) => ({ label: filter, value: filter }))}
+              />
+            </FilterBlock>
+            <FilterBlock label="Status">
+              <SegmentedControl
+                value={activeStatus}
+                onChange={setActiveStatus}
+                options={statusFilters.map((filter) => ({ label: filter, value: filter }))}
+              />
+            </FilterBlock>
+            <FilterBlock label="Game">
+              <SegmentedControl
+                value={activeGame}
+                onChange={setActiveGame}
+                options={gameFilters.map((filter) => ({ label: filter, value: filter }))}
+              />
+            </FilterBlock>
+            <FilterBlock label="Entry">
+              <SegmentedControl
+                value={activeFee}
+                onChange={setActiveFee}
+                options={feeFilters.map((filter) => ({ label: filter, value: filter }))}
+              />
+            </FilterBlock>
+            <FilterBlock label="Sort">
+              <SegmentedControl
+                value={activeSort}
+                onChange={setActiveSort}
+                options={sortOptions.map((filter) => ({ label: filter, value: filter }))}
+              />
+            </FilterBlock>
+            <FilterBlock label="Mode">
+              <SegmentedControl
+                value={activeMode}
+                onChange={setActiveMode}
+                options={modeOptions.map((filter) => ({ label: filter.replace(/_/g, " "), value: filter }))}
+              />
+            </FilterBlock>
+          </div>
+        </Surface>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {loading && [0, 1, 2, 3, 4, 5].map((item) => (
           <Surface key={item} className="space-y-3">
-            <SkeletonBlock className="h-32" />
+            <SkeletonBlock className="h-16" />
             <SkeletonBlock className="h-4 w-2/3" />
             <SkeletonBlock className="h-3 w-1/2" />
             <SkeletonBlock className="h-8" />

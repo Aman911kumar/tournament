@@ -347,8 +347,8 @@ const LoginScreen = () => {
         width={1280}
         height={1024}
       />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.28),transparent_32rem),linear-gradient(90deg,hsl(var(--background)/0.98),hsl(var(--background)/0.86)_45%,hsl(var(--background)/0.54))]" />
-      <div className="absolute inset-0 bg-[linear-gradient(hsl(var(--foreground)/0.05)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--foreground)/0.035)_1px,transparent_1px)] bg-[size:44px_44px] opacity-35" />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,hsl(var(--primary)/0.08),transparent_22rem)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(hsl(var(--foreground)/0.035)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--foreground)/0.026)_1px,transparent_1px)] bg-[size:32px_32px] opacity-55" />
 
       <main className="relative z-10 mx-auto grid min-h-[100dvh] w-full max-w-7xl items-center gap-4 px-3 py-4 sm:gap-6 sm:px-6 sm:py-6 lg:grid-cols-[minmax(0,1fr)_minmax(420px,440px)] lg:gap-8 lg:px-8">
         <section className="hidden h-[min(760px,calc(100dvh-3rem))] min-h-0 flex-col justify-between rounded-lg border border-glass-border bg-card/45 p-6 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.045)] lg:flex">
@@ -424,7 +424,7 @@ const LoginScreen = () => {
             </div>
           </div>
 
-          <div className="flex max-h-[calc(100dvh-7rem)] min-h-0 flex-col overflow-hidden rounded-xl border border-glass-border bg-card/88 shadow-[0_18px_48px_hsl(0_0%_0%/0.28)] sm:max-h-none sm:min-h-[704px] lg:h-[min(760px,calc(100dvh-3rem))] lg:min-h-0">
+          <div className="flex max-h-[calc(100dvh-7rem)] min-h-0 flex-col overflow-hidden rounded-md border border-glass-border bg-card/95 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.08)] sm:max-h-none sm:min-h-[704px] lg:h-[min(760px,calc(100dvh-3rem))] lg:min-h-0">
             <div className="border-b border-glass-border bg-background/35 p-1.5 sm:p-2">
               <div className="grid grid-cols-2 gap-1 rounded-xl border border-glass-border bg-background/45 p-1">
                 {[

@@ -11,7 +11,7 @@ export const RolePill = ({
 }) => (
   <span
     className={cn(
-      "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-heading font-bold uppercase tracking-wide",
+      "inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase tracking-[0.08em]",
       role === "creator" &&
         "border-secondary/30 bg-secondary/10 text-secondary",
       role === "admin" && "border-accent/30 bg-accent/10 text-accent",
@@ -53,7 +53,7 @@ export const UserIdentity = ({
       <UserAvatar user={user} name={title} size={avatarSize} />
       <span className="min-w-0 flex-1 text-left">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate font-heading text-sm font-bold text-foreground">
+          <span className="truncate font-display text-sm font-bold text-foreground">
             {title || user?.username || "Player"}
           </span>
           {isAdmin && <RolePill role="admin" />}
@@ -74,7 +74,7 @@ export const UserIdentity = ({
         type="button"
         onClick={onClick}
         className={cn(
-          "arena-focus flex w-full min-w-0 items-center gap-3 rounded-xl text-left transition-colors hover:bg-white/[0.03]",
+          "arena-focus flex w-full min-w-0 items-center gap-3 rounded-md text-left transition-colors hover:bg-primary/[0.04]",
           className,
         )}
       >

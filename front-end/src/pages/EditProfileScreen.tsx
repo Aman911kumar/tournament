@@ -1,3 +1,4 @@
+import type { ComponentType, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -8,12 +9,14 @@ import {
   Calendar,
   Camera,
   CheckCircle2,
+  Clock3,
   Image as ImageIcon,
   KeyRound,
   Loader2,
   Mail,
   Phone,
   RefreshCcw,
+  Send,
   ShieldCheck,
   Trash2,
   User,
@@ -60,6 +63,15 @@ const emptyForm: ProfileForm = {
 
 const inputClass =
   "w-full bg-transparent border border-glass-border rounded-lg px-3 py-2.5 text-sm font-heading focus:outline-none focus:border-primary transition-colors disabled:opacity-60";
+
+type VerificationTarget = "email" | "phone";
+
+const VERIFICATION_COOLDOWN_MS = 60_000;
+
+const formatCooldown = (ms: number) => {
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  return `${seconds}s`;
+};
 
 const formatDateInput = (dateOfBirth: string | null) => {
   if (!dateOfBirth) return "";
@@ -119,6 +131,115 @@ const VerificationBadge = ({ verified }: { verified?: boolean }) => (
   </span>
 );
 
+const VerificationCard = ({
+  icon: Icon,
+  title,
+  description,
+  verified,
+  invalidReason,
+  unsaved,
+  sent,
+  cooldownMs,
+  loading,
+  disabled,
+  children,
+  onSend,
+  onRefresh,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  verified: boolean;
+  invalidReason?: string;
+  unsaved: boolean;
+  sent: boolean;
+  cooldownMs: number;
+  loading: boolean;
+  disabled?: boolean;
+  children: ReactNode;
+  onSend: () => void;
+  onRefresh: () => void;
+}) => {
+  const locked = verified || unsaved || Boolean(invalidReason) || cooldownMs > 0 || loading || Boolean(disabled);
+  const statusText = verified
+    ? "Verified"
+    : unsaved
+      ? "Save first"
+      : invalidReason
+        ? "Needs attention"
+        : sent
+          ? "Link sent"
+          : "Ready";
+  const helperText = verified
+    ? `${title} is verified for account security.`
+    : unsaved
+      ? `Save the new ${title.toLowerCase()} before sending verification.`
+      : invalidReason || (sent ? "Open the link from your email, then check status." : description);
+  const buttonLabel = verified
+    ? "Verified"
+    : loading
+      ? "Sending"
+      : cooldownMs > 0
+        ? `Resend ${formatCooldown(cooldownMs)}`
+        : sent
+          ? "Resend link"
+          : "Send link";
+
+  return (
+    <GlassCard className="p-0">
+      <div className="flex items-start justify-between gap-3 border-b border-glass-border px-3 py-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+            <Icon className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-heading text-sm font-bold">{title}</h2>
+              <VerificationBadge verified={verified} />
+            </div>
+            <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+              {helperText}
+            </p>
+          </div>
+        </div>
+        <span className="shrink-0 rounded-full border border-glass-border bg-background/45 px-2 py-1 font-heading text-[10px] font-bold uppercase text-muted-foreground">
+          {statusText}
+        </span>
+      </div>
+
+      <div className="space-y-3 px-3 py-3">
+        {children}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onSend}
+            disabled={locked}
+            className="arena-focus inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3 font-heading text-[11px] font-bold text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+          >
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            {buttonLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            className="arena-focus inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-glass-border px-3 font-heading text-[11px] font-bold text-muted-foreground transition-colors hover:text-primary disabled:opacity-50"
+          >
+            <RefreshCcw className="h-3.5 w-3.5" />
+            Check
+          </button>
+          {sent && !verified && (
+            <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+              <Clock3 className="h-3.5 w-3.5 text-primary" />
+              Link expires in 30 minutes
+            </span>
+          )}
+        </div>
+      </div>
+    </GlassCard>
+  );
+};
+
 const EditProfileScreen = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -136,6 +257,11 @@ const EditProfileScreen = () => {
   const [profile, setProfile] = useState<ProfileUser | null>(null);
   const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState<"email" | "phone" | null>(null);
+  const [verificationSentAt, setVerificationSentAt] = useState<Record<VerificationTarget, number | null>>({
+    email: null,
+    phone: null,
+  });
+  const [nowMs, setNowMs] = useState(Date.now());
   const [imageBusy, setImageBusy] = useState<"avatar" | "banner" | "remove-avatar" | "remove-banner" | null>(null);
 
   const hasChanges = useMemo(
@@ -156,6 +282,26 @@ const EditProfileScreen = () => {
   const phoneVerified = isPhoneVerified(profile);
   const loading = profileLoading && !profile;
   const error = !profile && profileLoadError ? getErrorMessage(profileLoadError, "Failed to load profile.") : null;
+  const emailCooldownMs = Math.max(
+    0,
+    (verificationSentAt.email || 0) + VERIFICATION_COOLDOWN_MS - nowMs,
+  );
+  const phoneCooldownMs = Math.max(
+    0,
+    (verificationSentAt.phone || 0) + VERIFICATION_COOLDOWN_MS - nowMs,
+  );
+  const emailInvalidReason = !form.email.trim()
+    ? "Add an email address."
+    : !isValidEmail(form.email)
+      ? "Enter a valid email address."
+      : "";
+  const phoneInvalidReason = !form.phone_number.trim()
+    ? "Add a phone number."
+    : !isValidPhoneNumber(form.phone_number)
+      ? "Enter a valid 10 digit Indian phone number."
+      : !emailVerified
+        ? "Verify email first so phone proof can be sent securely."
+        : "";
 
   const update = (field: keyof ProfileForm, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -173,6 +319,12 @@ const EditProfileScreen = () => {
       applyProfile(cachedProfile);
     }
   }, [cachedProfile]);
+
+  useEffect(() => {
+    if (!verificationSentAt.email && !verificationSentAt.phone) return;
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [verificationSentAt.email, verificationSentAt.phone]);
 
   const handleSave = async () => {
     if (!hasChanges) {
@@ -216,7 +368,37 @@ const EditProfileScreen = () => {
     }
   };
 
-  const handleVerify = async (type: "email" | "phone") => {
+  const handleRefreshVerification = async () => {
+    try {
+      const result = await refetchProfile();
+      if (result.data) applyProfile(result.data);
+      toast.info("Verification status checked.");
+    } catch (refreshError) {
+      const errorToast = getErrorToast(refreshError, {
+        action: "Refresh profile",
+        fallback: "Could not refresh verification status.",
+      });
+      toast.error(errorToast.title, { description: errorToast.description });
+    }
+  };
+
+  const handleVerify = async (type: VerificationTarget) => {
+    if (verifying || saving) return;
+    const cooldownMs = type === "email" ? emailCooldownMs : phoneCooldownMs;
+    if (cooldownMs > 0) {
+      toast.info("Wait before resending", {
+        description: `You can resend this verification link in ${formatCooldown(cooldownMs)}.`,
+      });
+      return;
+    }
+    if (type === "email" && emailInvalidReason) {
+      toast.error(emailInvalidReason);
+      return;
+    }
+    if (type === "phone" && phoneInvalidReason) {
+      toast.error(phoneInvalidReason);
+      return;
+    }
     if (type === "email" && emailHasUnsavedChange) {
       toast.info("Save email first", { description: "Verification uses the saved email address." });
       return;
@@ -231,7 +413,15 @@ const EditProfileScreen = () => {
       const res = type === "email" ? await verifyEmail() : await verifyPhone();
       applyProfile(res.data.user);
       setCurrentProfileCache(queryClient, res.data.user, res);
-      toast.success(res.message);
+      const sentAt = Date.now();
+      setVerificationSentAt((current) => ({ ...current, [type]: sentAt }));
+      setNowMs(sentAt);
+      toast.success(res.message, {
+        description:
+          type === "email"
+            ? "Open the secure link from your inbox, then tap Check."
+            : "We sent a secure phone proof link to your verified email.",
+      });
     } catch (verifyError) {
       const errorToast = getErrorToast(verifyError, { action: type === "email" ? "Verify email" : "Verify phone", fallback: "Verification failed." });
       toast.error(errorToast.title, { description: errorToast.description });
@@ -426,61 +616,66 @@ const EditProfileScreen = () => {
               <input value={form.username} onChange={(e) => update("username", e.target.value)} disabled={saving} className={inputClass} />
             </GlassCard>
 
-            <GlassCard>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-secondary" />
-                  <h2 className="font-heading text-sm font-bold">Email</h2>
-                </div>
-                <VerificationBadge verified={emailVerified} />
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => update("email", e.target.value)}
-                  placeholder="Required email address"
-                  disabled={saving}
-                  className={inputClass}
-                />
-                <button
-                  type="button"
-                  onClick={() => handleVerify("email")}
-                  disabled={!form.email.trim() || emailVerified || emailHasUnsavedChange || Boolean(verifying)}
-                  className="shrink-0 rounded-lg border border-secondary/30 px-3 text-[10px] font-heading font-semibold text-secondary disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {verifying === "email" ? "..." : emailVerified ? "Verified" : "Verify"}
-                </button>
-              </div>
-            </GlassCard>
+            <section className="grid gap-3 lg:grid-cols-2">
+              <VerificationCard
+                icon={Mail}
+                title="Email"
+                description="Send a secure login-style verification link to your saved email."
+                verified={emailVerified}
+                invalidReason={emailInvalidReason}
+                unsaved={emailHasUnsavedChange}
+                sent={Boolean(verificationSentAt.email)}
+                cooldownMs={emailCooldownMs}
+                loading={verifying === "email"}
+                disabled={saving || (Boolean(verifying) && verifying !== "email")}
+                onSend={() => handleVerify("email")}
+                onRefresh={handleRefreshVerification}
+              >
+                <label className="block space-y-1">
+                  <span className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Saved email
+                  </span>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => update("email", e.target.value)}
+                    placeholder="Required email address"
+                    disabled={saving}
+                    className={inputClass}
+                  />
+                </label>
+              </VerificationCard>
 
-            <GlassCard>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-accent" />
-                  <h2 className="font-heading text-sm font-bold">Phone</h2>
-                </div>
-                <VerificationBadge verified={phoneVerified} />
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="tel"
-                  value={form.phone_number}
-                  onChange={(e) => update("phone_number", e.target.value)}
-                  placeholder="Required 10 digit phone number"
-                  disabled={saving}
-                  className={inputClass}
-                />
-                <button
-                  type="button"
-                  onClick={() => handleVerify("phone")}
-                  disabled={!form.phone_number.trim() || phoneVerified || phoneHasUnsavedChange || Boolean(verifying)}
-                  className="shrink-0 rounded-lg border border-accent/30 px-3 text-[10px] font-heading font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {verifying === "phone" ? "..." : phoneVerified ? "Verified" : "Verify"}
-                </button>
-              </div>
-            </GlassCard>
+              <VerificationCard
+                icon={Phone}
+                title="Phone"
+                description="Phone verification currently uses your verified email as the delivery channel."
+                verified={phoneVerified}
+                invalidReason={phoneInvalidReason}
+                unsaved={phoneHasUnsavedChange}
+                sent={Boolean(verificationSentAt.phone)}
+                cooldownMs={phoneCooldownMs}
+                loading={verifying === "phone"}
+                disabled={saving || (Boolean(verifying) && verifying !== "phone")}
+                onSend={() => handleVerify("phone")}
+                onRefresh={handleRefreshVerification}
+              >
+                <label className="block space-y-1">
+                  <span className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Indian phone number
+                  </span>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    value={form.phone_number}
+                    onChange={(e) => update("phone_number", e.target.value)}
+                    placeholder="Required 10 digit phone number"
+                    disabled={saving}
+                    className={inputClass}
+                  />
+                </label>
+              </VerificationCard>
+            </section>
 
             <GlassCard>
               <div className="mb-4 flex items-center gap-2">

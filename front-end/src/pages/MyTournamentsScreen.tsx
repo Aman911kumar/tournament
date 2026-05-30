@@ -8,6 +8,7 @@ import {
   MessageCircle,
   RefreshCcw,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Trophy,
   Users,
@@ -252,6 +253,7 @@ const MyTournamentsScreen = () => {
   const [registrations, setRegistrations] = useState<TournamentRegistration[]>([]);
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
+  const [showFilters, setShowFilters] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -388,16 +390,16 @@ const MyTournamentsScreen = () => {
                 Track your joined events, open live chat fast, and jump back into match details without hunting through the tournament list.
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2 sm:min-w-[260px]">
-              <div className="rounded-lg border border-glass-border bg-background/45 p-1.5 text-center sm:rounded-xl sm:p-2">
+            <div className="arena-data-grid grid-cols-3 sm:min-w-[260px]">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-base font-black text-primary sm:text-lg">{counts.all}</p>
                 <p className="text-[10px] text-muted-foreground">Joined</p>
               </div>
-              <div className="rounded-lg border border-glass-border bg-background/45 p-1.5 text-center sm:rounded-xl sm:p-2">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-base font-black text-accent sm:text-lg">{confirmedCount}</p>
                 <p className="text-[10px] text-muted-foreground">Ready</p>
               </div>
-              <div className="rounded-lg border border-glass-border bg-background/45 p-1.5 text-center sm:rounded-xl sm:p-2">
+              <div className="arena-data-tile text-center">
                 <p className="font-heading text-base font-black text-secondary sm:text-lg">{counts.live}</p>
                 <p className="text-[10px] text-muted-foreground">Live</p>
               </div>
@@ -406,29 +408,58 @@ const MyTournamentsScreen = () => {
         </div>
       </Surface>
 
-      <div className="grid gap-2.5 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <div className="flex min-w-0 items-center gap-2">
         <SearchBox
           value={query}
           onChange={setQuery}
           placeholder="Search tournament, game, slot..."
+          className="min-w-0 flex-1"
         />
-        <SegmentedControl
-          value={activeFilter}
-          onChange={setActiveFilter}
-          className="lg:max-w-[560px]"
-          options={filterOptions.map((option) => ({
-            value: option.value,
-            label: (
-              <span className="inline-flex items-center gap-1.5">
-                {option.label}
-                <span className="rounded-full bg-background/50 px-1.5 text-[10px]">
-                  {counts[option.value]}
-                </span>
-              </span>
-            ),
-          }))}
-        />
+        <button
+          type="button"
+          onClick={() => setShowFilters((value) => !value)}
+          className={cn(
+            "arena-focus inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-md border border-glass-border bg-card/80 px-3 font-heading text-[10px] font-bold transition-colors hover:border-primary/45 min-[420px]:gap-2 min-[420px]:px-4 min-[420px]:text-xs",
+            showFilters || activeFilter !== "all" ? "neon-border text-primary" : "text-muted-foreground",
+          )}
+          aria-label="Toggle joined tournament filters"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          <span className="hidden min-[360px]:inline">Filters</span>
+        </button>
       </div>
+
+      {showFilters && (
+        <Surface className="space-y-2 p-2.5 sm:p-3">
+          <SegmentedControl
+            value={activeFilter}
+            onChange={setActiveFilter}
+            options={filterOptions.map((option) => ({
+              value: option.value,
+              label: (
+                <span className="inline-flex items-center gap-1.5">
+                  {option.label}
+                  <span className="rounded-full bg-background/50 px-1.5 text-[10px]">
+                    {counts[option.value]}
+                  </span>
+                </span>
+              ),
+            }))}
+          />
+          {activeFilter !== "all" && (
+            <div className="flex items-center justify-between gap-3 border-t border-glass-border pt-2 text-[11px] text-muted-foreground">
+              <span>Showing {getPhaseLabel(activeFilter).toLowerCase()} tournaments.</span>
+              <button
+                type="button"
+                onClick={() => setActiveFilter("all")}
+                className="arena-focus shrink-0 rounded-sm font-heading font-bold text-primary"
+              >
+                Reset
+              </button>
+            </div>
+          )}
+        </Surface>
+      )}
 
       <div className="grid gap-2.5 sm:gap-3 lg:grid-cols-2">
         {loading &&
