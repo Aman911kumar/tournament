@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight,
+  Gamepad2,
   Search,
+  ShieldCheck,
   SlidersHorizontal,
+  Star,
+  Trophy,
 } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
 import {
@@ -13,7 +17,6 @@ import {
   SearchBox,
   SegmentedControl,
   SkeletonBlock,
-  StatusPill,
   Surface,
 } from "@/components/design-system";
 import { CreatorChannel, followCreator, getCreators, getJoinedChannels, unfollowCreator } from "@/api/creators";
@@ -22,7 +25,7 @@ import { prefetchCreatorProfile, prefetchOnIntent } from "@/lib/route-prefetch";
 import { toast } from "@/components/ui/sonner";
 import { getErrorToast } from "@/lib/page-utils";
 import { UserAvatar } from "@/components/identity";
-import { formatCompactNumber } from "@/config/discovery.config";
+import { DISCOVERY_GAMES, formatCompactNumber } from "@/config/discovery.config";
 import { cn } from "@/lib/utils";
 
 type SortKey = "Trending" | "Followers" | "Tournaments" | "Rating";
@@ -48,6 +51,18 @@ const getCreatorRating = (creator: CreatorChannel) =>
 const getTournamentCount = (creator: CreatorChannel & { tournamentCount?: number }) =>
   Number(creator.tournamentCount ?? creator.ranking?.activeTournaments ?? creator.ranking?.completedTournaments ?? 0);
 
+const getCreatorGames = (creator: CreatorChannel) => {
+  const text = `${creator.name} ${creator.handle} ${creator.description || ""}`.toLowerCase();
+  const matches = DISCOVERY_GAMES.filter((game) => {
+    if (game.key === "freefire") return /free\s*fire|freefire|\bff\b/.test(text);
+    if (game.key === "callofduty") return /call\s*of\s*duty|codm|\bcod\b/.test(text);
+    if (game.key === "bgmi") return /bgmi|pubg/.test(text);
+    return text.includes(game.label.toLowerCase()) || text.includes(game.short.toLowerCase());
+  });
+
+  return matches.length > 0 ? matches.slice(0, 3) : [];
+};
+
 const CreatorDiscoveryCard = ({
   creator,
   following,
@@ -66,34 +81,25 @@ const CreatorDiscoveryCard = ({
   const rating = getCreatorRating(creator);
   const tournamentCount = getTournamentCount(creator);
   const banner = creator.banner?.url ?? creator.owner?.banner?.url;
+  const games = getCreatorGames(creator);
+  const description = creator.description || "Competitive tournament organizer.";
 
   return (
-    <Surface className="overflow-hidden p-0">
-      <button
-        type="button"
-        onClick={onOpen}
-        {...prefetchOnIntent(onPrefetch)}
-        className="arena-focus block w-full text-left"
-      >
-        <div className="relative h-24 bg-gradient-to-r from-primary/30 via-secondary/20 to-accent/20">
-          {banner && (
-            <img
-              src={banner}
-              alt=""
-              loading="lazy"
-              className="h-full w-full object-cover"
-            />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-background/88 via-background/25 to-transparent" />
-          <div className="absolute left-3 top-3 flex gap-2">
-            <StatusPill tone={creator.isActive ? "accent" : "muted"}>
-              {creator.isActive ? "Live" : "Creator"}
-            </StatusPill>
-            {!creator.virtual && <StatusPill tone="secondary">Verified</StatusPill>}
-          </div>
-        </div>
+    <Surface className="relative min-h-[188px] overflow-hidden p-0 sm:min-h-[214px]">
+      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-r from-primary/20 via-secondary/12 to-accent/10">
+        {banner && (
+          <img
+            src={banner}
+            alt=""
+            loading="lazy"
+            className="h-full w-full object-cover opacity-35"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-background/15 to-card" />
+      </div>
 
-        <div className="-mt-7 flex items-end gap-3 px-3 pb-3">
+      <div className="relative flex h-full flex-col p-3">
+        <div className="flex items-start gap-3">
           <UserAvatar
             user={{
               _id: creator.owner?._id,
@@ -101,45 +107,80 @@ const CreatorDiscoveryCard = ({
               avatar: { url: creator.avatar?.url ?? creator.owner?.avatar?.url },
               role: ["creator"],
             }}
-            size="xl"
+            size="lg"
           />
-          <div className="min-w-0 flex-1 pb-1">
-            <p className="truncate font-heading text-base font-black">{creator.name}</p>
-            <p className="truncate text-xs text-muted-foreground">@{creator.handle}</p>
+          <div className="min-w-0 flex-1 pt-0.5">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <p className="truncate font-heading text-sm font-black leading-tight sm:text-base">{creator.name}</p>
+              {!creator.virtual && <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Verified creator" />}
+            </div>
+            <p className="truncate text-[11px] text-muted-foreground">@{creator.handle}</p>
           </div>
-          <ChevronRight className="mb-2 h-4 w-4 shrink-0 text-muted-foreground" />
+          <span
+            className={cn(
+              "mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 font-heading text-[10px] font-bold",
+              creator.isActive ? "bg-emerald-400/10 text-emerald-300" : "bg-muted/60 text-muted-foreground",
+            )}
+          >
+            <span className={cn("h-1.5 w-1.5 rounded-full", creator.isActive ? "bg-emerald-300" : "bg-muted-foreground")} />
+            {creator.isActive ? "Active" : "Recent"}
+          </span>
         </div>
-      </button>
 
-      <div className="grid grid-cols-3 gap-2 border-y border-glass-border/70 px-3 py-2 text-center">
-        <div>
-          <p className="font-heading text-sm font-black">{formatCompactNumber(creator.memberCount)}</p>
-          <p className="text-[10px] text-muted-foreground">Followers</p>
+        <div className="mt-3 flex min-h-6 flex-wrap gap-1.5">
+          {games.length > 0 ? games.map((game) => (
+            <span key={game.key} className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-2 py-1 font-heading text-[10px] font-bold text-primary">
+              <Gamepad2 className="h-3 w-3" />
+              {game.short}
+            </span>
+          )) : (
+            <span className="inline-flex items-center gap-1 rounded-sm bg-muted/55 px-2 py-1 font-heading text-[10px] font-bold text-muted-foreground">
+              <Gamepad2 className="h-3 w-3" />
+              Multi-game
+            </span>
+          )}
         </div>
-        <div>
-          <p className="font-heading text-sm font-black text-primary">{tournamentCount}</p>
-          <p className="text-[10px] text-muted-foreground">Events</p>
-        </div>
-        <div>
-          <p className="font-heading text-sm font-black text-accent">{rating.toFixed(1)}</p>
-          <p className="text-[10px] text-muted-foreground">Rating</p>
-        </div>
-      </div>
 
-      <div className="flex items-center justify-between gap-2 p-3">
-        <div className="min-w-0">
-          <p className="truncate text-xs text-muted-foreground">
-            {creator.description || "Tournament organizer and esports creator"}
-          </p>
+        <p className="mt-2 line-clamp-2 min-h-[2.35rem] text-xs leading-5 text-muted-foreground">
+          {description}
+        </p>
+
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1 font-heading font-bold text-accent">
+            <Star className="h-3.5 w-3.5 fill-accent" />
+            {rating > 0 ? rating.toFixed(1) : "New"}
+          </span>
+          <span>{formatCompactNumber(creator.memberCount)} followers</span>
+          <span className="inline-flex items-center gap-1">
+            <Trophy className="h-3.5 w-3.5 text-primary" />
+            {tournamentCount} events
+          </span>
         </div>
-        <NeonButton
-          variant={following ? "blue" : "purple"}
-          className="min-h-9 shrink-0 px-3 py-1.5 text-[10px]"
-          onClick={onFollowToggle}
-          disabled={creator.virtual || loading}
-        >
-          {loading ? "..." : following ? "Following" : "Follow"}
-        </NeonButton>
+
+        <div className="mt-auto grid grid-cols-[1fr_auto] gap-2 pt-3">
+          <button
+            type="button"
+            onClick={onOpen}
+            {...prefetchOnIntent(onPrefetch)}
+            className="arena-focus inline-flex min-h-10 items-center justify-center gap-1.5 rounded-sm bg-primary px-3 font-heading text-xs font-bold text-primary-foreground"
+          >
+            View Profile
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onFollowToggle}
+            disabled={creator.virtual || loading}
+            className={cn(
+              "arena-focus inline-flex min-h-10 min-w-[5.5rem] items-center justify-center rounded-sm px-3 font-heading text-xs font-bold transition-colors disabled:opacity-50",
+              following
+                ? "bg-card text-primary"
+                : "bg-secondary/15 text-secondary hover:bg-secondary/22",
+            )}
+          >
+            {loading ? "..." : following ? "Following" : "Follow"}
+          </button>
+        </div>
       </div>
     </Surface>
   );
@@ -316,15 +357,16 @@ const SubscriptionsScreen = () => {
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {loading && [0, 1, 2, 3, 4, 5].map((item) => (
-          <Surface key={item} className="space-y-3">
-            <SkeletonBlock className="h-24" />
+          <Surface key={item} className="space-y-3 p-3">
             <div className="flex items-center gap-3">
-              <SkeletonBlock className="h-14 w-14 rounded-full" />
+              <SkeletonBlock className="h-12 w-12 rounded-full" />
               <div className="flex-1 space-y-2">
                 <SkeletonBlock className="h-4 w-2/3" />
                 <SkeletonBlock className="h-3 w-1/2" />
               </div>
             </div>
+            <SkeletonBlock className="h-6 w-32" />
+            <SkeletonBlock className="h-10" />
             <SkeletonBlock className="h-10" />
           </Surface>
         ))}

@@ -4,25 +4,19 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertCircle,
   ArrowLeft,
-  Award,
   Calendar,
   ChevronRight,
-  Clock3,
   Copy,
-  Crosshair,
-  Eye,
   Flag,
   Gamepad2,
   Hash,
   KeyRound,
   Lock,
-  Medal,
   MessageCircle,
   Radio,
   RefreshCcw,
   Share2,
   Shield,
-  Sparkles,
   Star,
   Timer,
   Trophy,
@@ -76,20 +70,6 @@ const formatDateTime = (value?: string | null) => {
   }
 };
 
-const formatShortDate = (value?: string | null) => {
-  if (!value) return "TBA";
-  try {
-    return new Intl.DateTimeFormat("en-IN", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(value));
-  } catch {
-    return "TBA";
-  }
-};
-
 const formatCountdown = (targetMs: number, now: number) => {
   if (!Number.isFinite(targetMs) || targetMs <= 0) return "Schedule pending";
   const diff = targetMs - now;
@@ -121,6 +101,8 @@ const getStatusMeta = (status?: Tournament["status"]) => {
 const getPlayerName = (registration: TournamentRegistration) =>
   registration.user?.username || registration.gameAccount?.inGameName || registration.gameAccounts?.[0]?.inGameName || "Player";
 
+type DetailTab = "overview" | "room" | "players" | "chat";
+
 const TournamentDetailScreen = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -138,6 +120,8 @@ const TournamentDetailScreen = () => {
   const [reportProof, setReportProof] = useState("");
   const [reportTargetUser, setReportTargetUser] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
+  const [activeTab, setActiveTab] = useState<DetailTab>("overview");
+  const [tabTouched, setTabTouched] = useState(false);
 
   const loadTournament = useCallback(async () => {
     if (!id) return;
@@ -187,6 +171,10 @@ const TournamentDetailScreen = () => {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (registered && !tabTouched) setActiveTab("room");
+  }, [registered, tabTouched]);
+
   const creator = {
     id: tournament?.channel?._id ?? tournament?.organizer?._id ?? "",
     name: tournament?.channel?.name ?? tournament?.organizer?.username ?? "Creator",
@@ -220,7 +208,6 @@ const TournamentDetailScreen = () => {
       if (prizeMode === "kill") return Number(b.kills || 0) - Number(a.kills || 0);
       return Number(a.position || 9999) - Number(b.position || 9999);
     });
-  const resultPaidTotal = tournament?.paidMoney ?? resultRows.reduce((sum, result) => sum + Number(result.prizeWon || 0), 0);
   const registrationStartMs = tournament?.registrationStart ? new Date(tournament.registrationStart).getTime() : 0;
   const registrationEndMs = tournament?.registrationEnd ? new Date(tournament.registrationEnd).getTime() : 0;
   const registrationIsOpen =
@@ -278,6 +265,21 @@ const TournamentDetailScreen = () => {
   const slotSelectionPath = tournament
     ? `/tournament/${id}/slots?type=${tournament.type}&slots=${tournament.maxPlayers}&teamSize=${tournament.teamSize || ""}&fee=${entryFee}&game=${tournament.game}&title=${encodeURIComponent(tournament.title)}`
     : "";
+  const roomIdValue = tournament?.room_details?.roomId || "";
+  const roomPassValue = tournament?.room_details?.roomPass || "";
+  const roomIdDisplay = roomIdValue || (registered || tournament?.room_details?.hasRoomId ? "Pending" : "Join to view");
+  const roomPassDisplay = roomPassValue || (registered || tournament?.room_details?.hasRoomPass ? "Pending" : "Join to view");
+  const chatPath = tournament ? `/tournament/${tournament._id}/chat` : "";
+  const setTab = (tab: DetailTab) => {
+    setTabTouched(true);
+    setActiveTab(tab);
+  };
+  const tabs: Array<{ id: DetailTab; label: string; icon: typeof Trophy }> = [
+    { id: "overview", label: "Overview", icon: Trophy },
+    { id: "room", label: "Room", icon: KeyRound },
+    { id: "players", label: "Players", icon: Users },
+    { id: "chat", label: "Chat", icon: MessageCircle },
+  ];
 
   const reportablePlayers = (tournament?.results ?? [])
     .map((result) => result.player)
@@ -327,10 +329,6 @@ const TournamentDetailScreen = () => {
 
   const openChat = () => {
     if (tournament) navigate(`/tournament/${tournament._id}/chat`);
-  };
-
-  const scrollToRules = () => {
-    document.getElementById("tournament-rules")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const registerTournament = () => {
@@ -492,7 +490,7 @@ const TournamentDetailScreen = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.24, ease: "easeOut" }}
-              className="relative min-h-[280px] overflow-hidden rounded-xl border border-glass-border bg-card"
+              className="relative overflow-hidden rounded-lg border border-glass-border bg-card"
             >
               <div
                 className="absolute inset-0 bg-cover opacity-55"
@@ -502,10 +500,10 @@ const TournamentDetailScreen = () => {
                 }}
               />
               <div className={`absolute inset-0 bg-gradient-to-br ${heroAccent}`} />
-              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(5_8_18/0.24),rgb(5_8_18/0.92)_78%)]" />
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(5_8_18/0.18),rgb(5_8_18/0.92)_82%)]" />
               <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/70 to-transparent" />
 
-              <div className="relative flex min-h-[280px] flex-col justify-between p-4 sm:p-5">
+              <div className="relative flex min-h-[178px] flex-col justify-between p-3.5 sm:min-h-[220px] sm:p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 font-heading text-[11px] font-bold ${statusMeta.tone}`}>
                     <span className={`h-2 w-2 rounded-full ${statusMeta.dot} ${tournament.status === "running" ? "status-pulse" : ""}`} />
@@ -517,19 +515,19 @@ const TournamentDetailScreen = () => {
                   </span>
                 </div>
 
-                <div className="max-w-3xl pt-8">
-                  <h2 className="font-heading text-3xl font-black leading-tight text-white sm:text-5xl">
+                <div className="max-w-3xl pt-5 sm:pt-8">
+                  <h2 className="font-heading text-[clamp(1.45rem,8vw,2.55rem)] font-black leading-tight text-white">
                     {tournament.title}
                   </h2>
-                  <p className="mt-2 line-clamp-2 max-w-2xl text-sm leading-6 text-white/72">
+                  <p className="mt-1 line-clamp-1 max-w-2xl text-xs leading-5 text-white/70 sm:mt-2 sm:text-sm">
                     {tournament.description || `${teamLabel} ${modeLabel} tournament hosted on Battle4Arena.`}
                   </p>
 
-                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-4">
                     <button
                       type="button"
                       onClick={() => creator.id && navigate(`/creator/${creator.id}`)}
-                      className="arena-focus inline-flex max-w-full items-center gap-2 rounded-full border border-primary/25 bg-black/32 px-2.5 py-2 text-left"
+                      className="arena-focus inline-flex max-w-full items-center gap-2 rounded-full border border-primary/25 bg-black/32 px-2.5 py-1.5 text-left"
                     >
                       <UserAvatar
                         user={{
@@ -552,17 +550,17 @@ const TournamentDetailScreen = () => {
                   </div>
                 </div>
 
-                <div className="mt-5 grid gap-2 min-[420px]:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-4 grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
                   {[
-                    { icon: Trophy, label: "Prize Pool", value: usesPositionPrize ? formatCurrency(prize) : "Kill based", tone: "text-accent" },
-                    { icon: Users, label: "Slots Left", value: `${slotsLeft}/${tournament.maxPlayers}`, tone: "text-cyan-200" },
                     { icon: Timer, label: countdownLabel, value: countdownValue, tone: "text-primary" },
+                    { icon: Users, label: "Slots", value: `${registeredSlots}/${tournament.maxPlayers}`, tone: "text-cyan-200" },
                     { icon: Wallet, label: "Entry Fee", value: entryFee === 0 ? "Free" : formatCurrency(entryFee), tone: "text-emerald-200" },
+                    { icon: Trophy, label: "Prize", value: usesPositionPrize ? formatCurrency(prize) : "Kill based", tone: "text-accent" },
                   ].map((item) => (
-                    <div key={item.label} className="rounded-lg border border-glass-border bg-black/34 p-3">
-                      <item.icon className={`mb-2 h-4 w-4 ${item.tone}`} />
+                    <div key={item.label} className="rounded-md border border-glass-border bg-black/34 p-2.5 sm:p-3">
+                      <item.icon className={`mb-1.5 h-4 w-4 ${item.tone}`} />
                       <p className="text-[10px] uppercase tracking-[0.14em] text-white/48">{item.label}</p>
-                      <p className="mt-1 truncate font-heading text-lg font-black text-white">{item.value}</p>
+                      <p className="mt-0.5 truncate font-heading text-sm font-black text-white sm:text-base">{item.value}</p>
                     </div>
                   ))}
                 </div>
@@ -570,12 +568,12 @@ const TournamentDetailScreen = () => {
             </motion.section>
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-              <aside className="order-first space-y-4 lg:sticky lg:top-24 lg:order-last">
-                <section className="tournament-section rounded-xl p-4">
+              <aside className="order-first lg:sticky lg:top-24 lg:order-last">
+                <section className="tournament-section rounded-lg p-3.5 sm:p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
-                      <p className="font-heading text-sm font-bold">Ready check</p>
-                      <p className="text-[11px] text-muted-foreground">{registered ? "You are in this lobby" : "Secure your slot before it fills"}</p>
+                      <p className="font-heading text-sm font-bold">Match Lobby</p>
+                      <p className="text-[11px] text-muted-foreground">{registered ? "Joined and ready" : "Join to unlock room and chat"}</p>
                     </div>
                     {myRegistration?.slotNumber && (
                       <span className="rounded-lg border border-accent/30 bg-accent/10 px-2.5 py-1 font-heading text-xs font-bold text-accent">
@@ -596,14 +594,42 @@ const TournamentDetailScreen = () => {
                     {registered && (
                       <button
                         type="button"
-                        onClick={openChat}
-                        {...prefetchOnIntent(() => prefetchRoute(tournament ? `/tournament/${tournament._id}/chat` : ""))}
-                        className="arena-focus inline-flex h-10 items-center justify-center gap-2 rounded-sm border border-primary/30 bg-primary/10 font-heading text-xs font-bold text-primary"
+                        onClick={() => setTab("room")}
+                        className="arena-focus inline-flex min-h-10 items-center justify-center gap-2 rounded-sm border border-secondary/30 bg-secondary/10 font-heading text-xs font-bold text-secondary"
                       >
-                        <MessageCircle className="h-4 w-4" />
-                        Open Chat & Voice
+                        <KeyRound className="h-4 w-4" />
+                        View Room Details
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={openChat}
+                      disabled={!registered}
+                      {...prefetchOnIntent(() => prefetchRoute(chatPath))}
+                      className="arena-focus inline-flex min-h-10 items-center justify-center gap-2 rounded-sm border border-primary/30 bg-primary/10 font-heading text-xs font-bold text-primary disabled:opacity-50"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Open Chat & Voice
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => creatorProfilePath && navigate(creatorProfilePath)}
+                      disabled={!creatorProfilePath}
+                      {...prefetchOnIntent(() => prefetchCreatorProfile(creator.id))}
+                      className="arena-focus flex min-h-10 items-center justify-between gap-3 rounded-sm border border-glass-border bg-card/70 px-3 text-left disabled:opacity-50"
+                    >
+                      <UserIdentity
+                        user={{
+                          _id: creator.id,
+                          username: creator.name,
+                          avatar: { url: creator.avatarUrl },
+                        }}
+                        subtitle="Organizer"
+                        avatarSize="sm"
+                        className="min-w-0 flex-1"
+                      />
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </button>
                     <details className="group rounded-sm border border-glass-border bg-card/70">
                       <summary className="arena-focus flex min-h-9 cursor-pointer list-none items-center justify-between gap-3 px-3 font-heading text-xs font-bold text-muted-foreground">
                         More actions
@@ -620,11 +646,11 @@ const TournamentDetailScreen = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={scrollToRules}
+                          onClick={() => setTab("overview")}
                           className="arena-focus flex min-h-8 items-center gap-2 rounded-sm px-2 text-left font-heading text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                         >
                           <Shield className="h-3.5 w-3.5" />
-                          Rules
+                          View rules
                         </button>
                         <button
                           type="button"
@@ -638,302 +664,312 @@ const TournamentDetailScreen = () => {
                     </details>
                   </div>
                 </section>
-
-                <section className="tournament-section rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <UserIdentity
-                      user={{
-                        _id: creator.id,
-                        username: creator.name,
-                        avatar: { url: creator.avatarUrl },
-                        role: ["creator"],
-                      }}
-                      subtitle="Organizer"
-                      avatarSize="md"
-                      className="min-w-0 flex-1"
-                    />
-                    {creator.verified && <Shield className="h-4 w-4 fill-accent text-accent" />}
-                  </div>
-                  {creatorProfilePath && (
-                    <div className="mt-3 border-t border-glass-border/70 pt-3">
-                      <button
-                        type="button"
-                        onClick={() => navigate(creatorProfilePath)}
-                        {...prefetchOnIntent(() => prefetchCreatorProfile(creator.id))}
-                        className="arena-focus flex w-full items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-left transition-colors hover:border-primary/45 hover:bg-primary/15"
-                      >
-                        <span className="min-w-0">
-                          <span className="block font-heading text-xs font-bold text-primary">Open creator profile</span>
-                          <span className="block truncate text-[11px] text-muted-foreground">
-                            View tournaments, ratings, and creator details
-                          </span>
-                        </span>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
-                      </button>
-                    </div>
-                  )}
-                </section>
-
               </aside>
 
-              <div className="space-y-4">
-                <section className="tournament-section rounded-xl p-4 sm:p-5">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="font-heading text-base font-bold">Match Overview</h3>
-                      <p className="text-xs text-muted-foreground">Schedule, format, slot health, and room readiness.</p>
-                    </div>
-                    <span className={`shrink-0 rounded-full border px-2.5 py-1 font-heading text-[10px] font-bold ${statusMeta.tone}`}>
-                      {statusMeta.label}
-                    </span>
-                  </div>
-
-                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                    {[
-                      { icon: Calendar, label: "Starts", value: formatShortDate(tournament.startAt) },
-                      { icon: Clock3, label: "Registration", value: registrationIsOpen ? "Open now" : now < registrationStartMs ? "Opening soon" : "Closed" },
-                      { icon: Gamepad2, label: "Mode", value: modeLabel },
-                      { icon: UserCheck, label: "Team Setup", value: teamLabel },
-                      { icon: Hash, label: "Format", value: tournament.type.toUpperCase() },
-                      { icon: Shield, label: "Platform", value: tournament.platform || "mobile" },
-                      { icon: Users, label: "Players", value: `${participantCount} joined` },
-                      { icon: Award, label: "Prize Type", value: prizeMode === "both" ? "Position + Kill" : prizeMode },
-                    ].map((item) => (
-                      <div key={item.label} className="detail-tile rounded-lg p-3">
-                        <item.icon className="mb-2 h-4 w-4 text-primary" />
-                        <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{item.label}</p>
-                        <p className="mt-1 truncate font-heading text-sm font-bold capitalize">{item.value}</p>
+              <div className="space-y-3">
+                {registered && (
+                  <section className="rounded-lg border border-secondary/35 bg-secondary/10 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-heading text-sm font-bold text-secondary">Room Access</p>
+                        <p className="truncate text-[11px] text-muted-foreground">{formatDateTime(tournament.room_details?.roomJoinTime)}</p>
                       </div>
-                    ))}
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => setTab("room")}
+                        className="arena-focus inline-flex min-h-9 items-center gap-1.5 rounded-sm bg-secondary px-3 font-heading text-[11px] font-bold text-secondary-foreground"
+                      >
+                        Open
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => roomIdValue && copyValue("Room ID", roomIdValue)}
+                        disabled={!roomIdValue}
+                        className="arena-focus min-w-0 rounded-sm border border-secondary/25 bg-background/35 p-2 text-left disabled:opacity-60"
+                      >
+                        <span className="block text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Room ID</span>
+                        <span className="mt-0.5 block truncate font-heading text-sm font-black text-foreground">{roomIdDisplay}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => roomPassValue && copyValue("Password", roomPassValue)}
+                        disabled={!roomPassValue}
+                        className="arena-focus min-w-0 rounded-sm border border-secondary/25 bg-background/35 p-2 text-left disabled:opacity-60"
+                      >
+                        <span className="block text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Password</span>
+                        <span className="mt-0.5 block truncate font-heading text-sm font-black text-foreground">{roomPassDisplay}</span>
+                      </button>
+                    </div>
+                  </section>
+                )}
 
-                  <div className="mt-4 rounded-lg border border-glass-border/70 bg-background/35 p-3">
-                    <div className="flex items-center justify-between gap-3 text-xs">
-                      <span className="font-heading font-bold">Slot capacity</span>
-                      <span className="text-muted-foreground">{registeredSlots}/{tournament.maxPlayers} booked</span>
-                    </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-gradient-to-r from-primary via-cyan-400 to-emerald-300" style={{ width: `${slotFillPercent}%` }} />
-                    </div>
+                <nav className="sticky top-[4.25rem] z-10 rounded-lg border border-glass-border bg-background/95 p-1">
+                  <div className="grid grid-cols-4 gap-1">
+                    {tabs.map((tab) => {
+                      const active = activeTab === tab.id;
+                      const Icon = tab.icon;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setTab(tab.id)}
+                          className={`arena-focus inline-flex min-h-10 items-center justify-center gap-1.5 rounded-sm px-1 font-heading text-[10px] font-bold transition-colors min-[390px]:text-[11px] ${
+                            active
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:bg-card hover:text-foreground"
+                          }`}
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                          {tab.label}
+                        </button>
+                      );
+                    })}
                   </div>
-                </section>
+                </nav>
 
-                <section className="tournament-section rounded-xl p-4 sm:p-5">
-                  <div className="mb-4 flex items-center gap-2">
-                    <Trophy className="h-5 w-5 text-accent" />
-                    <div>
-                      <h3 className="font-heading text-base font-bold">Prize Pool</h3>
-                      <p className="text-xs text-muted-foreground">Transparent payout setup for this event.</p>
+                {activeTab === "overview" && (
+                  <section className="tournament-section rounded-lg p-3.5 sm:p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-heading text-base font-bold">Overview</h3>
+                        <p className="text-xs text-muted-foreground">Only the match prep essentials.</p>
+                      </div>
+                      <span className={`shrink-0 rounded-full border px-2.5 py-1 font-heading text-[10px] font-bold ${statusMeta.tone}`}>
+                        {registered ? "Joined" : statusMeta.label}
+                      </span>
                     </div>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <div className="detail-tile rounded-lg p-3">
-                      <p className="text-[10px] text-muted-foreground">Position Prize</p>
-                      <p className="mt-1 font-heading text-lg font-black text-primary">{usesPositionPrize ? formatCurrency(prize) : "Disabled"}</p>
-                    </div>
-                    <div className="detail-tile rounded-lg p-3">
-                      <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                        <Crosshair className="h-3 w-3" /> Per Kill
-                      </p>
-                      <p className="mt-1 font-heading text-lg font-black text-accent">{usesKillPrize ? formatCurrency(killPrizeAmount) : "Disabled"}</p>
-                    </div>
-                    <div className="detail-tile rounded-lg p-3">
-                      <p className="text-[10px] text-muted-foreground">Entry</p>
-                      <p className="mt-1 font-heading text-lg font-black text-emerald-200">{entryFee === 0 ? "Free" : formatCurrency(entryFee)}</p>
-                    </div>
-                  </div>
-                  {usesPositionPrize && Boolean(tournament.prizeDistribution?.length) && (
-                    <div className="mt-3 grid gap-2 min-[520px]:grid-cols-3">
-                      {tournament.prizeDistribution.slice(0, 6).map((row) => (
-                        <div key={row.position} className="rounded-lg border border-accent/20 bg-accent/5 p-3">
-                          <p className="text-[10px] text-muted-foreground">Position #{row.position}</p>
-                          <p className="font-heading font-bold text-accent">{formatCurrency(row.prizeAmount)}</p>
+
+                    <div className="divide-y divide-glass-border/70">
+                      {[
+                        { icon: Calendar, label: "Match starts", value: formatDateTime(tournament.startAt) },
+                        { icon: Gamepad2, label: "Mode", value: modeLabel },
+                        { icon: UserCheck, label: "Team size", value: teamLabel },
+                      ].map((item) => (
+                        <div key={item.label} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-sm border border-primary/25 bg-primary/10 text-primary">
+                            <item.icon className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{item.label}</p>
+                            <p className="mt-0.5 truncate font-heading text-sm font-bold">{item.value}</p>
+                          </div>
                         </div>
                       ))}
                     </div>
-                  )}
-                </section>
 
-                <section className="tournament-section rounded-xl p-4 sm:p-5">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <KeyRound className="h-5 w-5 text-secondary" />
-                      <div>
-                        <h3 className="font-heading text-base font-bold">Room Credentials</h3>
-                        <p className="text-xs text-muted-foreground">Visible only when your access allows it.</p>
+                    <div className="mt-3 grid grid-cols-3 divide-x divide-glass-border/70 border-y border-glass-border/70 py-2 text-center">
+                      <div className="px-2">
+                        <p className="text-[10px] text-muted-foreground">Prize</p>
+                        <p className="truncate font-heading text-sm font-black text-accent">{usesPositionPrize ? formatCurrency(prize) : "Kill"}</p>
+                      </div>
+                      <div className="px-2">
+                        <p className="text-[10px] text-muted-foreground">Entry</p>
+                        <p className="truncate font-heading text-sm font-black">{entryFee === 0 ? "Free" : formatCurrency(entryFee)}</p>
+                      </div>
+                      <div className="px-2">
+                        <p className="text-[10px] text-muted-foreground">Slots</p>
+                        <p className="truncate font-heading text-sm font-black text-primary">{slotsLeft} left</p>
                       </div>
                     </div>
-                    <Lock className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <div className="detail-tile rounded-lg p-3">
-                      <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                        <Calendar className="h-3 w-3" /> Join Time
-                      </p>
-                      <p className="mt-1 font-heading text-sm font-bold">{formatDateTime(tournament.room_details?.roomJoinTime)}</p>
-                    </div>
-                    <div className="detail-tile rounded-lg p-3">
-                      <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                        <Hash className="h-3 w-3" /> Room ID
-                      </p>
-                      <div className="mt-1 flex items-center gap-2">
-                        <p className="min-w-0 flex-1 truncate font-heading text-sm font-bold">
-                          {tournament.room_details?.roomId || (registered || tournament.room_details?.hasRoomId ? "Not shared yet" : "Join to view")}
-                        </p>
-                        {tournament.room_details?.roomId && (
-                          <button
-                            type="button"
-                            onClick={() => copyValue("Room ID", tournament.room_details?.roomId)}
-                            className="arena-focus grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-primary"
-                            aria-label="Copy Room ID"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="detail-tile rounded-lg p-3">
-                      <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                        <Lock className="h-3 w-3" /> Password
-                      </p>
-                      <div className="mt-1 flex items-center gap-2">
-                        <p className="min-w-0 flex-1 truncate font-heading text-sm font-bold">
-                          {tournament.room_details?.roomPass || (registered || tournament.room_details?.hasRoomPass ? "Not shared yet" : "Join to view")}
-                        </p>
-                        {tournament.room_details?.roomPass && (
-                          <button
-                            type="button"
-                            onClick={() => copyValue("Room Pass", tournament.room_details?.roomPass)}
-                            className="arena-focus grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-primary"
-                            aria-label="Copy Room Pass"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {!hasRoomDetails && (
-                    <p className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
-                      Room credentials have not been published yet. Joined players will receive live room updates.
-                    </p>
-                  )}
-                </section>
 
-                <section className="tournament-section rounded-xl p-4 sm:p-5">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-5 w-5 text-secondary" />
-                      <div>
-                        <h3 className="font-heading text-base font-bold">Participants</h3>
-                        <p className="text-xs text-muted-foreground">
-                          {registeredSlots > 0
-                            ? `${registeredSlots} slot${registeredSlots === 1 ? "" : "s"} booked with ${participantCount} participant${participantCount === 1 ? "" : "s"}.`
-                            : "No participants have joined yet."}
-                        </p>
+                    <details className="mt-3 group rounded-sm border border-glass-border bg-background/35">
+                      <summary className="arena-focus flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 font-heading text-xs font-bold">
+                        View Details
+                        <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+                      </summary>
+                      <div className="border-t border-glass-border/70 p-3">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {[
+                            { label: "Registration", value: registrationIsOpen ? "Open now" : now < registrationStartMs ? "Opening soon" : "Closed" },
+                            { label: "Format", value: tournament.type.toUpperCase() },
+                            { label: "Platform", value: tournament.platform || "mobile" },
+                            { label: "Prize type", value: prizeMode === "both" ? "Position + Kill" : prizeMode },
+                            { label: "Per kill", value: usesKillPrize ? formatCurrency(killPrizeAmount) : "Disabled" },
+                            { label: "Players", value: `${participantCount} joined` },
+                          ].map((item) => (
+                            <div key={item.label} className="border-t border-glass-border/60 py-2 first:border-t-0 sm:first:border-t">
+                              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{item.label}</p>
+                              <p className="mt-0.5 truncate font-heading text-sm font-bold capitalize">{item.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <div id="tournament-rules" className="mt-3 scroll-mt-24 border-t border-glass-border/70 pt-3">
+                          <p className="mb-2 font-heading text-xs font-bold text-primary">Rules</p>
+                          <div className="space-y-2">
+                            {rules.map((rule, i) => (
+                              <details key={`${rule}-${i}`} className="group rounded-sm border border-glass-border/70 bg-card/55 p-2.5" open={i === 0}>
+                                <summary className="cursor-pointer list-none font-heading text-xs font-bold">
+                                  Rule {i + 1}
+                                  <span className="float-right text-muted-foreground transition-transform group-open:rotate-45">+</span>
+                                </summary>
+                                <p className="mt-2 text-xs leading-5 text-muted-foreground">{rule}</p>
+                              </details>
+                            ))}
+                          </div>
+                        </div>
                       </div>
+                    </details>
+
+                    {tournament.status === "completed" && resultRows.length > 0 && (
+                      <details className="mt-3 group rounded-sm border border-accent/25 bg-accent/5">
+                        <summary className="arena-focus flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 font-heading text-xs font-bold text-accent">
+                          Results published
+                          <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+                        </summary>
+                        <div className="space-y-2 border-t border-accent/15 p-3">
+                          {resultRows.map((result, index) => (
+                            <div key={`${tournament._id}-${result.position}-${index}`} className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-2 border-t border-glass-border/60 py-2 first:border-t-0">
+                              <span className="grid h-9 w-9 place-items-center rounded-sm border border-accent/35 bg-accent/10 font-heading text-xs font-black text-accent">
+                                #{result.position || index + 1}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="truncate font-heading text-sm font-bold">{getResultPlayerName(result.player)}</p>
+                                <p className="truncate text-[10px] text-muted-foreground">{Number(result.kills || 0)} kills</p>
+                              </div>
+                              <p className="whitespace-nowrap font-heading text-sm font-bold text-secondary">{formatCurrency(result.prizeWon)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </section>
+                )}
+
+                {activeTab === "room" && (
+                  <section className="tournament-section rounded-lg p-3.5 sm:p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-heading text-base font-bold">Room</h3>
+                        <p className="text-xs text-muted-foreground">{registered ? "Copy and join fast." : "Join the tournament to unlock room access."}</p>
+                      </div>
+                      <Lock className="h-4 w-4 text-muted-foreground" />
                     </div>
-                    {participantsLoading && <RefreshCcw className="h-4 w-4 animate-spin text-primary" />}
-                  </div>
-                  {participantPreview.length > 0 ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {participantPreview.map((registration) => {
-                        const playerName = getPlayerName(registration);
-                        return (
-                          <div key={registration._id} className="detail-tile rounded-lg p-3">
-                            <div className="flex items-center gap-3">
-                              <UserAvatar
-                                user={registration.user}
-                                name={playerName}
-                                size="md"
-                              />
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3 border-y border-glass-border/70 py-3">
+                        <Calendar className="h-5 w-5 shrink-0 text-primary" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Join time</p>
+                          <p className="truncate font-heading text-sm font-bold">{formatDateTime(tournament.room_details?.roomJoinTime)}</p>
+                        </div>
+                      </div>
+
+                      {[
+                        { label: "Room ID", value: roomIdValue, display: roomIdDisplay, icon: Hash },
+                        { label: "Password", value: roomPassValue, display: roomPassDisplay, icon: KeyRound },
+                      ].map((item) => (
+                        <div key={item.label} className="rounded-sm border border-secondary/25 bg-secondary/10 p-3">
+                          <div className="mb-2 flex items-center gap-2 text-secondary">
+                            <item.icon className="h-4 w-4" />
+                            <p className="font-heading text-[11px] font-bold uppercase tracking-[0.12em]">{item.label}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <p className="min-w-0 flex-1 truncate font-display text-[clamp(1.2rem,7vw,2rem)] font-black text-foreground">
+                              {item.display}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => item.value && copyValue(item.label, item.value)}
+                              disabled={!item.value}
+                              className="arena-focus inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-sm bg-secondary px-3 font-heading text-xs font-bold text-secondary-foreground disabled:bg-muted disabled:text-muted-foreground"
+                            >
+                              <Copy className="h-4 w-4" />
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {!hasRoomDetails && (
+                      <p className="mt-3 rounded-sm border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                        Room credentials have not been published yet. Joined players will receive live room updates.
+                      </p>
+                    )}
+                  </section>
+                )}
+
+                {activeTab === "players" && (
+                  <section className="tournament-section rounded-lg p-3.5 sm:p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="font-heading text-base font-bold">Players</h3>
+                        <p className="text-xs text-muted-foreground">{registeredSlots}/{tournament.maxPlayers} slots booked</p>
+                      </div>
+                      {participantsLoading && <RefreshCcw className="h-4 w-4 animate-spin text-primary" />}
+                    </div>
+                    <div className="mb-3 h-2 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-gradient-to-r from-primary via-cyan-400 to-emerald-300" style={{ width: `${slotFillPercent}%` }} />
+                    </div>
+                    {participantPreview.length > 0 ? (
+                      <div className="divide-y divide-glass-border/70">
+                        {participantPreview.map((registration) => {
+                          const playerName = getPlayerName(registration);
+                          return (
+                            <div key={registration._id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                              <UserAvatar user={registration.user} name={playerName} size="md" />
                               <div className="min-w-0 flex-1">
                                 <p className="truncate font-heading text-sm font-bold">{playerName}</p>
                                 <p className="truncate text-[11px] text-muted-foreground">
                                   {registration.gameAccount?.gameId || registration.gameAccounts?.[0]?.gameId || "Game ID pending"}
                                 </p>
                               </div>
-                              <span className="rounded-lg border border-secondary/30 bg-secondary/10 px-2 py-1 font-heading text-[10px] font-bold text-secondary">
+                              <span className="rounded-sm border border-secondary/30 bg-secondary/10 px-2 py-1 font-heading text-[10px] font-bold text-secondary">
                                 #{registration.slotNumber || "-"}
                               </span>
                             </div>
-                          </div>
-                        );
-                      })}
-                      {participants.length > participantPreview.length && (
-                        <div className="detail-tile rounded-lg p-3 text-center font-heading text-sm font-bold text-muted-foreground">
-                          +{participants.length - participantPreview.length} more joined
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-glass-border bg-background/30 p-5 text-center">
-                      <Users className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-                      <p className="font-heading text-sm font-bold">Waiting for players</p>
-                      <p className="mt-1 text-xs text-muted-foreground">The participant board will fill as players join.</p>
-                    </div>
-                  )}
-                </section>
-
-                {tournament.status === "completed" && (
-                  <section className="tournament-section rounded-xl p-4 sm:p-5">
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <Medal className="h-5 w-5 text-accent" />
-                        <h3 className="font-heading text-base font-bold">Tournament Result</h3>
+                          );
+                        })}
+                        {participants.length > participantPreview.length && (
+                          <p className="py-3 text-center font-heading text-xs font-bold text-muted-foreground">
+                            +{participants.length - participantPreview.length} more joined
+                          </p>
+                        )}
                       </div>
-                      <span className="text-[11px] text-muted-foreground">{formatCurrency(resultPaidTotal)} paid</span>
-                    </div>
-                    {resultRows.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Result not published yet.</p>
                     ) : (
-                      <div className="space-y-2">
-                        {resultRows.map((result, index) => (
-                          <div key={`${tournament._id}-${result.position}-${index}`} className="detail-tile rounded-lg p-3">
-                            <div className="grid grid-cols-[3rem_1fr_auto] items-center gap-2">
-                              <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg border border-accent/40 bg-accent/15">
-                                <span className="text-[9px] leading-none text-muted-foreground">{prizeMode === "kill" ? "Rank" : "Pos"}</span>
-                                <span className="font-heading text-sm font-bold leading-tight text-accent">#{result.position || index + 1}</span>
-                              </div>
-                              <div className="min-w-0">
-                                <p className="truncate font-heading text-sm font-bold">{getResultPlayerName(result.player)}</p>
-                                <p className="truncate text-[10px] text-muted-foreground">
-                                  {result.gameName || "Game name not set"} - ID {result.gameId || "Not set"}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="whitespace-nowrap font-heading font-bold text-secondary">{formatCurrency(result.prizeWon)}</p>
-                                <p className="whitespace-nowrap text-[10px] text-muted-foreground">{Number(result.kills || 0)} kills</p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                      <div className="rounded-sm border border-dashed border-glass-border bg-background/30 p-5 text-center">
+                        <Users className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                        <p className="font-heading text-sm font-bold">Waiting for players</p>
+                        <p className="mt-1 text-xs text-muted-foreground">The player list will fill as slots are booked.</p>
                       </div>
                     )}
                   </section>
                 )}
 
-                <section id="tournament-rules" className="tournament-section scroll-mt-24 rounded-xl p-4 sm:p-5">
-                  <div className="mb-4 flex items-center gap-2">
-                    <Shield className="h-5 w-5 text-primary" />
-                    <div>
-                      <h3 className="font-heading text-base font-bold">Rules & Regulations</h3>
-                      <p className="text-xs text-muted-foreground">Match conduct and dispute standards.</p>
+                {activeTab === "chat" && (
+                  <section className="tournament-section rounded-lg p-3.5 sm:p-4">
+                    <div className="mb-3 flex items-center gap-3">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-sm border border-primary/25 bg-primary/10 text-primary">
+                        <MessageCircle className="h-5 w-5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-heading text-base font-bold">Chat & Voice</h3>
+                        <p className="truncate text-xs text-muted-foreground">Coordinate room entry, reports, and match calls.</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    {rules.map((rule, i) => (
-                      <details key={`${rule}-${i}`} className="group rounded-lg border border-glass-border/70 bg-background/35 p-3" open={i === 0}>
-                        <summary className="cursor-pointer list-none font-heading text-sm font-bold">
-                          Rule {i + 1}
-                          <span className="float-right text-muted-foreground transition-transform group-open:rotate-45">+</span>
-                        </summary>
-                        <p className="mt-2 text-xs leading-5 text-muted-foreground">{rule}</p>
-                      </details>
-                    ))}
-                  </div>
-                </section>
-
+                    <div className="rounded-sm border border-primary/20 bg-primary/10 p-3">
+                      <p className="font-heading text-sm font-bold text-primary">{registered ? "Live communication unlocked" : "Join required"}</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        {registered
+                          ? "Open the tournament chat to message joined players and use voice controls."
+                          : "Chat and voice are available only after you join this tournament."}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={openChat}
+                        disabled={!registered}
+                        {...prefetchOnIntent(() => prefetchRoute(chatPath))}
+                        className="arena-focus mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-sm bg-primary px-4 font-heading text-xs font-bold text-primary-foreground disabled:bg-muted disabled:text-muted-foreground"
+                      >
+                        <Radio className="h-4 w-4" />
+                        Open Chat & Voice
+                      </button>
+                    </div>
+                  </section>
+                )}
               </div>
             </div>
           </>

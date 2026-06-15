@@ -42,19 +42,25 @@
     --radius-panel: 0.3125rem;
     --ui-font-scale: 1;
     --ui-control-scale: 1;
-    --ui-density-gap: 0.45rem;
-    --ui-surface-padding: 0.55rem;
-    --ui-section-gap: 0.65rem;
-    --ui-page-inline: 0.65rem;
-    --ui-touch-target: 2.35rem;
+    --ui-text-micro: clamp(calc(0.625rem * var(--ui-font-scale)), 0.18vw + 0.56rem, calc(0.6875rem * var(--ui-font-scale)));
+    --ui-text-small: clamp(calc(0.75rem * var(--ui-font-scale)), 0.22vw + 0.68rem, calc(0.875rem * var(--ui-font-scale)));
+    --ui-text-body: clamp(calc(0.875rem * var(--ui-font-scale)), 0.28vw + 0.78rem, calc(1rem * var(--ui-font-scale)));
+    --ui-text-lead: clamp(calc(1rem * var(--ui-font-scale)), 0.55vw + 0.84rem, calc(1.25rem * var(--ui-font-scale)));
+    --ui-text-title: clamp(calc(1.2rem * var(--ui-font-scale)), 1.55vw + 0.82rem, calc(2rem * var(--ui-font-scale)));
+    --ui-text-display: clamp(calc(1.55rem * var(--ui-font-scale)), 4.2vw + 0.5rem, calc(3.75rem * var(--ui-font-scale)));
+    --ui-density-gap: clamp(0.45rem, 0.34vw + 0.34rem, 0.75rem);
+    --ui-surface-padding: clamp(0.55rem, 0.55vw + 0.38rem, 0.95rem);
+    --ui-section-gap: clamp(0.65rem, 0.72vw + 0.42rem, 1.15rem);
+    --ui-page-inline: clamp(0.55rem, 1.15vw, 1.25rem);
+    --ui-touch-target: clamp(2.5rem, 0.7vw + 2.25rem, 3rem);
     --ui-motion-duration: 150ms;
     --ui-shadow-strength: 0;
     --ui-card-shadow: none;
-    --ui-auto-grid-min: 13rem;
-    --ui-auto-card-min: 11rem;
-    --ui-auto-stat-min: 8.5rem;
-    --ui-auto-gap: 0.625rem;
-    --ui-auto-panel-pad: 0.625rem;
+    --ui-auto-grid-min: clamp(10rem, 18vw, 16rem);
+    --ui-auto-card-min: clamp(8.75rem, 15vw, 13.5rem);
+    --ui-auto-stat-min: clamp(6.75rem, 12vw, 10rem);
+    --ui-auto-gap: clamp(0.45rem, 0.5vw + 0.28rem, 0.875rem);
+    --ui-auto-panel-pad: clamp(0.5rem, 0.52vw + 0.34rem, 0.875rem);
     --b4a-bottom-nav-height: calc(3.5rem + env(safe-area-inset-bottom));
     --b4a-fixed-action-bottom: var(--b4a-bottom-nav-height);
     --b4a-keyboard-scroll-margin: calc(var(--b4a-bottom-nav-height) + 5rem);
@@ -218,10 +224,13 @@
   :where(.arena-shell h1, .arena-shell h2, .arena-shell h3) {
     text-wrap: balance;
     overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   :where(.arena-shell p, .arena-shell span, .arena-shell a, .arena-shell button, .arena-shell label) {
     overflow-wrap: anywhere;
+    word-break: break-word;
+    text-wrap: pretty;
   }
 
   :where(input, textarea, select) {
@@ -304,15 +313,13 @@
 
   .arena-title {
     @apply truncate font-display text-base font-black uppercase leading-tight tracking-tight text-primary sm:text-lg;
-    font-size: clamp(
-      calc(0.9rem * var(--ui-font-scale)),
-      calc(100cqw / 24),
-      calc(1.125rem * var(--ui-font-scale))
-    );
+    font-size: clamp(calc(0.95rem * var(--ui-font-scale)), 5.5cqw, calc(1.35rem * var(--ui-font-scale)));
   }
 
   .arena-subtitle {
     @apply truncate font-heading text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs;
+    font-size: var(--ui-text-micro);
+    line-height: 1.35;
   }
 
   .arena-responsive-grid {
@@ -335,10 +342,12 @@
 
   .arena-section-title {
     @apply font-heading text-sm font-black leading-tight text-foreground sm:text-base;
+    font-size: clamp(calc(0.86rem * var(--ui-font-scale)), 3.8cqw, calc(1.05rem * var(--ui-font-scale)));
   }
 
   .arena-section-copy {
     @apply mt-0.5 text-xs leading-relaxed text-muted-foreground;
+    font-size: var(--ui-text-small);
   }
 
   .arena-mobile-panel {
@@ -378,13 +387,13 @@
   }
 
   .arena-fluid-title {
-    font-size: clamp(0.76rem, 8cqw, 0.95rem);
+    font-size: clamp(calc(0.76rem * var(--ui-font-scale)), 8cqw, calc(0.95rem * var(--ui-font-scale)));
     line-height: 1.15;
     overflow-wrap: anywhere;
   }
 
   .arena-fluid-copy {
-    font-size: clamp(0.68rem, 6cqw, 0.8rem);
+    font-size: clamp(calc(0.68rem * var(--ui-font-scale)), 6cqw, calc(0.8rem * var(--ui-font-scale)));
     line-height: 1.25;
     overflow-wrap: anywhere;
   }
@@ -442,16 +451,12 @@
 
   .arena-card-title {
     @apply truncate font-heading text-sm font-black leading-tight text-foreground;
-    font-size: clamp(
-      calc(0.78rem * var(--ui-font-scale)),
-      calc(100cqw / 22),
-      calc(0.95rem * var(--ui-font-scale))
-    );
+    font-size: clamp(calc(0.78rem * var(--ui-font-scale)), 4.6cqw, calc(0.98rem * var(--ui-font-scale)));
   }
 
   .arena-card-text {
     @apply text-xs leading-relaxed text-muted-foreground;
-    font-size: calc(0.75rem * var(--ui-font-scale));
+    font-size: var(--ui-text-small);
   }
 
   .arena-data-grid {
@@ -468,7 +473,7 @@
     border-radius: 0 !important;
     background: transparent !important;
     box-shadow: none !important;
-    padding: 0.5rem 0.35rem !important;
+    padding: clamp(0.42rem, 1.8cqw, 0.6rem) clamp(0.28rem, 1.4cqw, 0.5rem) !important;
   }
 
   .arena-data-tile + .arena-data-tile {
@@ -786,21 +791,42 @@
     --tw-ring-color: hsl(var(--glass-border)) !important;
   }
 
+  .arena-shell :where(.text-8xl, .text-9xl) {
+    font-size: clamp(2rem, 12vw, 4rem) !important;
+    line-height: 1.02 !important;
+    letter-spacing: 0 !important;
+  }
+
   .arena-shell :where(.text-5xl, .text-6xl, .text-7xl) {
-    font-size: clamp(1.45rem, 8.5vw, 3rem) !important;
+    font-size: var(--ui-text-display) !important;
     line-height: 1.05 !important;
     letter-spacing: 0 !important;
   }
 
   .arena-shell :where(.text-3xl, .text-4xl) {
-    font-size: clamp(1.2rem, 6vw, 2rem) !important;
+    font-size: var(--ui-text-title) !important;
     line-height: 1.08 !important;
     letter-spacing: 0 !important;
   }
 
   .arena-shell :where(.text-xl, .text-2xl) {
-    font-size: clamp(1rem, 4.8vw, 1.35rem) !important;
+    font-size: var(--ui-text-lead) !important;
     line-height: 1.15 !important;
+  }
+
+  .arena-shell :where(.text-base, .text-lg) {
+    font-size: var(--ui-text-body) !important;
+    line-height: 1.45 !important;
+  }
+
+  .arena-shell :where(.text-sm) {
+    font-size: var(--ui-text-small) !important;
+    line-height: 1.38 !important;
+  }
+
+  .arena-shell :where(.text-xs, .text-\[10px\], .text-\[11px\]) {
+    font-size: var(--ui-text-micro) !important;
+    line-height: 1.35 !important;
   }
 
   .arena-shell :where(.tracking-widest, .tracking-\[0\.2em\], .tracking-\[0\.18em\], .tracking-\[0\.16em\]) {
@@ -876,24 +902,56 @@
     margin: clamp(0.55rem, 1.15cqw, 0.9rem) !important;
   }
 
+  .arena-shell :where(.m-4) {
+    margin: clamp(0.5rem, 1cqw, 0.8rem) !important;
+  }
+
   .arena-shell :where(.mx-5, .mx-6, .mx-7, .mx-8) {
     margin-inline: clamp(0.55rem, 1.15cqw, 0.9rem) !important;
+  }
+
+  .arena-shell :where(.mx-4) {
+    margin-inline: clamp(0.5rem, 1cqw, 0.8rem) !important;
   }
 
   .arena-shell :where(.my-5, .my-6, .my-7, .my-8) {
     margin-block: clamp(0.55rem, 1.15cqw, 0.9rem) !important;
   }
 
+  .arena-shell :where(.my-4) {
+    margin-block: clamp(0.5rem, 1cqw, 0.8rem) !important;
+  }
+
+  .arena-shell :where(.mt-6, .mt-8, .mt-10, .mt-12) {
+    margin-top: clamp(0.65rem, 1.6cqw, 1.15rem) !important;
+  }
+
+  .arena-shell :where(.mb-6, .mb-8, .mb-10, .mb-12) {
+    margin-bottom: clamp(0.65rem, 1.6cqw, 1.15rem) !important;
+  }
+
   .arena-shell :where(.p-5, .p-6, .p-7, .p-8) {
     padding: clamp(0.6rem, 1.25cqw, 0.95rem) !important;
+  }
+
+  .arena-shell :where(.p-4) {
+    padding: clamp(0.55rem, 1.15cqw, 0.85rem) !important;
   }
 
   .arena-shell :where(.px-5, .px-6, .px-7, .px-8) {
     padding-inline: clamp(0.6rem, 1.25cqw, 0.95rem) !important;
   }
 
+  .arena-shell :where(.px-4) {
+    padding-inline: clamp(0.55rem, 1.15cqw, 0.85rem) !important;
+  }
+
   .arena-shell :where(.py-5, .py-6, .py-7, .py-8) {
     padding-block: clamp(0.6rem, 1.25cqw, 0.95rem) !important;
+  }
+
+  .arena-shell :where(.py-4) {
+    padding-block: clamp(0.55rem, 1.15cqw, 0.85rem) !important;
   }
 
   .arena-shell :where(.p-10, .p-12, .p-14, .p-16) {
@@ -906,6 +964,116 @@
 
   .arena-shell :where(.py-10, .py-12, .py-14, .py-16) {
     padding-block: calc(var(--ui-surface-padding) * 1.4) !important;
+  }
+
+  .arena-shell :where(.min-h-\[300px\], .min-h-\[320px\], .min-h-\[360px\], .min-h-\[400px\], .min-h-\[480px\], .min-h-\[500px\], .min-h-\[600px\]) {
+    min-height: auto !important;
+  }
+
+  .arena-shell :where(.w-\[240px\]) {
+    width: min(100%, 15rem) !important;
+  }
+
+  .arena-shell :where(.w-\[260px\]) {
+    width: min(100%, 16.25rem) !important;
+  }
+
+  .arena-shell :where(.w-\[300px\]) {
+    width: min(100%, 18.75rem) !important;
+  }
+
+  .arena-shell :where(.w-\[320px\]) {
+    width: min(100%, 20rem) !important;
+  }
+
+  .arena-shell :where(.w-\[360px\]) {
+    width: min(100%, 22.5rem) !important;
+  }
+
+  .arena-shell :where(.w-\[420px\]) {
+    width: min(100%, 26.25rem) !important;
+  }
+
+  .arena-shell :where(.w-\[480px\]) {
+    width: min(100%, 30rem) !important;
+  }
+
+  #root :where(.b4a-responsive-root, .b4a-responsive-root *) {
+    min-width: 0;
+  }
+
+  #root .b4a-responsive-root {
+    font-size: var(--ui-text-body);
+  }
+
+  #root .b4a-responsive-root :where(h1, h2, h3) {
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  #root .b4a-responsive-root :where(p, span, a, button, label) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    text-wrap: pretty;
+  }
+
+  #root .b4a-responsive-root :where(.text-8xl, .text-9xl) {
+    font-size: clamp(2rem, 12vw, 4rem) !important;
+    line-height: 1.02 !important;
+    letter-spacing: 0 !important;
+  }
+
+  #root .b4a-responsive-root :where(.text-5xl, .text-6xl, .text-7xl) {
+    font-size: var(--ui-text-display) !important;
+    line-height: 1.05 !important;
+    letter-spacing: 0 !important;
+  }
+
+  #root .b4a-responsive-root :where(.text-3xl, .text-4xl) {
+    font-size: var(--ui-text-title) !important;
+    line-height: 1.08 !important;
+    letter-spacing: 0 !important;
+  }
+
+  #root .b4a-responsive-root :where(.text-xl, .text-2xl) {
+    font-size: var(--ui-text-lead) !important;
+    line-height: 1.15 !important;
+  }
+
+  #root .b4a-responsive-root :where(.text-base, .text-lg) {
+    font-size: var(--ui-text-body) !important;
+    line-height: 1.45 !important;
+  }
+
+  #root .b4a-responsive-root :where(.text-sm) {
+    font-size: var(--ui-text-small) !important;
+    line-height: 1.38 !important;
+  }
+
+  #root .b4a-responsive-root :where(.text-xs, .text-\[10px\], .text-\[11px\]) {
+    font-size: var(--ui-text-micro) !important;
+    line-height: 1.35 !important;
+  }
+
+  #root .b4a-responsive-root :where(.gap-8, .gap-10, .gap-12, .gap-14, .gap-16) {
+    gap: var(--ui-section-gap) !important;
+  }
+
+  #root .b4a-responsive-root :where(.p-6, .p-8, .p-10, .p-12, .p-14, .p-16) {
+    padding: calc(var(--ui-surface-padding) * 1.25) !important;
+  }
+
+  #root .b4a-responsive-root :where(.px-6, .px-8, .px-10, .px-12, .px-14, .px-16) {
+    padding-inline: calc(var(--ui-surface-padding) * 1.25) !important;
+  }
+
+  #root .b4a-responsive-root :where(.py-10, .py-12, .py-14, .py-16, .py-20, .py-24) {
+    padding-block: calc(var(--ui-section-gap) * 2.2) !important;
+  }
+
+  #root .b4a-responsive-root :where(button, a[role="button"], [role="button"]) {
+    max-width: 100%;
   }
 
   #root
@@ -1138,22 +1306,35 @@
 
 @media (min-width: 768px) {
   :root {
-    --ui-auto-grid-min: 14.5rem;
-    --ui-auto-card-min: 12.5rem;
-    --ui-auto-stat-min: 9.25rem;
-    --ui-auto-gap: 0.75rem;
-    --ui-auto-panel-pad: 0.75rem;
+    --ui-page-inline: clamp(0.8rem, 1.1vw, 1.4rem);
+    --ui-surface-padding: clamp(0.65rem, 0.62vw, 1rem);
+    --ui-section-gap: clamp(0.75rem, 0.86vw, 1.25rem);
+    --ui-auto-grid-min: clamp(13rem, 20vw, 16.5rem);
+    --ui-auto-card-min: clamp(11rem, 16vw, 14rem);
+    --ui-auto-stat-min: clamp(8rem, 12vw, 10rem);
+    --ui-auto-gap: clamp(0.55rem, 0.62vw, 0.875rem);
+    --ui-auto-panel-pad: clamp(0.6rem, 0.62vw, 0.875rem);
   }
 }
 
 @media (min-width: 1180px) {
   :root {
-    --ui-auto-grid-min: 16rem;
-    --ui-auto-card-min: 13.5rem;
-    --ui-auto-stat-min: 10rem;
-    --ui-auto-gap: 0.875rem;
-    --ui-auto-panel-pad: 0.875rem;
-    --ui-page-inline: 1rem;
+    --ui-page-inline: clamp(0.9rem, 0.85vw, 1.5rem);
+    --ui-surface-padding: clamp(0.7rem, 0.48vw, 1rem);
+    --ui-section-gap: clamp(0.8rem, 0.65vw, 1.2rem);
+    --ui-auto-grid-min: clamp(14rem, 16vw, 17rem);
+    --ui-auto-card-min: clamp(12rem, 13vw, 14rem);
+    --ui-auto-stat-min: clamp(8.5rem, 9vw, 10rem);
+    --ui-auto-gap: clamp(0.625rem, 0.45vw, 0.875rem);
+    --ui-auto-panel-pad: clamp(0.625rem, 0.45vw, 0.875rem);
+  }
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --ui-text-display: clamp(calc(1.75rem * var(--ui-font-scale)), 3.2vw, calc(3.5rem * var(--ui-font-scale)));
+    --ui-page-inline: 1.25rem;
+    --ui-section-gap: 1rem;
   }
 }
 
@@ -1170,15 +1351,15 @@
 
 @media (max-width: 640px) {
   :root {
-    --ui-page-inline: 0.75rem;
-    --ui-surface-padding: 0.55rem;
-    --ui-section-gap: 0.7rem;
-    --ui-density-gap: 0.5rem;
-    --ui-auto-grid-min: 9.5rem;
-    --ui-auto-card-min: 9rem;
-    --ui-auto-stat-min: 7.5rem;
-    --ui-auto-gap: 0.5rem;
-    --ui-auto-panel-pad: 0.55rem;
+    --ui-page-inline: clamp(0.55rem, 2.4vw, 0.75rem);
+    --ui-surface-padding: clamp(0.48rem, 1.8vw, 0.6rem);
+    --ui-section-gap: clamp(0.55rem, 2.2vw, 0.75rem);
+    --ui-density-gap: clamp(0.4rem, 1.8vw, 0.55rem);
+    --ui-auto-grid-min: clamp(8.75rem, 45vw, 10rem);
+    --ui-auto-card-min: clamp(8rem, 42vw, 9.25rem);
+    --ui-auto-stat-min: clamp(6.4rem, 34vw, 7.5rem);
+    --ui-auto-gap: clamp(0.38rem, 1.7vw, 0.55rem);
+    --ui-auto-panel-pad: clamp(0.45rem, 1.8vw, 0.6rem);
     --ui-touch-target: 2.75rem;
     --ui-card-shadow: none;
   }
@@ -1280,7 +1461,18 @@
     );
   }
 
+  #root .b4a-responsive-root :where(.grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5) {
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(100%, var(--ui-auto-card-min)), 1fr)
+    );
+  }
+
   .arena-shell :where(.gap-6, .gap-7, .gap-8, .gap-10, .gap-12) {
+    gap: var(--ui-section-gap) !important;
+  }
+
+  #root .b4a-responsive-root :where(.gap-6, .gap-7, .gap-8, .gap-10, .gap-12) {
     gap: var(--ui-section-gap) !important;
   }
 
@@ -1288,12 +1480,24 @@
     padding: var(--ui-surface-padding) !important;
   }
 
+  #root .b4a-responsive-root :where(.p-4, .p-5, .p-6, .p-7, .p-8, .p-10, .p-12) {
+    padding: var(--ui-surface-padding) !important;
+  }
+
   .arena-shell :where(.px-6, .px-7, .px-8, .px-10, .px-12) {
+    padding-inline: var(--ui-surface-padding) !important;
+  }
+
+  #root .b4a-responsive-root :where(.px-4, .px-5, .px-6, .px-7, .px-8, .px-10, .px-12) {
     padding-inline: var(--ui-surface-padding) !important;
   }
 
   .arena-shell :where(.py-6, .py-7, .py-8, .py-10, .py-12) {
     padding-block: var(--ui-surface-padding) !important;
+  }
+
+  #root .b4a-responsive-root :where(.py-6, .py-7, .py-8, .py-10, .py-12, .py-14, .py-20) {
+    padding-block: calc(var(--ui-section-gap) * 1.45) !important;
   }
 
   .arena-shell :where(.space-y-6 > :not([hidden]) ~ :not([hidden]), .space-y-7 > :not([hidden]) ~ :not([hidden]), .space-y-8 > :not([hidden]) ~ :not([hidden]), .space-y-10 > :not([hidden]) ~ :not([hidden])) {
@@ -1334,14 +1538,14 @@
 
 @media (max-width: 380px) {
   :root {
-    --ui-page-inline: 0.55rem;
-    --ui-surface-padding: 0.5rem;
-    --ui-section-gap: 0.6rem;
-    --ui-auto-grid-min: 8.25rem;
-    --ui-auto-card-min: 8rem;
-    --ui-auto-stat-min: 6.75rem;
-    --ui-auto-gap: 0.45rem;
-    --ui-auto-panel-pad: 0.5rem;
+    --ui-page-inline: clamp(0.45rem, 2vw, 0.6rem);
+    --ui-surface-padding: clamp(0.42rem, 1.6vw, 0.52rem);
+    --ui-section-gap: clamp(0.48rem, 1.8vw, 0.62rem);
+    --ui-auto-grid-min: clamp(7.85rem, 44vw, 8.75rem);
+    --ui-auto-card-min: clamp(7.5rem, 42vw, 8.25rem);
+    --ui-auto-stat-min: clamp(6rem, 34vw, 6.8rem);
+    --ui-auto-gap: clamp(0.35rem, 1.5vw, 0.48rem);
+    --ui-auto-panel-pad: clamp(0.38rem, 1.5vw, 0.52rem);
     --ui-touch-target: 3rem;
   }
 
@@ -1351,5 +1555,26 @@
 
   .arena-shell :where(button, [role="button"]) {
     letter-spacing: 0.02em;
+  }
+}
+
+@media (max-width: 330px) {
+  :root {
+    --ui-page-inline: 0.42rem;
+    --ui-surface-padding: 0.4rem;
+    --ui-section-gap: 0.46rem;
+    --ui-auto-grid-min: 7.2rem;
+    --ui-auto-card-min: 7rem;
+    --ui-auto-stat-min: 5.8rem;
+    --ui-text-display: clamp(calc(1.35rem * var(--ui-font-scale)), 10vw, calc(2.25rem * var(--ui-font-scale)));
+    --ui-text-title: clamp(calc(1rem * var(--ui-font-scale)), 6.6vw, calc(1.45rem * var(--ui-font-scale)));
+  }
+
+  .arena-shell :where(.grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5) {
+    grid-template-columns: 1fr;
+  }
+
+  #root .b4a-responsive-root :where(.grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5) {
+    grid-template-columns: 1fr;
   }
 }

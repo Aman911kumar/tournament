@@ -914,7 +914,7 @@ const Landing = () => {
     meta.setAttribute("content", desc);
   }, []);
   return (
-    <div className="min-h-screen text-foreground overflow-x-hidden">
+    <div className="b4a-responsive-root min-h-screen text-foreground overflow-x-hidden">
       <ArenaBackground />
       <Navbar />
       <main>

@@ -291,7 +291,7 @@ const GoogleOnboardingScreen = () => {
   };
 
   return (
-    <div className="relative min-h-[100dvh] overflow-hidden bg-background">
+    <div className="b4a-responsive-root relative min-h-[100dvh] overflow-hidden bg-background">
       <img
         src={heroBg}
         alt="Battle4Arena esports arena"

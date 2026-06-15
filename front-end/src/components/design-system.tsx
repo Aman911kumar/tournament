@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Search,
   ShieldCheck,
+  Star,
   Trophy,
   Users,
 } from "lucide-react";
@@ -449,25 +450,33 @@ export const CreatorCard = ({
   <button
     type="button"
     onClick={onClick}
-    className="arena-focus min-w-[132px] shrink-0 rounded-md border border-glass-border bg-card/92 p-2.5 text-left transition-colors hover:border-primary/55 hover:bg-card"
+    className="arena-focus min-w-[180px] shrink-0 rounded-md border border-glass-border bg-card/92 p-3 text-left transition-colors hover:border-primary/55 hover:bg-card"
   >
-    <div className="flex items-center gap-3">
+    <div className="flex items-start gap-2.5">
       <UserAvatar
         user={{ username: name, avatar: { url: avatarUrl }, role: ["creator"] }}
-        size="lg"
+        size="md"
       />
-      <div className="min-w-0">
-        <p className="truncate font-display text-sm font-bold">{name}</p>
-        <p className="mt-0.5 text-[10px] text-muted-foreground">
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <p className="truncate font-display text-sm font-bold">{name}</p>
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-primary" />
+        </div>
+        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
           {Number(followers || 0).toLocaleString("en-IN")} followers
         </p>
       </div>
     </div>
-    <div className="mt-2 flex items-center justify-between gap-2">
-      <StatusPill tone={active ? "accent" : "muted"}>
-        {active ? "Active" : "Creator"}
-      </StatusPill>
-      <span className="font-heading text-[10px] font-bold text-accent">
+    <div className="mt-3 flex items-center justify-between gap-2 text-[10px]">
+      <span className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-1 font-heading font-bold",
+        active ? "bg-emerald-400/10 text-emerald-300" : "bg-muted/60 text-muted-foreground",
+      )}>
+        <span className={cn("h-1.5 w-1.5 rounded-full", active ? "bg-emerald-300" : "bg-muted-foreground")} />
+        {active ? "Active" : "Recent"}
+      </span>
+      <span className="inline-flex items-center gap-1 font-heading font-bold text-accent">
+        <Star className="h-3.5 w-3.5 fill-accent" />
         {Number(rating || 0).toFixed(1)}
       </span>
     </div>

@@ -8,7 +8,9 @@ import {
   Gamepad2,
   Radio,
   Search,
+  ShieldCheck,
   Sparkles,
+  Star,
   Trophy,
 } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
@@ -70,6 +72,18 @@ const SectionHeading = ({
     {action}
   </div>
 );
+
+const getCreatorGames = (creator: CreatorChannel) => {
+  const text = `${creator.name} ${creator.handle} ${creator.description || ""}`.toLowerCase();
+  const matches = DISCOVERY_GAMES.filter((game) => {
+    if (game.key === "freefire") return /free\s*fire|freefire|\bff\b/.test(text);
+    if (game.key === "callofduty") return /call\s*of\s*duty|codm|\bcod\b/.test(text);
+    if (game.key === "bgmi") return /bgmi|pubg/.test(text);
+    return text.includes(game.label.toLowerCase()) || text.includes(game.short.toLowerCase());
+  });
+
+  return matches.length > 0 ? matches.slice(0, 2) : [];
+};
 
 const TournamentShowcaseCard = ({
   tournament,
@@ -453,45 +467,78 @@ const Index = () => {
         />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {recommendedCreators.slice(0, 4).map((creator) => (
-            <Surface
-              key={creator._id}
-              interactive
-              onClick={() => navigate(`/creator/${creator._id}`)}
-              {...prefetchOnIntent(() => prefetchCreatorProfile(creator._id))}
-              className="overflow-hidden p-0"
-            >
-              <div className="h-14 bg-gradient-to-r from-primary/30 via-secondary/20 to-accent/20">
+            <Surface key={creator._id} className="relative min-h-[184px] overflow-hidden p-0">
+              <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-r from-primary/20 via-secondary/12 to-accent/10">
                 {(creator.banner?.url || creator.owner?.banner?.url) && (
                   <img
                     src={creator.banner?.url ?? creator.owner?.banner?.url}
                     alt=""
                     loading="lazy"
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-cover opacity-35"
                   />
                 )}
+                <div className="absolute inset-0 bg-gradient-to-b from-background/10 to-card" />
               </div>
-              <div className="-mt-5 flex items-end gap-2.5 px-3 pb-3">
-                <UserAvatar
-                  user={{
-                    _id: creator.owner?._id,
-                    username: creator.name,
-                    avatar: { url: creator.avatar?.url ?? creator.owner?.avatar?.url },
-                    role: ["creator"],
-                  }}
-                  size="lg"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-heading text-sm font-black">{creator.name}</p>
-                  <p className="truncate text-[11px] text-muted-foreground">@{creator.handle}</p>
+
+              <div className="relative flex h-full flex-col p-3">
+                <div className="flex items-start gap-2.5">
+                  <UserAvatar
+                    user={{
+                      _id: creator.owner?._id,
+                      username: creator.name,
+                      avatar: { url: creator.avatar?.url ?? creator.owner?.avatar?.url },
+                      role: ["creator"],
+                    }}
+                    size="lg"
+                  />
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <p className="truncate font-heading text-sm font-black">{creator.name}</p>
+                      {!creator.virtual && <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                    </div>
+                    <p className="truncate text-[11px] text-muted-foreground">@{creator.handle}</p>
+                  </div>
+                  <span className={cn(
+                    "mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 font-heading text-[10px] font-bold",
+                    creator.isActive ? "bg-emerald-400/10 text-emerald-300" : "bg-muted/60 text-muted-foreground",
+                  )}>
+                    <span className={cn("h-1.5 w-1.5 rounded-full", creator.isActive ? "bg-emerald-300" : "bg-muted-foreground")} />
+                    {creator.isActive ? "Active" : "Recent"}
+                  </span>
                 </div>
-                <StatusPill tone={creator.isActive ? "accent" : "muted"}>
-                  {creator.isActive ? "Active" : "Creator"}
-                </StatusPill>
-              </div>
-              <div className="grid grid-cols-3 gap-1 border-t border-glass-border/70 px-3 py-2 text-center text-[10px] text-muted-foreground">
-                <span><b className="block font-heading text-xs text-foreground">{formatCompactNumber(creator.memberCount)}</b>Followers</span>
-                <span><b className="block font-heading text-xs text-foreground">{creator.tournamentCount ?? creator.ranking?.activeTournaments ?? 0}</b>Events</span>
-                <span><b className="block font-heading text-xs text-accent">{Number(creator.owner?.stats?.rating || creator.ranking?.rating || 0).toFixed(1)}</b>Rating</span>
+
+                <div className="mt-3 flex min-h-6 flex-wrap gap-1.5">
+                  {getCreatorGames(creator).length > 0 ? getCreatorGames(creator).map((game) => (
+                    <span key={game.key} className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-2 py-1 font-heading text-[10px] font-bold text-primary">
+                      <Gamepad2 className="h-3 w-3" />
+                      {game.short}
+                    </span>
+                  )) : (
+                    <span className="inline-flex items-center gap-1 rounded-sm bg-muted/55 px-2 py-1 font-heading text-[10px] font-bold text-muted-foreground">
+                      <Gamepad2 className="h-3 w-3" />
+                      Multi-game
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 font-heading font-bold text-accent">
+                    <Star className="h-3.5 w-3.5 fill-accent" />
+                    {Number(creator.owner?.stats?.rating || creator.ranking?.rating || 0).toFixed(1)}
+                  </span>
+                  <span>{formatCompactNumber(creator.memberCount)} followers</span>
+                  <span>{creator.tournamentCount ?? creator.ranking?.activeTournaments ?? 0} events</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => navigate(`/creator/${creator._id}`)}
+                  {...prefetchOnIntent(() => prefetchCreatorProfile(creator._id))}
+                  className="arena-focus mt-auto inline-flex min-h-9 items-center justify-center gap-1.5 rounded-sm bg-primary px-3 font-heading text-xs font-bold text-primary-foreground"
+                >
+                  View Profile
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
               </div>
             </Surface>
           ))}
