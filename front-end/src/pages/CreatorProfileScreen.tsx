@@ -50,6 +50,7 @@ import {
   prefetchTournamentDetail,
 } from "@/lib/route-prefetch";
 import { createReport } from "@/api/moderation";
+import { startDmConversation } from "@/api/dm";
 import { ProfileHero } from "@/components/identity";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import {
@@ -363,6 +364,7 @@ const CreatorProfileScreen = () => {
   const [reportDescription, setReportDescription] = useState("");
   const [reportProof, setReportProof] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
+  const [dmLoading, setDmLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"tournaments" | "about">(
     "tournaments",
   );
@@ -428,6 +430,33 @@ const CreatorProfileScreen = () => {
   const ownProfileBannerUrl = isOwnCreatorProfile ? currentProfile?.banner?.url : undefined;
   const creatorAvatarUrl = ownProfileAvatarUrl || channel?.avatar?.url || creator?.avatar?.url;
   const creatorBannerUrl = ownProfileBannerUrl || channel?.banner?.url || creator?.banner?.url;
+
+  const handleMessageCreator = async () => {
+    if (!creator?._id) {
+      toast.error("Creator account not available");
+      return;
+    }
+    if (isOwnCreatorProfile) {
+      toast.info("This is your creator profile");
+      return;
+    }
+    try {
+      setDmLoading(true);
+      const { conversation } = await startDmConversation({
+        targetUserId: creator._id,
+        metadata: {
+          source: "creator-profile",
+          creatorId: creator._id,
+          creatorName: displayName,
+        },
+      });
+      navigate(`/messages/${conversation._id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open direct message");
+    } finally {
+      setDmLoading(false);
+    }
+  };
 
   const handleFollow = async () => {
     if (!channel?._id) {
@@ -713,10 +742,12 @@ const CreatorProfileScreen = () => {
                 </button>
                 <button
                   type="button"
+                  onClick={handleMessageCreator}
+                  disabled={dmLoading || isOwnCreatorProfile}
                   className="arena-focus grid h-9 w-9 place-items-center rounded-xl border border-glass-border bg-secondary/[0.045] text-muted-foreground transition-colors hover:border-secondary/40 hover:text-secondary"
                   title="Message creator"
                 >
-                  <MessageCircle className="h-4 w-4" />
+                  {dmLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
                 </button>
                 {isVerifiedCreator && (
                   <span className="grid h-9 w-9 place-items-center rounded-xl border border-accent/25 bg-accent/10">

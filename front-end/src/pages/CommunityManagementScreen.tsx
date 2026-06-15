@@ -52,6 +52,7 @@ import {
   getMyChannel,
   getMyChannelMembers,
 } from "@/api/creators";
+import { startDmConversation } from "@/api/dm";
 import { UserAvatar } from "@/components/identity";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
 import { toast } from "@/components/ui/sonner";
@@ -305,6 +306,7 @@ const EmptyTabState = ({
 const MemberRow = ({
   member,
   onOpen,
+  onProfile,
   onMessage,
   onReport,
   onRestrict,
@@ -313,6 +315,7 @@ const MemberRow = ({
 }: {
   member: CommunityMember;
   onOpen: () => void;
+  onProfile: () => void;
   onMessage: () => void;
   onReport: () => void;
   onRestrict: () => void;
@@ -381,7 +384,7 @@ const MemberRow = ({
             <MessageSquare className="mr-2 h-4 w-4 text-primary" />
             Message
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={onOpen}>
+          <DropdownMenuItem onClick={onProfile}>
             <Eye className="mr-2 h-4 w-4 text-primary" />
             View Profile
           </DropdownMenuItem>
@@ -559,6 +562,8 @@ const CommunityManagementScreen = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [enabledFilters, setEnabledFilters] = useState<Set<string>>(new Set());
   const [selectedMember, setSelectedMember] = useState<CommunityMember | null>(null);
+  const [profileTarget, setProfileTarget] = useState<CommunityMember | null>(null);
+  const [startingDmId, setStartingDmId] = useState<string | null>(null);
   const [moderationAction, setModerationAction] = useState<ModerationAction | null>(null);
   const [actionTarget, setActionTarget] = useState<CommunityMember | null>(null);
   const profileId = profile?._id ? String(profile._id) : "";
@@ -706,10 +711,24 @@ const CommunityManagementScreen = () => {
     setActionTarget(null);
   };
 
-  const handleMessageMember = (member: CommunityMember) => {
-    toast.info("Direct messaging coming soon", {
-      description: `You will be able to message ${member.name} from this community panel.`,
-    });
+  const handleMessageMember = async (member: CommunityMember) => {
+    if (startingDmId) return;
+    setProfileTarget(null);
+    setSelectedMember(null);
+    setStartingDmId(member.id);
+    try {
+      const { conversation } = await startDmConversation({
+        targetUserId: member.id,
+        metadata: {
+          source: "community-management",
+        },
+      });
+      navigate(`/messages/${conversation._id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open direct message");
+    } finally {
+      setStartingDmId(null);
+    }
   };
 
   const handleExportMember = (member: CommunityMember) => {
@@ -738,6 +757,7 @@ const CommunityManagementScreen = () => {
           key={member.id}
           member={member}
           onOpen={() => setSelectedMember(member)}
+          onProfile={() => setProfileTarget(member)}
           onMessage={() => handleMessageMember(member)}
           onReport={() => openModeration("report", member)}
           onRestrict={() => openModeration("restrict", member)}
@@ -1006,7 +1026,7 @@ const CommunityManagementScreen = () => {
                     type="button"
                     variant="outline"
                     className="w-full justify-start"
-                    onClick={() => toast.success("Member profile open", { description: selectedMember.username })}
+                    onClick={() => setProfileTarget(selectedMember)}
                   >
                     <Eye className="mr-1 h-3.5 w-3.5" />
                     View Profile
@@ -1034,6 +1054,83 @@ const CommunityManagementScreen = () => {
           )}
         </SheetContent>
       </Sheet>
+
+      <Dialog open={Boolean(profileTarget)} onOpenChange={(open) => !open && setProfileTarget(null)}>
+        <DialogContent className="w-[calc(100%-1.5rem)] max-w-md border-border bg-[#161B22]">
+          {profileTarget && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="font-heading">Member Profile</DialogTitle>
+                <DialogDescription>Community identity and activity summary.</DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <UserAvatar
+                    user={{ username: profileTarget.username, avatar: { url: profileTarget.avatarUrl }, role: profileTarget.roles }}
+                    size="lg"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate font-heading text-base font-black">{profileTarget.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">@{profileTarget.username}</p>
+                    <p className="truncate text-xs text-muted-foreground">{profileTarget.email || "Email hidden"}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {profileTarget.roles.map((role) => (
+                    <span
+                      key={role}
+                      className={cn(
+                        "rounded-sm px-2 py-1 font-heading text-[10px] font-bold uppercase",
+                        role === "creator"
+                          ? "bg-secondary/12 text-secondary"
+                          : role === "moderator"
+                            ? "bg-primary/12 text-primary"
+                            : "bg-muted/50 text-muted-foreground",
+                      )}
+                    >
+                      {role}
+                    </span>
+                  ))}
+                  <span className={cn("rounded-sm px-2 py-1 font-heading text-[10px] font-bold uppercase", getStateTone(profileTarget.state))}>
+                    {profileTarget.state}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-y border-border/45 py-3">
+                  <div>
+                    <p className="font-heading text-[10px] uppercase text-muted-foreground">Joined</p>
+                    <p className="font-heading text-xs font-bold">{formatDate(profileTarget.joinedAt)}</p>
+                  </div>
+                  <div>
+                    <p className="font-heading text-[10px] uppercase text-muted-foreground">Last Active</p>
+                    <p className="font-heading text-xs font-bold">{formatDateTime(profileTarget.lastActiveAt)}</p>
+                  </div>
+                  <div>
+                    <p className="font-heading text-[10px] uppercase text-muted-foreground">Follower Since</p>
+                    <p className="font-heading text-xs font-bold">{formatDate(profileTarget.followedAt)}</p>
+                  </div>
+                  <div>
+                    <p className="font-heading text-[10px] uppercase text-muted-foreground">Activity</p>
+                    <p className="font-heading text-xs font-bold text-primary">{profileTarget.activityScore}/100</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 min-[420px]:flex-row">
+                  <Button type="button" className="flex-1" onClick={() => handleMessageMember(profileTarget)}>
+                    <MessageSquare className="mr-1 h-3.5 w-3.5" />
+                    Message
+                  </Button>
+                  <Button type="button" variant="outline" className="flex-1" onClick={() => setProfileTarget(null)}>
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <ActionDialog
         open={Boolean(moderationAction)}

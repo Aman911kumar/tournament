@@ -97,6 +97,10 @@ const AdminModerationScreen = lazy(
 const NotificationsScreen = lazy(
   () => import("./pages/NotificationsScreen.tsx"),
 );
+const DmInboxScreen = lazy(() => import("./pages/DmInboxScreen.tsx"));
+const DmConversationScreen = lazy(
+  () => import("./pages/DmConversationScreen.tsx"),
+);
 const SubscriptionsScreen = lazy(
   () => import("./pages/SubscriptionsScreen.tsx"),
 );
@@ -244,6 +248,10 @@ const App = () => (
                   path="/tournament/:id/comments"
                   element={<TournamentCommentsScreen />}
                 />
+                <Route
+                  path="/messages/:conversationId"
+                  element={<DmConversationScreen />}
+                />
               </Route>
               <Route element={<ProtectedShell />}>
                 <Route path="/" element={<Index />} />
@@ -317,6 +325,7 @@ const App = () => (
                   path="/notifications"
                   element={<NotificationsScreen />}
                 />
+                <Route path="/messages" element={<DmInboxScreen />} />
                 <Route
                   path="/subscriptions"
                   element={<SubscriptionsScreen />}

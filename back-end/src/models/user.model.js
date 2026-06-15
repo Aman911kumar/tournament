@@ -160,7 +160,20 @@ const userSchema = new mongoose.Schema({
         default: true
     },
     preferences: {
-        notifications: { type: Boolean, default: true }
+        notifications: { type: Boolean, default: true },
+        dmPrivacy: {
+            type: String,
+            enum: ["everyone", "followers_only", "subscribers_only", "mutual_followers", "nobody"],
+            default: "everyone",
+        },
+        dmReadReceipts: {
+            type: Boolean,
+            default: true,
+        },
+        dmOnlineStatus: {
+            type: Boolean,
+            default: true,
+        },
     },
     refreshToken: {
         type: String

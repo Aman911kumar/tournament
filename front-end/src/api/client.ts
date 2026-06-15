@@ -131,6 +131,7 @@ const publicAuthPaths = [
 
 const realtimePathPatterns = [
   /^\/chat(?:\/|$)/,
+  /^\/dm(?:\/|$)/,
   /^\/notifications(?:\/|$)/,
   /^\/moderation(?:\/|$)/,
   /^\/admin(?:\/|$)/,

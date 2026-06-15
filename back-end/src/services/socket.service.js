@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import { ACCESS_TOKEN_SECRET } from "../../env.js";
 import { User } from "../models/user.model.js";
 import { registerChatSocketHandlers } from "../sockets/chat.socket.js";
+import { registerDmSocketHandlers } from "../sockets/dm.socket.js";
 
 let io;
 let redisAdapterReady = false;
@@ -63,7 +64,7 @@ const recordSocketEvent = (event) => {
 
 const getRoomStats = () => {
     if (!io?.sockets?.adapter?.rooms) {
-        return { rooms: 0, appRooms: 0, chatRooms: 0, voiceRooms: 0, userRooms: 0 };
+        return { rooms: 0, appRooms: 0, chatRooms: 0, voiceRooms: 0, dmRooms: 0, userRooms: 0 };
     }
 
     const roomNames = [...io.sockets.adapter.rooms.keys()];
@@ -74,6 +75,7 @@ const getRoomStats = () => {
         appRooms: appRooms.length,
         chatRooms: appRooms.filter((room) => room.startsWith("chat:tournament:")).length,
         voiceRooms: appRooms.filter((room) => room.startsWith("voice:tournament:")).length,
+        dmRooms: appRooms.filter((room) => room.startsWith("dm:conversation:")).length,
         userRooms: appRooms.filter((room) => room.startsWith("user:")).length,
     };
 };
@@ -169,6 +171,7 @@ export const initSocket = (server, allowedOrigins = []) => {
         }
         socket.emit("notification:ready", { userId: socket.userId });
         registerChatSocketHandlers(io, socket);
+        registerDmSocketHandlers(io, socket);
         emitAdminPresence();
 
         socket.on("disconnect", () => {

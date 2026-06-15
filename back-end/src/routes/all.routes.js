@@ -14,6 +14,7 @@ import healthRoutes from "./health.routes.js";
 import monitoringRoutes from "./monitoring.routes.js";
 import moderationRoutes from "./moderation.routes.js";
 import chatRoutes from "./chat.routes.js";
+import dmRoutes from "./dm.routes.js";
 import emailRoutes from "./email.routes.js";
 
 const router = express.Router();
@@ -47,6 +48,9 @@ router.use("/moderation", moderationRoutes);
 
 // Tournament room chat routes
 router.use("/chat", chatRoutes);
+
+// Direct messages
+router.use("/dm", dmRoutes);
 
 // Game Account routes
 router.use("/game-account",gameAccount)

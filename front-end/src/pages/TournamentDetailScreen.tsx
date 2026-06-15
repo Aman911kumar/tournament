@@ -33,6 +33,7 @@ import {
   Tournament,
   TournamentRegistration,
 } from "@/api/tournaments";
+import { startDmConversation } from "@/api/dm";
 import { formatCurrency, getErrorMessage } from "@/lib/page-utils";
 import { CACHE_KEYS, readCache, writeAuthenticatedCache, writeCache } from "@/lib/offline-cache";
 import {
@@ -101,6 +102,9 @@ const getStatusMeta = (status?: Tournament["status"]) => {
 const getPlayerName = (registration: TournamentRegistration) =>
   registration.user?.username || registration.gameAccount?.inGameName || registration.gameAccounts?.[0]?.inGameName || "Player";
 
+const getRegistrationUserId = (registration: TournamentRegistration) =>
+  typeof registration.user === "string" ? registration.user : registration.user?._id || "";
+
 type DetailTab = "overview" | "room" | "players" | "chat";
 
 const TournamentDetailScreen = () => {
@@ -113,6 +117,7 @@ const TournamentDetailScreen = () => {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [startingDmId, setStartingDmId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState<ReportCategory>("cheating");
@@ -177,12 +182,34 @@ const TournamentDetailScreen = () => {
 
   const creator = {
     id: tournament?.channel?._id ?? tournament?.organizer?._id ?? "",
+    userId: tournament?.organizer?._id ?? "",
     name: tournament?.channel?.name ?? tournament?.organizer?.username ?? "Creator",
     avatarUrl: tournament?.channel?.avatar?.url ?? tournament?.organizer?.avatar?.url ?? "",
     verified: Boolean(tournament?.channel || tournament?.organizer),
     rating: tournament?.organizer?.stats?.rating ?? 4.5,
   };
   const creatorProfilePath = creator.id ? `/creator/${creator.id}` : "";
+
+  const openDirectMessage = async (targetUserId: string, metadata: Record<string, unknown> = {}) => {
+    if (!targetUserId || startingDmId) return;
+    setStartingDmId(targetUserId);
+    try {
+      const { conversation } = await startDmConversation({
+        targetUserId,
+        metadata: {
+          source: "tournament-detail",
+          tournamentId: tournament?._id,
+          tournamentTitle: tournament?.title,
+          ...metadata,
+        },
+      });
+      navigate(`/messages/${conversation._id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open direct message");
+    } finally {
+      setStartingDmId(null);
+    }
+  };
 
   const rules = tournament?.rules
     ? tournament.rules.split("\n").filter(Boolean)
@@ -613,6 +640,15 @@ const TournamentDetailScreen = () => {
                     </button>
                     <button
                       type="button"
+                      onClick={() => openDirectMessage(creator.userId, { creatorId: creator.userId, creatorName: creator.name })}
+                      disabled={!creator.userId || startingDmId === creator.userId}
+                      className="arena-focus inline-flex min-h-10 items-center justify-center gap-2 rounded-sm border border-secondary/25 bg-secondary/10 font-heading text-xs font-bold text-secondary disabled:opacity-50"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Message Organizer
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => creatorProfilePath && navigate(creatorProfilePath)}
                       disabled={!creatorProfilePath}
                       {...prefetchOnIntent(() => prefetchCreatorProfile(creator.id))}
@@ -908,6 +944,7 @@ const TournamentDetailScreen = () => {
                       <div className="divide-y divide-glass-border/70">
                         {participantPreview.map((registration) => {
                           const playerName = getPlayerName(registration);
+                          const playerUserId = getRegistrationUserId(registration);
                           return (
                             <div key={registration._id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                               <UserAvatar user={registration.user} name={playerName} size="md" />
@@ -920,6 +957,17 @@ const TournamentDetailScreen = () => {
                               <span className="rounded-sm border border-secondary/30 bg-secondary/10 px-2 py-1 font-heading text-[10px] font-bold text-secondary">
                                 #{registration.slotNumber || "-"}
                               </span>
+                              {playerUserId && (
+                                <button
+                                  type="button"
+                                  onClick={() => openDirectMessage(playerUserId, { source: "tournament-participants" })}
+                                  disabled={startingDmId === playerUserId}
+                                  className="arena-focus grid h-8 w-8 shrink-0 place-items-center rounded-sm text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                                  aria-label={`Message ${playerName}`}
+                                >
+                                  <MessageCircle className="h-4 w-4" />
+                                </button>
+                              )}
                             </div>
                           );
                         })}
