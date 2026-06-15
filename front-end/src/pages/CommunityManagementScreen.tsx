@@ -3,16 +3,15 @@ import { useNavigate } from "react-router-dom";
 import {
   Activity,
   Ban,
-  Bell,
-  CheckCircle2,
   Eye,
+  FileDown,
   MessageSquare,
-  Search,
+  MoreVertical,
+  Plus,
   Shield,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
-  UserCog,
   Users,
 } from "lucide-react";
 import {
@@ -29,6 +28,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   EmptyState,
   PageHeader,
@@ -60,7 +66,7 @@ type CommunityTab =
 
 type MemberRole = "member" | "subscriber" | "moderator" | "creator";
 type MemberState = "active" | "inactive" | "restricted" | "blocked";
-type ModerationAction = "warn" | "mute" | "restrict" | "block" | "promote" | "remove-moderator" | "unblock";
+type ModerationAction = "restrict" | "block" | "report";
 
 interface CommunityMember {
   id: string;
@@ -110,7 +116,7 @@ const filterOptions = {
 const advancedFilters = [
   "Active",
   "Inactive",
-  "Moderator",
+  "Verified",
 ] as const;
 
 const formatDate = (value: string) =>
@@ -147,7 +153,6 @@ const mapChannelMember = (subscription: CreatorChannelMember): CommunityMember =
   const user = subscription.user;
   const roles: MemberRole[] = ["member"];
   if (user.role?.includes("creator")) roles.push("creator");
-  if (user.role?.includes("moderator") || user.role?.includes("admin")) roles.push("moderator");
 
   const accountStatus = String(user.accountStatus || "active");
   const state: MemberState =
@@ -172,9 +177,7 @@ const mapChannelMember = (subscription: CreatorChannelMember): CommunityMember =
     lastActiveAt: user.lastLoginAt || subscription.joinedAt,
     verified: Boolean(user.emailVerified || user.phoneVerified),
     activityScore: getActivityScore(user.lastLoginAt || subscription.joinedAt),
-    permissions: roles.includes("moderator")
-      ? ["Manage Chat", "Manage Reports"]
-      : undefined,
+    permissions: undefined,
     restriction: state === "restricted"
       ? {
           reason: accountStatus === "muted" ? "Muted account" : "Suspended account",
@@ -207,14 +210,14 @@ const buildCommunityData = (
         username: profile.username || owner?.username || channel?.handle || "creator",
         avatarUrl: profile.avatar?.url || owner?.avatar?.url || channel?.avatar?.url,
         email: profile.email,
-        roles: ["creator", "moderator"],
+        roles: ["creator"],
         state: "active",
         joinedAt: profile.createdAt || toIsoDaysAgo(30),
         followedAt: profile.createdAt || toIsoDaysAgo(30),
         lastActiveAt: profile.lastLoginAt || new Date().toISOString(),
         verified: true,
         activityScore: 100,
-        permissions: ["Manage Chat", "Manage Reports", "Manage Tournaments", "Manage Community"],
+        permissions: undefined,
         notes: ["Owner account"],
       }
     : null;
@@ -227,7 +230,7 @@ const buildCommunityData = (
 
   const ownerId = ownerMember?.id;
   const members = Array.from(memberById.values()).filter((member) => member.id !== ownerId);
-  const moderators = Array.from(memberById.values()).filter((member) => member.roles.includes("moderator"));
+  const moderators = fetchedCommunityMembers.filter((member) => Boolean(member.permissions?.length));
 
   return {
     members,
@@ -301,34 +304,26 @@ const EmptyTabState = ({
 
 const MemberRow = ({
   member,
-  selected,
-  onSelect,
   onOpen,
-  onAction,
+  onMessage,
+  onReport,
+  onRestrict,
+  onBlock,
+  onExport,
 }: {
   member: CommunityMember;
-  selected: boolean;
-  onSelect: () => void;
   onOpen: () => void;
-  onAction: (action: ModerationAction) => void;
+  onMessage: () => void;
+  onReport: () => void;
+  onRestrict: () => void;
+  onBlock: () => void;
+  onExport: () => void;
 }) => (
-  <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2 border-b border-border py-2.5 last:border-b-0">
-    <button
-      type="button"
-      onClick={onSelect}
-      className={cn(
-        "arena-focus grid h-6 w-6 place-items-center rounded-sm border text-[10px]",
-        selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card/50 text-muted-foreground",
-      )}
-      aria-label={selected ? "Deselect member" : "Select member"}
-    >
-      {selected ? <CheckCircle2 className="h-3.5 w-3.5" /> : ""}
-    </button>
-
+  <div className="grid grid-cols-[1fr_auto] items-center gap-2 border-b border-border/45 py-2.5 last:border-b-0">
     <button
       type="button"
       onClick={onOpen}
-      className="arena-focus flex min-w-0 items-center gap-2.5 text-left"
+      className="arena-focus flex min-w-0 items-center gap-2.5 rounded-sm text-left"
     >
       <UserAvatar
         user={{ username: member.username, avatar: { url: member.avatarUrl }, role: member.roles }}
@@ -339,32 +334,76 @@ const MemberRow = ({
           <span className="truncate font-heading text-sm font-bold">{member.name}</span>
           {member.verified && <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-primary" />}
         </span>
-        <span className="block truncate text-[11px] text-muted-foreground">
-          @{member.username} - active {formatDateTime(member.lastActiveAt)}
+        <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+          <span className="truncate">@{member.username}</span>
+          <span>Joined {formatDate(member.joinedAt)}</span>
+          <span>Active {formatDateTime(member.lastActiveAt)}</span>
+        </span>
+        <span className="mt-1 flex flex-wrap gap-1">
+          {member.roles.map((role) => (
+            <span
+              key={role}
+              className={cn(
+                "rounded-sm px-1.5 py-0.5 font-heading text-[9px] font-bold uppercase",
+                role === "creator" ? "bg-secondary/12 text-secondary" : role === "moderator" ? "bg-primary/12 text-primary" : "bg-muted/50 text-muted-foreground",
+              )}
+            >
+              {role}
+            </span>
+          ))}
+          <span className={cn("rounded-sm px-1.5 py-0.5 font-heading text-[9px] font-bold uppercase", getStateTone(member.state))}>
+            {member.state}
+          </span>
         </span>
       </span>
     </button>
 
-    <div className="flex items-center gap-1">
-      <span className={cn("hidden rounded-sm px-1.5 py-0.5 font-heading text-[9px] font-bold uppercase min-[430px]:inline-flex", getStateTone(member.state))}>
-        {member.state}
-      </span>
+    <div className="flex shrink-0 items-center gap-1">
       <button
         type="button"
-        onClick={() => onAction("restrict")}
-        className="arena-focus grid h-8 w-8 place-items-center rounded-sm text-muted-foreground hover:bg-warning/10 hover:text-warning"
-        aria-label="Restrict member"
+        onClick={onOpen}
+        className="arena-focus inline-flex min-h-9 items-center justify-center rounded-sm bg-primary/10 px-3 font-heading text-[10px] font-bold text-primary hover:bg-primary hover:text-primary-foreground"
       >
-        <ShieldAlert className="h-4 w-4" />
+        View
       </button>
-      <button
-        type="button"
-        onClick={() => onAction("block")}
-        className="arena-focus grid h-8 w-8 place-items-center rounded-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-        aria-label="Block member"
-      >
-        <Ban className="h-4 w-4" />
-      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="arena-focus grid h-9 w-9 place-items-center rounded-sm bg-card/75 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            aria-label={`Open actions for ${member.name}`}
+          >
+            <MoreVertical className="h-4 w-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48 border-border bg-[#161B22]">
+          <DropdownMenuItem onClick={onMessage}>
+            <MessageSquare className="mr-2 h-4 w-4 text-primary" />
+            Message
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onOpen}>
+            <Eye className="mr-2 h-4 w-4 text-primary" />
+            View Profile
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onExport}>
+            <FileDown className="mr-2 h-4 w-4 text-muted-foreground" />
+            Export
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onReport} className="text-destructive focus:text-destructive">
+            <ShieldAlert className="mr-2 h-4 w-4" />
+            Report
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onRestrict}>
+            <Shield className="mr-2 h-4 w-4 text-warning" />
+            Restrict
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onBlock} className="text-destructive focus:text-destructive">
+            <Ban className="mr-2 h-4 w-4" />
+            Block
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   </div>
 );
@@ -379,40 +418,65 @@ const PermissionChips = ({ permissions = [] }: { permissions?: CommunityMember["
   </div>
 );
 
-const ModerationDialog = ({
+const useMobileSheet = () => {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 640px)");
+    const update = () => setIsMobile(media.matches);
+
+    update();
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
+  return isMobile;
+};
+
+const ActionDialog = ({
   action,
-  count,
+  targetName,
   open,
   onOpenChange,
   onSubmit,
 }: {
   action: ModerationAction | null;
-  count: number;
+  targetName?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (payload: { reason: string; duration: string; notes: string }) => void;
 }) => {
   const [reason, setReason] = useState("");
-  const [duration, setDuration] = useState("24h");
+  const [duration, setDuration] = useState("1 Day");
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
     if (!open) {
       setReason("");
-      setDuration("24h");
+      setDuration("1 Day");
       setNotes("");
     }
   }, [open]);
 
-  const label = action ? action.replace("-", " ") : "moderation action";
+  const isRestrict = action === "restrict";
+  const isBlock = action === "block";
+  const isReport = action === "report";
+  const title = isRestrict ? "Restrict User" : isBlock ? "Block User" : "Report User";
+  const description = isRestrict
+    ? "Limit this member's community access without removing their account."
+    : isBlock
+      ? "Block this member from the community. This should be used for serious abuse."
+      : "Send a moderation report for review.";
+  const confirmLabel = isRestrict ? "Confirm Restriction" : isBlock ? "Confirm Block" : "Send Report";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[calc(100%-1.5rem)] max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-heading capitalize">{label}</DialogTitle>
+          <DialogTitle className="font-heading">{title}</DialogTitle>
           <DialogDescription>
-            Add a reason, duration, and staff note for {count} selected user{count === 1 ? "" : "s"}.
+            {description} {targetName ? `Target: ${targetName}.` : ""}
           </DialogDescription>
         </DialogHeader>
 
@@ -421,13 +485,46 @@ const ModerationDialog = ({
             <span className="font-heading text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Reason</span>
             <Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Spam, abuse, scam, harassment..." />
           </label>
+
+          {isRestrict && (
+            <div className="space-y-1.5">
+              <span className="font-heading text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Duration</span>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {["1 Day", "7 Days", "30 Days", "Permanent"].map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setDuration(option)}
+                    className={cn(
+                      "arena-focus min-h-10 rounded-sm border px-2 font-heading text-[10px] font-bold transition-colors",
+                      duration === option
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border/60 bg-card/70 text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {isBlock && (
+            <div className="rounded-sm bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              Permanent Block keeps the member out of this community until you unblock them manually.
+            </div>
+          )}
+
           <label className="block space-y-1.5">
-            <span className="font-heading text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Duration</span>
-            <Input value={duration} onChange={(event) => setDuration(event.target.value)} placeholder="24h, 7d, permanent" />
-          </label>
-          <label className="block space-y-1.5">
-            <span className="font-heading text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Staff notes</span>
-            <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Visible only to creator staff." rows={4} />
+            <span className="font-heading text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+              {isReport ? "Description" : "Notes"}
+            </span>
+            <Textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder={isReport ? "Explain what happened..." : "Visible only to creator staff."}
+              rows={4}
+            />
           </label>
         </div>
 
@@ -437,11 +534,11 @@ const ModerationDialog = ({
           </Button>
           <Button
             type="button"
-            variant={action === "block" || action === "unblock" ? "destructive" : "default"}
+            variant={isBlock ? "destructive" : "default"}
             disabled={!reason.trim()}
             onClick={() => onSubmit({ reason, duration, notes })}
           >
-            Apply
+            {confirmLabel}
           </Button>
         </div>
       </DialogContent>
@@ -452,6 +549,7 @@ const ModerationDialog = ({
 const CommunityManagementScreen = () => {
   const navigate = useNavigate();
   const { profile, isLoading: profileLoading } = useCurrentProfile();
+  const isMobileSheet = useMobileSheet();
   const [channel, setChannel] = useState<CreatorChannel | null>(null);
   const [channelMembers, setChannelMembers] = useState<CreatorChannelMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -460,10 +558,9 @@ const CommunityManagementScreen = () => {
   const [search, setSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [enabledFilters, setEnabledFilters] = useState<Set<string>>(new Set());
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedMember, setSelectedMember] = useState<CommunityMember | null>(null);
   const [moderationAction, setModerationAction] = useState<ModerationAction | null>(null);
-  const [moderationTargets, setModerationTargets] = useState<string[]>([]);
+  const [actionTarget, setActionTarget] = useState<CommunityMember | null>(null);
   const profileId = profile?._id ? String(profile._id) : "";
   const hasCreatorAccess = Boolean(profile?.role?.includes("creator"));
 
@@ -530,7 +627,6 @@ const CommunityManagementScreen = () => {
 
   useEffect(() => {
     setActiveFilter(filterOptions[activeTab][0]);
-    setSelectedIds(new Set());
   }, [activeTab]);
 
   const communityData = useMemo(
@@ -563,7 +659,7 @@ const CommunityManagementScreen = () => {
     enabledFilters.forEach((filter) => {
       if (filter === "Active") list = list.filter((member) => member.state === "active");
       if (filter === "Inactive") list = list.filter((member) => member.state === "inactive");
-      if (filter === "Moderator") list = list.filter((member) => member.roles.includes("moderator"));
+      if (filter === "Verified") list = list.filter((member) => member.verified);
     });
 
     if (activeTab === "Members") {
@@ -596,28 +692,30 @@ const CommunityManagementScreen = () => {
     });
   };
 
-  const toggleSelected = (id: string) => {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const openModeration = (action: ModerationAction, targetIds?: string[]) => {
+  const openModeration = (action: ModerationAction, target: CommunityMember) => {
     setModerationAction(action);
-    setModerationTargets(targetIds?.length ? targetIds : Array.from(selectedIds));
+    setActionTarget(target);
   };
 
   const handleModerationSubmit = (payload: { reason: string; duration: string; notes: string }) => {
-    const label = moderationAction?.replace("-", " ") || "moderation";
-    toast.success("Action queued", {
-      description: `${label} for ${moderationTargets.length || 1} user(s). Reason: ${payload.reason}`,
+    const label = moderationAction === "restrict" ? "Restriction" : moderationAction === "block" ? "Block" : "Report";
+    toast.success(`${label} saved`, {
+      description: `${actionTarget?.name || "Member"} - ${payload.reason}`,
     });
     setModerationAction(null);
-    setModerationTargets([]);
-    setSelectedIds(new Set());
+    setActionTarget(null);
+  };
+
+  const handleMessageMember = (member: CommunityMember) => {
+    toast.info("Direct messaging coming soon", {
+      description: `You will be able to message ${member.name} from this community panel.`,
+    });
+  };
+
+  const handleExportMember = (member: CommunityMember) => {
+    toast.success("Member export prepared", {
+      description: `${member.name}'s community row is ready for export when backend export is connected.`,
+    });
   };
 
   const channelReady = Boolean(channel);
@@ -639,10 +737,12 @@ const CommunityManagementScreen = () => {
         <MemberRow
           key={member.id}
           member={member}
-          selected={selectedIds.has(member.id)}
-          onSelect={() => toggleSelected(member.id)}
           onOpen={() => setSelectedMember(member)}
-          onAction={(action) => openModeration(action, [member.id])}
+          onMessage={() => handleMessageMember(member)}
+          onReport={() => openModeration("report", member)}
+          onRestrict={() => openModeration("restrict", member)}
+          onBlock={() => openModeration("block", member)}
+          onExport={() => handleExportMember(member)}
         />
       ));
     }
@@ -669,8 +769,8 @@ const CommunityManagementScreen = () => {
           </button>
           <PermissionChips permissions={member.permissions} />
           <div className="flex gap-2">
-            <Button size="sm" variant="soft" onClick={() => openModeration("promote", [member.id])}>Edit</Button>
-            <Button size="sm" variant="outline" onClick={() => openModeration("remove-moderator", [member.id])}>Remove</Button>
+            <Button size="sm" variant="soft" onClick={() => setSelectedMember(member)}>View</Button>
+            <Button size="sm" variant="outline" onClick={() => toast.info("Moderator permissions editor coming soon.")}>Edit</Button>
           </div>
         </div>
       ));
@@ -831,23 +931,6 @@ const CommunityManagementScreen = () => {
             ))}
           </div>
 
-          {selectedIds.size > 0 && (
-            <Surface className="flex flex-col gap-2 p-2.5 min-[560px]:flex-row min-[560px]:items-center min-[560px]:justify-between">
-              <p className="font-heading text-xs font-bold text-primary">
-                {selectedIds.size} selected
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => toast.info("Bulk message ready for chat integration.")}>
-                  <MessageSquare className="mr-1 h-3.5 w-3.5" />
-                  Message
-                </Button>
-                <Button size="sm" variant="soft" onClick={() => openModeration("restrict")}>Restrict</Button>
-                <Button size="sm" variant="destructive" onClick={() => openModeration("block")}>Block</Button>
-                <Button size="sm" variant="outline" onClick={() => toast.success("Export prepared", { description: "CSV export can attach to backend when available." })}>Export</Button>
-              </div>
-            </Surface>
-          )}
-
           <Surface className="min-h-[280px] p-3">
             {renderTabContent()}
           </Surface>
@@ -855,7 +938,13 @@ const CommunityManagementScreen = () => {
       )}
 
       <Sheet open={Boolean(selectedMember)} onOpenChange={(open) => !open && setSelectedMember(null)}>
-        <SheetContent side="right" className="w-[92vw] overflow-y-auto sm:max-w-md">
+        <SheetContent
+          side={isMobileSheet ? "bottom" : "right"}
+          className={cn(
+            "overflow-y-auto border-border bg-[#161B22] text-foreground shadow-[0_28px_80px_hsl(0_0%_0%/0.55)]",
+            isMobileSheet ? "max-h-[88dvh] rounded-t-lg p-4" : "h-full w-[92vw] p-5 sm:max-w-md",
+          )}
+        >
           {selectedMember && (
             <>
               <SheetHeader className="pr-9">
@@ -908,28 +997,34 @@ const CommunityManagementScreen = () => {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <Button type="button" variant="soft" onClick={() => toast.info("Message flow will use chat integration when available.")}>
+                <div className="space-y-2">
+                  <Button type="button" variant="soft" className="w-full justify-start" onClick={() => handleMessageMember(selectedMember)}>
                     <MessageSquare className="mr-1 h-3.5 w-3.5" />
                     Message
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => toast.info("Profile preview will open public user profile when available.")}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => toast.success("Member profile open", { description: selectedMember.username })}
+                  >
                     <Eye className="mr-1 h-3.5 w-3.5" />
-                    Profile
+                    View Profile
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => openModeration("promote", [selectedMember.id])}>
-                    <UserCog className="mr-1 h-3.5 w-3.5" />
-                    Promote
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => openModeration("restrict", [selectedMember.id])}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start border-destructive/35 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => openModeration("report", selectedMember)}
+                  >
                     <ShieldAlert className="mr-1 h-3.5 w-3.5" />
+                    Report
+                  </Button>
+                  <Button type="button" variant="outline" className="w-full justify-start" onClick={() => openModeration("restrict", selectedMember)}>
+                    <Shield className="mr-1 h-3.5 w-3.5" />
                     Restrict
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => openModeration("warn", [selectedMember.id])}>
-                    <Bell className="mr-1 h-3.5 w-3.5" />
-                    Warn
-                  </Button>
-                  <Button type="button" variant="destructive" onClick={() => openModeration("block", [selectedMember.id])}>
+                  <Button type="button" variant="destructive" className="w-full justify-start" onClick={() => openModeration("block", selectedMember)}>
                     <Ban className="mr-1 h-3.5 w-3.5" />
                     Block
                   </Button>
@@ -940,14 +1035,14 @@ const CommunityManagementScreen = () => {
         </SheetContent>
       </Sheet>
 
-      <ModerationDialog
+      <ActionDialog
         open={Boolean(moderationAction)}
         action={moderationAction}
-        count={moderationTargets.length || selectedIds.size || 1}
+        targetName={actionTarget?.name}
         onOpenChange={(open) => {
           if (!open) {
             setModerationAction(null);
-            setModerationTargets([]);
+            setActionTarget(null);
           }
         }}
         onSubmit={handleModerationSubmit}
