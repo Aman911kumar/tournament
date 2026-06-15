@@ -1,13 +1,10 @@
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-interface NeonButtonProps {
-  children: React.ReactNode;
-  onClick?: () => void;
+interface NeonButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  children: ReactNode;
   variant?: "purple" | "blue" | "green" | "danger" | "ghost";
-  className?: string;
   full?: boolean;
-  type?: "button" | "submit";
-  disabled?: boolean;
 }
 
 const glowMap = {
@@ -30,8 +27,10 @@ const NeonButton = ({
   full = false,
   type = "button",
   disabled = false,
+  ...props
 }: NeonButtonProps) => (
   <button
+    {...props}
     type={type}
     disabled={disabled}
     onClick={!disabled ? onClick : undefined}

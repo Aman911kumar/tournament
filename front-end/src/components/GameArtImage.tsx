@@ -16,6 +16,7 @@ export const GameArtImage = ({
   alt,
   loading = "lazy",
   decoding = "async",
+  sizes = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw",
   ...props
 }: GameArtImageProps) => {
   const discoveryGame = getDiscoveryGame(game);
@@ -26,7 +27,9 @@ export const GameArtImage = ({
       alt={alt ?? discoveryGame.label}
       loading={loading}
       decoding={decoding}
-      className={cn("h-full w-full object-cover", className)}
+      sizes={sizes}
+      draggable={false}
+      className={cn("h-full w-full bg-muted/30 object-cover", className)}
       style={{ objectPosition: getGameImagePosition(game, variant), ...style }}
       {...props}
     />

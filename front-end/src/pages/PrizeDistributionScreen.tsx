@@ -811,9 +811,9 @@ const PrizeDistributionScreen = () => {
         <motion.div
           initial={{ y: 80, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="fixed bottom-[72px] left-0 right-0 z-30 px-3 sm:px-4 pb-3 pt-3 bg-gradient-to-t from-background via-background/95 to-transparent"
+          className="arena-fixed-actions"
         >
-          <div className="max-w-md mx-auto glass rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-3 neon-border">
+          <div className="arena-fixed-actions-inner glass flex flex-col gap-3 rounded-lg p-3 sm:flex-row sm:items-center neon-border">
             <div className="flex-1 min-w-0">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-heading">
                 {prizesPaid ? "Total Paid" : "Total Transfer"}

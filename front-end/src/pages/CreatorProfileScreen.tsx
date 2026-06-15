@@ -44,6 +44,11 @@ import {
   getErrorToast,
 } from "@/lib/page-utils";
 import { CACHE_KEYS, readCache, writeCache } from "@/lib/offline-cache";
+import {
+  prefetchOnIntent,
+  prefetchRoute,
+  prefetchTournamentDetail,
+} from "@/lib/route-prefetch";
 import { createReport } from "@/api/moderation";
 import { ProfileHero } from "@/components/identity";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
@@ -254,9 +259,11 @@ const CreatorProfileSkeleton = () => (
 const CreatorTournamentCard = ({
   tournament,
   onClick,
+  onPrefetch,
 }: {
   tournament: Tournament;
   onClick: () => void;
+  onPrefetch?: () => void;
 }) => {
   const game = getDiscoveryGame(tournament.game);
   const fill = getTournamentFill(tournament);
@@ -265,6 +272,7 @@ const CreatorTournamentCard = ({
     <Surface
       interactive
       onClick={onClick}
+      {...prefetchOnIntent(onPrefetch)}
       neon
       className="overflow-hidden p-0 transition-transform hover:-translate-y-0.5 active:translate-y-0"
     >
@@ -766,6 +774,7 @@ const CreatorProfileScreen = () => {
                   <button
                     type="button"
                     onClick={() => navigate("/channel-setup")}
+                    {...prefetchOnIntent(() => prefetchRoute("/channel-setup"))}
                     className="arena-focus rounded-xl border border-secondary/30 px-3 py-2 font-heading text-xs font-semibold text-secondary transition-colors hover:bg-secondary/10"
                   >
                     Setup channel
@@ -797,11 +806,12 @@ const CreatorProfileScreen = () => {
                   ) : (
                     <div className="grid gap-3 md:grid-cols-2">
                       {tournaments.map((tournament) => (
-                        <CreatorTournamentCard
-                          key={tournament._id}
-                          tournament={tournament}
-                          onClick={() => navigate(`/tournament/${tournament._id}`)}
-                        />
+                    <CreatorTournamentCard
+                      key={tournament._id}
+                      tournament={tournament}
+                      onClick={() => navigate(`/tournament/${tournament._id}`)}
+                      onPrefetch={() => prefetchTournamentDetail(tournament._id)}
+                    />
                       ))}
                     </div>
                   )}

@@ -17,7 +17,6 @@ import {
 } from "@/lib/offline-cache";
 import { formatCurrency, getErrorToast } from "@/lib/page-utils";
 import {
-  WalletSecurityNote,
   WalletShell,
 } from "@/components/wallet/WalletShell";
 
@@ -362,31 +361,6 @@ const AddMoneyScreen = () => {
             ))}
           </div>
         </section>
-
-        <section className="wallet-flow-panel space-y-2.5 rounded-2xl p-2.5 sm:space-y-3 sm:p-4">
-          <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="font-heading text-muted-foreground">
-              Backend verified payment
-            </span>
-            <span className="font-heading font-semibold text-foreground">
-              {isValidAmount ? formatCurrency(value) : formatCurrency(0)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="font-heading text-muted-foreground">
-              Payment gateway
-            </span>
-            <span className="inline-flex items-center gap-1.5 font-heading font-semibold">
-              <CreditCard className="h-3.5 w-3.5 text-primary" />
-              Razorpay Checkout
-            </span>
-          </div>
-        </section>
-
-        <WalletSecurityNote>
-          Your wallet is credited only after Razorpay verification succeeds on
-          the backend. Cancelled or failed payments stay visible for tracking.
-        </WalletSecurityNote>
 
         <NeonButton
           variant="green"

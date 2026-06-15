@@ -28,6 +28,12 @@ import { getCreators, CreatorChannel } from "@/api/creators";
 import { formatCurrency, formatPrizeSummary } from "@/lib/page-utils";
 import { CACHE_KEYS, readCache, writeCache } from "@/lib/offline-cache";
 import {
+  prefetchCreatorProfile,
+  prefetchOnIntent,
+  prefetchRoute,
+  prefetchTournamentDetail,
+} from "@/lib/route-prefetch";
+import {
   DISCOVERY_GAMES,
   formatCompactNumber,
   formatDateShort,
@@ -71,12 +77,14 @@ const TournamentShowcaseCard = ({
   compact = false,
   onClick,
   onCreatorClick,
+  onPrefetch,
 }: {
   tournament: Tournament;
   joined?: boolean;
   compact?: boolean;
   onClick: () => void;
   onCreatorClick?: () => void;
+  onPrefetch?: () => void;
 }) => {
   const game = getDiscoveryGame(tournament.game);
   const participants = getParticipants(tournament);
@@ -87,6 +95,7 @@ const TournamentShowcaseCard = ({
     <button
       type="button"
       onClick={onClick}
+      {...prefetchOnIntent(onPrefetch)}
       className="arena-focus group overflow-hidden rounded-xl border border-glass-border bg-card/82 text-left transition-colors hover:border-primary/45 hover:bg-card"
     >
       <div className={cn("relative", compact ? "h-24" : "h-32 sm:h-36")}>
@@ -264,6 +273,7 @@ const Index = () => {
             <button
               type="button"
               onClick={() => navigate("/tournaments")}
+              {...prefetchOnIntent(() => prefetchRoute("/tournaments"))}
               className="arena-icon-button"
               aria-label="Search tournaments"
             >
@@ -298,11 +308,21 @@ const Index = () => {
             </p>
 
             <div className="mt-5 flex flex-col gap-2 min-[420px]:flex-row">
-              <NeonButton variant="green" className="min-h-11 text-xs" onClick={() => navigate("/tournaments")}>
+              <NeonButton
+                variant="green"
+                className="min-h-11 text-xs"
+                onClick={() => navigate("/tournaments")}
+                {...prefetchOnIntent(() => prefetchRoute("/tournaments"))}
+              >
                 <Trophy className="h-4 w-4" />
                 Join Tournament
               </NeonButton>
-              <NeonButton variant="ghost" className="min-h-11 text-xs" onClick={() => navigate("/create-tournament")}>
+              <NeonButton
+                variant="ghost"
+                className="min-h-11 text-xs"
+                onClick={() => navigate("/create-tournament")}
+                {...prefetchOnIntent(() => prefetchRoute("/create-tournament"))}
+              >
                 <Sparkles className="h-4 w-4" />
                 Create
               </NeonButton>
@@ -319,6 +339,7 @@ const Index = () => {
             <button
               type="button"
               onClick={() => navigate("/tournaments?sort=trending")}
+              {...prefetchOnIntent(() => prefetchRoute("/tournaments"))}
               className="arena-focus inline-flex items-center gap-1 rounded-lg px-2 py-1 font-heading text-xs font-bold text-primary"
             >
               View all <ChevronRight className="h-3.5 w-3.5" />
@@ -346,6 +367,7 @@ const Index = () => {
                 joined={joinedTournamentIds.has(tournament._id)}
                 onClick={() => navigate(`/tournament/${tournament._id}`)}
                 onCreatorClick={() => navigate(tournament.channel?._id ? `/creator/${tournament.channel._id}` : "/subscriptions")}
+                onPrefetch={() => prefetchTournamentDetail(tournament._id)}
               />
             ))}
           </div>
@@ -371,6 +393,7 @@ const Index = () => {
             <button
               type="button"
               onClick={() => navigate("/tournaments")}
+              {...prefetchOnIntent(() => prefetchRoute("/tournaments"))}
               className="arena-focus inline-flex items-center gap-1 rounded-lg px-2 py-1 font-heading text-xs font-bold text-primary"
             >
               Browse <ChevronRight className="h-3.5 w-3.5" />
@@ -388,6 +411,7 @@ const Index = () => {
                 transition={{ delay: index * 0.04 }}
                 type="button"
                 onClick={() => navigate(`/tournaments?game=${game.key}`)}
+                {...prefetchOnIntent(() => prefetchRoute("/tournaments"))}
                 className="arena-focus group overflow-hidden rounded-xl border border-glass-border bg-card/82 text-left transition-colors hover:border-primary/45"
               >
                 <div className="relative aspect-[1.15]">
@@ -420,6 +444,7 @@ const Index = () => {
             <button
               type="button"
               onClick={() => navigate("/subscriptions")}
+              {...prefetchOnIntent(() => prefetchRoute("/subscriptions"))}
               className="arena-focus inline-flex items-center gap-1 rounded-lg px-2 py-1 font-heading text-xs font-bold text-primary"
             >
               Discover <ChevronRight className="h-3.5 w-3.5" />
@@ -432,6 +457,7 @@ const Index = () => {
               key={creator._id}
               interactive
               onClick={() => navigate(`/creator/${creator._id}`)}
+              {...prefetchOnIntent(() => prefetchCreatorProfile(creator._id))}
               className="overflow-hidden p-0"
             >
               <div className="h-14 bg-gradient-to-r from-primary/30 via-secondary/20 to-accent/20">

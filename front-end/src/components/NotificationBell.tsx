@@ -162,7 +162,7 @@ const NotificationBell = () => {
           </div>
         </div>
 
-        <div className="arena-scrollbar max-h-[420px] overflow-y-auto p-2">
+        <div className="arena-scrollbar max-h-[min(420px,calc(100dvh-5rem))] overflow-y-auto p-2">
           {visibleItems.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <Bell className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />

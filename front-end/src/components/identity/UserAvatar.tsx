@@ -24,6 +24,14 @@ const sizeClass: Record<AvatarSize, string> = {
   xl: "h-24 w-24 text-xl",
 };
 
+const imageSizes: Record<AvatarSize, string> = {
+  xs: "28px",
+  sm: "32px",
+  md: "40px",
+  lg: "64px",
+  xl: "96px",
+};
+
 const getInitials = (name?: string, fallback = "B4A") => {
   const value = String(name || "").trim();
   if (!value) return fallback;
@@ -79,6 +87,7 @@ export const UserAvatar = ({
             className={cn("object-cover", imageClassName)}
             loading={priority ? "eager" : "lazy"}
             decoding="async"
+            sizes={imageSizes[size]}
             referrerPolicy="no-referrer"
           />
         )}

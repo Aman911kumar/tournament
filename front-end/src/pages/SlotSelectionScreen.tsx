@@ -52,6 +52,7 @@ const SlotSelectionScreen = () => {
   const [loadingSlots, setLoadingSlots] = useState(true);
   const [selected, setSelected] = useState<number[]>([]);
   const [confirming, setConfirming] = useState(false);
+  const [optimisticSlotIndex, setOptimisticSlotIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -93,13 +94,13 @@ const SlotSelectionScreen = () => {
     const taken = new Map(takenSlots.map((slot) => [slot.index, slot.player]));
     return Array.from({ length: totalSlots }, (_, i) => ({
       index: i,
-      taken: taken.has(i),
-      player: taken.get(i),
+      taken: taken.has(i) || optimisticSlotIndex === i,
+      player: optimisticSlotIndex === i ? "You" : taken.get(i),
       gameName: takenSlots.find((slot) => slot.index === i)?.gameName,
       gameId: takenSlots.find((slot) => slot.index === i)?.gameId,
-      verified: takenSlots.find((slot) => slot.index === i)?.verified,
+      verified: optimisticSlotIndex === i || takenSlots.find((slot) => slot.index === i)?.verified,
     }));
-  }, [takenSlots, totalSlots]);
+  }, [optimisticSlotIndex, takenSlots, totalSlots]);
 
   const teams = useMemo(() => {
     const groups: SlotInfo[][] = [];
@@ -161,10 +162,15 @@ const SlotSelectionScreen = () => {
         }
       }
 
-      if (id) await joinTournament(id, { slotNumber: selected[0] + 1 });
-      toast.success("Slot booked!", { description: `Slot: ${selected[0] + 1}` });
-      navigate(`/tournament/${id}`);
+      const slotNumber = selected[0] + 1;
+      setOptimisticSlotIndex(selected[0]);
+      toast.info("Reserving slot", { description: `Slot ${slotNumber} is being confirmed.` });
+
+      if (id) await joinTournament(id, { slotNumber });
+      toast.success("Slot booked!", { description: `Slot: ${slotNumber}` });
+      navigate(`/tournament/${id}/chat`);
     } catch (err) {
+      setOptimisticSlotIndex(null);
       const errorToast = getErrorToast(err, { action: "Book slot", fallback: "Slot booking failed." });
       toast.error(errorToast.title, { description: errorToast.description });
       const message = getErrorMessage(err, "").toLowerCase();
@@ -278,10 +284,18 @@ const SlotSelectionScreen = () => {
         })}
       </div>
 
-      <div className="fixed bottom-[72px] left-0 right-0 z-30 px-5 pb-3 pt-4 bg-gradient-to-t from-background via-background to-transparent">
-        <NeonButton full variant={canConfirm ? "green" : "purple"} onClick={() => canConfirm && handleConfirm()} disabled={!canConfirm}>
-          {confirming ? "Booking..." : canConfirm ? `Confirm Slot - ${entryFee === 0 ? "FREE" : `Rs. ${entryFee}`}` : "Pick a slot to continue"}
-        </NeonButton>
+      <div className="arena-fixed-actions">
+        <div className="arena-fixed-actions-inner">
+          <NeonButton full variant={canConfirm ? "green" : "purple"} onClick={() => canConfirm && handleConfirm()} disabled={!canConfirm}>
+            {optimisticSlotIndex !== null
+              ? "Confirming reserved slot..."
+              : confirming
+                ? "Booking..."
+                : canConfirm
+                  ? `Confirm Slot - ${entryFee === 0 ? "FREE" : `Rs. ${entryFee}`}`
+                  : "Pick a slot to continue"}
+          </NeonButton>
+        </div>
       </div>
 
       <AnimatePresence />

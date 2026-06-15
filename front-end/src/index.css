@@ -55,6 +55,9 @@
     --ui-auto-stat-min: 8.5rem;
     --ui-auto-gap: 0.625rem;
     --ui-auto-panel-pad: 0.625rem;
+    --b4a-bottom-nav-height: calc(3.5rem + env(safe-area-inset-bottom));
+    --b4a-fixed-action-bottom: var(--b4a-bottom-nav-height);
+    --b4a-keyboard-scroll-margin: calc(var(--b4a-bottom-nav-height) + 5rem);
 
     /* Custom neon tokens */
     --neon-purple: 271 76% 53%;
@@ -197,6 +200,7 @@
   textarea,
   select {
     font-size: 16px;
+    scroll-margin-bottom: var(--b4a-keyboard-scroll-margin);
   }
 
   :where(a, button, input, textarea, select, [role="button"]) {
@@ -270,7 +274,7 @@
   .arena-page {
     min-height: 100dvh;
     overflow-x: hidden;
-    padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--b4a-bottom-nav-height) + 2rem);
   }
 
   .arena-page-no-nav {
@@ -532,17 +536,39 @@
 
   .arena-sticky-actions {
     @apply sticky z-20 rounded-md border border-glass-border bg-background/95 p-2;
-    bottom: calc(5.25rem + env(safe-area-inset-bottom));
+    bottom: calc(var(--b4a-bottom-nav-height) + 0.5rem);
     backdrop-filter: none;
   }
 
   .arena-safe-bottom {
-    padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--b4a-bottom-nav-height) + 2rem);
+  }
+
+  .arena-fixed-actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--b4a-fixed-action-bottom);
+    z-index: 30;
+    padding: 0.65rem var(--ui-page-inline) 0.75rem;
+    background: linear-gradient(
+      180deg,
+      transparent,
+      hsl(var(--background) / 0.96) 28%,
+      hsl(var(--background)) 100%
+    );
+  }
+
+  .arena-fixed-actions-inner {
+    margin-inline: auto;
+    width: min(100%, 32rem);
   }
 
   .arena-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
   .arena-scrollbar::-webkit-scrollbar {
@@ -666,6 +692,7 @@
 
   .b4a-mobile-scroll {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
     scrollbar-width: none;
   }
@@ -1093,11 +1120,11 @@
   }
 
   .arena-shell.min-h-screen:not([class*="pb-"]) {
-    padding-bottom: calc(5.25rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(var(--b4a-bottom-nav-height) + 2rem);
   }
 
   .pb-10 {
-    padding-bottom: max(2.5rem, calc(5.25rem + env(safe-area-inset-bottom)));
+    padding-bottom: max(2.5rem, calc(var(--b4a-bottom-nav-height) + 2rem));
   }
 
   .scrollbar-hide {
@@ -1152,7 +1179,7 @@
     --ui-auto-stat-min: 7.5rem;
     --ui-auto-gap: 0.5rem;
     --ui-auto-panel-pad: 0.55rem;
-    --ui-touch-target: 2.375rem;
+    --ui-touch-target: 2.75rem;
     --ui-card-shadow: none;
   }
 
@@ -1195,6 +1222,10 @@
   textarea,
   select {
     min-height: 2.75rem;
+  }
+
+  :where(.arena-shell, .arena-page, .arena-page-no-nav, .wallet-flow-panel, .wallet-flow-hero, .chat-scroll, .arena-scrollbar) {
+    -webkit-overflow-scrolling: touch;
   }
 
   .neon-glow-purple,
@@ -1277,6 +1308,30 @@
 
 }
 
+@media (pointer: coarse) and (max-width: 640px) {
+  :root {
+    --ui-touch-target: 3rem;
+  }
+
+  .arena-shell :where(button, [role="button"], a[role="button"]) {
+    min-height: var(--ui-touch-target);
+    touch-action: manipulation;
+  }
+
+  .arena-shell :where(button, [role="button"], a[role="button"], .chat-action, .chat-composer-action) {
+    min-width: var(--ui-touch-target);
+  }
+
+  .arena-shell :where(.arena-icon-button) {
+    height: var(--ui-touch-target);
+    width: var(--ui-touch-target);
+  }
+
+  .arena-shell :where(input, textarea, select) {
+    min-height: var(--ui-touch-target);
+  }
+}
+
 @media (max-width: 380px) {
   :root {
     --ui-page-inline: 0.55rem;
@@ -1287,6 +1342,7 @@
     --ui-auto-stat-min: 6.75rem;
     --ui-auto-gap: 0.45rem;
     --ui-auto-panel-pad: 0.5rem;
+    --ui-touch-target: 3rem;
   }
 
   .arena-shell :where(.arena-title) {

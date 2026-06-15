@@ -25,6 +25,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import GlassCard from "@/components/GlassCard";
 import NeonButton from "@/components/NeonButton";
+import { SkeletonBlock } from "@/components/design-system";
 import {
   getBalance,
   getCreatorEarnings,
@@ -41,6 +42,7 @@ import {
 } from "@/lib/offline-cache";
 import { formatCurrency, getErrorMessage } from "@/lib/page-utils";
 import { getNotificationSocket } from "@/lib/notification-socket";
+import { prefetchOnIntent, prefetchRoute } from "@/lib/route-prefetch";
 import type { NotificationItem } from "@/api/notifications";
 
 interface WalletSummary {
@@ -276,7 +278,7 @@ const WalletScreen = () => {
     );
 
     try {
-      if (nextPage === 1) setLoading(true);
+      if (nextPage === 1) setLoading(!(cachedSummary || cachedTransactions));
       else setLoadingMore(true);
       setError(null);
       if (nextPage === 1 && cachedSummary) {
@@ -572,7 +574,7 @@ const WalletScreen = () => {
                 Available Balance
               </p>
               {loading ? (
-                <div className="mt-3 h-12 w-48 animate-pulse rounded-xl bg-muted" />
+                <SkeletonBlock className="mt-3 h-12 w-48 max-w-full rounded-md" />
               ) : error ? (
                 <div className="mt-4 rounded-xl border border-destructive/25 bg-destructive/10 p-3">
                   <p className="flex items-center gap-2 text-sm font-heading text-destructive">
@@ -686,6 +688,7 @@ const WalletScreen = () => {
                   key={action.title}
                   type="button"
                   onClick={() => navigate(action.route)}
+                  {...prefetchOnIntent(() => prefetchRoute(action.route))}
                   className={`arena-focus wallet-action-card arena-fluid-card rounded-lg p-2 text-left sm:rounded-xl sm:p-3 ${
                     action.title === "Add Money"
                       ? "border-primary/55 bg-primary text-primary-foreground"
@@ -777,10 +780,7 @@ const WalletScreen = () => {
           {loading && transactions.length === 0 && (
             <div className="space-y-2">
               {[0, 1, 2, 3].map((item) => (
-                <div
-                  key={item}
-                  className="h-16 animate-pulse rounded-xl bg-muted/60"
-                />
+                <SkeletonBlock key={item} className="h-16 rounded-md" />
               ))}
             </div>
           )}

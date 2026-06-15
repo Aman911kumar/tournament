@@ -26,7 +26,6 @@ import {
 } from "@/lib/offline-cache";
 import { formatCurrency, getErrorToast } from "@/lib/page-utils";
 import {
-  WalletSecurityNote,
   WalletShell,
 } from "@/components/wallet/WalletShell";
 
@@ -528,11 +527,6 @@ const WithdrawScreen = () => {
           className="wallet-flow-input w-full rounded-lg px-3 py-2.5 text-sm font-heading placeholder:text-muted-foreground/50 outline-none disabled:opacity-60"
         />
       </section>
-
-      <WalletSecurityNote>
-        Withdrawals verify your current backend wallet balance before reserving
-        funds, then move through admin/payment processing.
-      </WalletSecurityNote>
 
       <NeonButton
         variant="blue"

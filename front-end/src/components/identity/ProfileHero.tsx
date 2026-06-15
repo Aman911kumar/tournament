@@ -14,6 +14,7 @@ export const ProfileHero = ({
   cacheNotice,
   className,
   onEditImages,
+  onEditImagesPrefetch,
   compact = false,
 }: {
   user?: IdentityUser;
@@ -25,6 +26,7 @@ export const ProfileHero = ({
   cacheNotice?: string | null;
   className?: string;
   onEditImages?: () => void;
+  onEditImagesPrefetch?: () => void;
   compact?: boolean;
 }) => {
   const roles = user?.role || [];
@@ -48,6 +50,8 @@ export const ProfileHero = ({
             className="h-full w-full object-cover"
             loading="lazy"
             decoding="async"
+            sizes="(max-width: 640px) 100vw, 960px"
+            draggable={false}
             referrerPolicy="no-referrer"
           />
         ) : (
@@ -62,6 +66,9 @@ export const ProfileHero = ({
           <button
             type="button"
             onClick={onEditImages}
+            onPointerEnter={onEditImagesPrefetch}
+            onFocus={onEditImagesPrefetch}
+            onTouchStart={onEditImagesPrefetch}
             className="arena-focus absolute right-3 top-3 inline-flex h-9 items-center gap-2 rounded-sm border border-glass-border bg-background/80 px-3 text-[10px] font-heading font-bold uppercase tracking-[0.06em] text-white transition-colors hover:bg-card sm:right-4 sm:top-4"
           >
             <Camera className="h-3.5 w-3.5" />

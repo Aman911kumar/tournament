@@ -538,16 +538,24 @@ const GoogleOnboardingScreen = () => {
                       )}
                   </div>
 
-                  <OnboardingInput icon={User} label="Username (optional)">
-                    <input
-                      type="text"
-                      placeholder="ak_player"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      disabled={submitting}
-                      className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                    />
-                  </OnboardingInput>
+                  <details className="group rounded-xl border border-glass-border bg-background/25">
+                    <summary className="arena-focus flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3 font-heading text-xs font-bold text-muted-foreground">
+                      Customize username
+                      <span className="text-[10px] uppercase group-open:text-primary">Optional</span>
+                    </summary>
+                    <div className="border-t border-glass-border p-3">
+                      <OnboardingInput icon={User} label="Username">
+                        <input
+                          type="text"
+                          placeholder="ak_player"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          disabled={submitting}
+                          className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                        />
+                      </OnboardingInput>
+                    </div>
+                  </details>
 
                   <OnboardingInput
                     icon={Calendar}
@@ -651,22 +659,6 @@ const GoogleOnboardingScreen = () => {
                     )}
                   </NeonButton>
 
-                  <div className="rounded-xl border border-glass-border bg-background/35 p-3 text-xs text-muted-foreground">
-                    <div className="flex items-start gap-2">
-                      <ShieldCheck className="mt-0.5 h-4 w-4 text-secondary" />
-                      <div>
-                        <p className="font-heading text-xs font-bold text-foreground">
-                          Phone verification
-                        </p>
-                        <p className="mt-1">
-                          We will add OTP verification here soon. For now, your
-                          phone is saved and marked unverified until
-                          verification is enabled.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
                   <AnimatePresence initial={false}>
                     {dateOfBirth &&
                       getAgeYears(dateOfBirth) >= 13 &&
@@ -694,16 +686,6 @@ const GoogleOnboardingScreen = () => {
             </motion.div>
           </div>
 
-          <p className="mt-6 text-center text-[11px] text-muted-foreground">
-            Need help? Read the{" "}
-            <Link
-              to="/help"
-              className="arena-focus rounded-sm font-heading font-bold text-primary"
-            >
-              Help Center
-            </Link>
-            .
-          </p>
         </motion.section>
       </main>
     </div>

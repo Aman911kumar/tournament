@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
   ChevronRight,
-  Radio,
   RefreshCcw,
   SlidersHorizontal,
   Trophy,
@@ -16,18 +15,23 @@ import {
   PageShell,
   SearchBox,
   SegmentedControl,
-  SkeletonBlock,
   StatusPill,
   Surface,
+  TournamentCardSkeleton,
 } from "@/components/design-system";
 import { formatCurrency, formatPrizeSummary, getErrorMessage, getPrizeSortValue } from "@/lib/page-utils";
 import { getMyTournamentRegistrations, getTournamentPage, Tournament } from "@/api/tournaments";
 import { getJoinedChannelTournaments } from "@/api/creators";
 import { CACHE_KEYS, readCache, stableCacheKey, writeAuthenticatedCache, writeCache } from "@/lib/offline-cache";
 import { getNotificationSocket } from "@/lib/notification-socket";
+import {
+  prefetchCreatorProfile,
+  prefetchOnIntent,
+  prefetchRoute,
+  prefetchTournamentDetail,
+} from "@/lib/route-prefetch";
 import type { NotificationItem } from "@/api/notifications";
 import {
-  formatCompactNumber,
   formatDateShort,
   gameLabels,
   gameQueryLabels,
@@ -99,6 +103,9 @@ const getStatusRank = (status: Tournament["status"]) => {
   return 3;
 };
 
+const getSlotSelectionPath = (tournament: Tournament) =>
+  `/tournament/${tournament._id}/slots?type=${tournament.type}&slots=${tournament.maxPlayers}&teamSize=${tournament.teamSize || ""}&fee=${Number(tournament.entryFee || 0)}&game=${tournament.game}&title=${encodeURIComponent(tournament.title)}`;
+
 const FilterBlock = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <div className="min-w-0 space-y-1.5">
     <p className="font-heading text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
@@ -112,20 +119,25 @@ const TournamentDiscoveryCard = ({
   tournament,
   joined,
   onClick,
+  onJoin,
   onCreatorClick,
+  onPrefetch,
 }: {
   tournament: Tournament;
   joined?: boolean;
   onClick: () => void;
+  onJoin: () => void;
   onCreatorClick: () => void;
+  onPrefetch?: () => void;
 }) => {
   const game = getDiscoveryGame(tournament.game);
   const participants = getParticipants(tournament);
   const fill = tournament.maxPlayers ? Math.min((participants / tournament.maxPlayers) * 100, 100) : 0;
   const slotsLeft = Math.max(Number(tournament.maxPlayers || 0) - participants, 0);
+  const canJoin = !joined && ["open", "running"].includes(tournament.status) && slotsLeft > 0;
 
   return (
-    <Surface interactive onClick={onClick} className="group overflow-hidden p-0">
+    <Surface interactive onClick={onClick} onPointerEnter={onPrefetch} onFocus={onPrefetch} onTouchStart={onPrefetch} className="group overflow-hidden p-0">
       <div className="border-b border-glass-border p-3">
         <div className="mb-3 flex max-w-full flex-wrap gap-2">
           <StatusPill tone={getStatusTone(tournament.status, joined)}>
@@ -176,19 +188,45 @@ const TournamentDiscoveryCard = ({
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-glass-border/70 pt-3">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onCreatorClick();
-            }}
-            className="arena-focus min-w-0 truncate rounded-lg text-xs text-muted-foreground hover:text-primary"
-          >
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onCreatorClick();
+              }}
+              {...prefetchOnIntent(() => prefetchCreatorProfile(tournament.channel?._id ?? tournament.organizer?._id))}
+              className="arena-focus min-w-0 truncate rounded-lg text-xs text-muted-foreground hover:text-primary"
+            >
             {tournament.channel?.name ?? tournament.organizer?.username ?? "Creator"}
           </button>
-          <span className="inline-flex items-center gap-1 font-heading text-xs font-bold text-primary">
-            {joined ? "Open" : "View"} <ChevronRight className="h-3.5 w-3.5" />
-          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onClick();
+              }}
+              className="arena-focus rounded-sm px-2 py-1 font-heading text-[11px] font-bold text-muted-foreground hover:text-primary"
+            >
+              Details
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                joined || canJoin ? onJoin() : onClick();
+              }}
+              {...prefetchOnIntent(() => prefetchRoute(joined ? `/tournament/${tournament._id}/chat` : getSlotSelectionPath(tournament)))}
+              className={`arena-focus inline-flex min-h-8 items-center gap-1 rounded-sm px-3 font-heading text-xs font-bold ${
+                canJoin || joined
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-glass-border text-muted-foreground"
+              }`}
+            >
+              {joined ? "Chat" : canJoin ? "Join" : "View"}
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     </Surface>
@@ -385,8 +423,6 @@ const TournamentsScreen = () => {
     });
   }, [activeFee, activeGame, activeMode, activeScope, activeSort, activeStatus, joinedCreatorTournamentIds, joinedTournamentIds, searchQuery, tournaments]);
 
-  const liveCount = tournaments.filter((t) => t.status === "running").length;
-  const playerCount = tournaments.reduce((sum, tournament) => sum + getParticipants(tournament), 0);
   const hasActiveFilters =
     activeScope !== "All" ||
     activeGame !== "All" ||
@@ -407,40 +443,6 @@ const TournamentsScreen = () => {
   return (
     <PageShell wide contentClassName="max-w-7xl space-y-4 pb-4">
       <PageHeader title="Tournaments" subtitle="Discover live rooms, upcoming events, and prize battles" />
-      {/* 
-      <Surface neon className="overflow-hidden p-0">
-        <div className="relative p-3 sm:p-4 lg:p-5">
-          <div className="absolute inset-x-0 top-0 h-px gradient-neon" />
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center">
-            <div className="min-w-0">
-              <div className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 font-heading text-[10px] font-bold text-accent">
-                <Radio className="h-3.5 w-3.5" />
-                TOURNAMENT DISCOVERY
-              </div>
-              <h1 className="mt-3 font-heading text-2xl font-black leading-tight sm:text-4xl">
-                Browse arenas built for fast competitive play.
-              </h1>
-              <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                Search by game, mode, creator, fee, prize, and live status. Results stay cached and update from tournament notifications.
-              </p>
-            </div>
-            <div className="arena-data-grid grid-cols-3">
-              <div className="arena-data-tile text-center">
-                <p className="font-heading text-lg font-black text-accent">{liveCount}</p>
-                <p className="text-[10px] text-muted-foreground">Live</p>
-              </div>
-              <div className="arena-data-tile text-center">
-                <p className="font-heading text-lg font-black text-secondary">{formatCompactNumber(playerCount)}</p>
-                <p className="text-[10px] text-muted-foreground">Players</p>
-              </div>
-              <div className="arena-data-tile text-center">
-                <p className="font-heading text-lg font-black text-primary">{filtered.length}</p>
-                <p className="text-[10px] text-muted-foreground">Shown</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Surface> */}
 
       <div className="flex min-w-0 items-center gap-2">
         <SearchBox
@@ -452,6 +454,7 @@ const TournamentsScreen = () => {
         <button
           type="button"
           onClick={() => setShowFilters((value) => !value)}
+          {...prefetchOnIntent(() => prefetchRoute("/tournaments"))}
           className={cn(
             "arena-focus inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-md border border-glass-border bg-card/80 px-3 font-heading text-[10px] font-bold transition-colors hover:border-primary/45 min-[420px]:gap-2 min-[420px]:px-4 min-[420px]:text-xs",
             showFilters || hasActiveFilters ? "neon-border text-primary" : "text-muted-foreground",
@@ -526,12 +529,7 @@ const TournamentsScreen = () => {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {loading && [0, 1, 2, 3, 4, 5].map((item) => (
-          <Surface key={item} className="space-y-3">
-            <SkeletonBlock className="h-16" />
-            <SkeletonBlock className="h-4 w-2/3" />
-            <SkeletonBlock className="h-3 w-1/2" />
-            <SkeletonBlock className="h-8" />
-          </Surface>
+          <TournamentCardSkeleton key={item} compact />
         ))}
 
         {!loading && error && (
@@ -559,7 +557,9 @@ const TournamentsScreen = () => {
               tournament={tournament}
               joined={joined}
               onClick={() => navigate(`/tournament/${tournament._id}`)}
+              onJoin={() => navigate(joined ? `/tournament/${tournament._id}/chat` : getSlotSelectionPath(tournament))}
               onCreatorClick={() => navigate(tournament.channel?._id ? `/creator/${tournament.channel._id}` : "/subscriptions")}
+              onPrefetch={() => prefetchTournamentDetail(tournament._id)}
             />
           );
         })}

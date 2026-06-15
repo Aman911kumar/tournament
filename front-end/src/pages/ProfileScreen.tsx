@@ -49,6 +49,7 @@ import {
   SkeletonBlock,
   Surface,
 } from "@/components/design-system";
+import { prefetchOnIntent, prefetchRoute } from "@/lib/route-prefetch";
 import { cn } from "@/lib/utils";
 
 const menuItems = [
@@ -120,6 +121,7 @@ const MenuRow = ({
   tone = "primary",
   disabled = false,
   onClick,
+  onPrefetch,
 }: {
   icon: typeof Edit;
   label: string;
@@ -127,10 +129,12 @@ const MenuRow = ({
   tone?: MenuTone;
   disabled?: boolean;
   onClick?: () => void;
+  onPrefetch?: () => void;
 }) => (
   <button
     type="button"
     onClick={onClick}
+    {...prefetchOnIntent(onPrefetch)}
     disabled={disabled}
     className="arena-focus flex min-h-[48px] w-full items-center justify-between gap-3 border-b border-[#1B2532] bg-transparent px-2.5 py-2 text-left transition-colors last:border-b-0 hover:bg-primary/[0.04] disabled:cursor-not-allowed disabled:opacity-60"
   >
@@ -425,6 +429,7 @@ const ProfileScreen = () => {
           stats={stats}
           cacheNotice={cacheNotice}
           onEditImages={() => navigate("/edit-profile")}
+          onEditImagesPrefetch={() => prefetchRoute("/edit-profile")}
         />
       ) : (
         <EmptyState
@@ -489,6 +494,7 @@ const ProfileScreen = () => {
                       description={item.description}
                       tone="secondary"
                       onClick={() => navigate(item.route)}
+                      onPrefetch={() => prefetchRoute(item.route)}
                     />
                   ))}
               </MenuSection>
@@ -502,6 +508,7 @@ const ProfileScreen = () => {
                     description={item.description}
                     tone="primary"
                     onClick={() => navigate(item.route)}
+                    onPrefetch={() => prefetchRoute(item.route)}
                   />
                 ))}
               </MenuSection>
@@ -549,6 +556,7 @@ const ProfileScreen = () => {
                       description="Platform operations"
                       tone="accent"
                       onClick={() => navigate(item.route)}
+                      onPrefetch={() => prefetchRoute(item.route)}
                     />
                   ))}
                 </MenuSection>
@@ -563,6 +571,7 @@ const ProfileScreen = () => {
                     description={item.description}
                     tone="secondary"
                     onClick={() => navigate(item.route)}
+                    onPrefetch={() => prefetchRoute(item.route)}
                   />
                 ))}
               </MenuSection>

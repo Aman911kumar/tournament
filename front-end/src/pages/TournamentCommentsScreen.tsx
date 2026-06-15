@@ -610,7 +610,7 @@ const SkeletonMessages = () => (
         key={item}
         className={`flex ${item % 2 ? "justify-end" : "justify-start"}`}
       >
-        <div className="h-16 w-[72%] animate-pulse rounded-2xl bg-muted/70" />
+        <div className="b4a-skeleton h-16 w-[72%] rounded-2xl" />
       </div>
     ))}
   </div>
@@ -1459,20 +1459,22 @@ const TournamentCommentsScreen = () => {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          min-width: 32px;
-          height: 32px;
+          min-width: 2.5rem;
+          height: 2.5rem;
           border-radius: var(--radius-card);
           border: 1px solid hsl(var(--border) / 0.55);
           background: hsl(var(--card) / 0.95);
           color: hsl(var(--muted-foreground));
-          font-size: 12px;
+          font-size: 0.8rem;
+          touch-action: manipulation;
           transition: transform 140ms ease, border-color 140ms ease, color 140ms ease;
         }
         .chat-action:active { transform: scale(0.94); }
         .chat-action:hover { color: hsl(var(--foreground)); border-color: hsl(var(--primary) / 0.45); }
         .chat-scroll {
           overscroll-behavior: contain;
-          scroll-padding-bottom: 5.75rem;
+          -webkit-overflow-scrolling: touch;
+          scroll-padding-bottom: calc(6rem + env(safe-area-inset-bottom));
           contain: layout paint;
         }
         .chat-bubble {
@@ -1511,12 +1513,13 @@ const TournamentCommentsScreen = () => {
         }
         .chat-composer-action {
           display: grid;
-          height: 2.25rem;
-          width: 2.25rem;
+          height: 2.75rem;
+          width: 2.75rem;
           flex-shrink: 0;
           place-items: center;
           border-radius: var(--radius-card);
           color: hsl(var(--muted-foreground));
+          touch-action: manipulation;
           transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
         }
         .chat-composer-action:hover {
@@ -1531,7 +1534,17 @@ const TournamentCommentsScreen = () => {
             box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.035);
           }
           .chat-scroll {
-            scroll-padding-bottom: 5.25rem;
+            scroll-padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+          }
+        }
+        @media (pointer: coarse) and (max-width: 640px) {
+          .chat-action,
+          .chat-composer-action {
+            min-width: 3rem;
+            height: 3rem;
+          }
+          .chat-action {
+            font-size: 0.84rem;
           }
         }
       `}</style>

@@ -17,6 +17,7 @@ import NetworkStatusBanner from "./components/NetworkStatusBanner";
 import OnboardingGate from "./components/OnboardingGate";
 import CapacitorUrlListener from "./components/CapacitorUrlListener";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
+import { RouteSkeleton } from "@/components/design-system";
 import { ApiError, scheduleRealtimeWarmup } from "@/api/client";
 import { recordFrontendEvent } from "@/lib/frontend-monitoring";
 import { useUiPreferences } from "@/hooks/useUiPreferences";
@@ -150,19 +151,7 @@ const ProtectedFullscreenShell = () => (
   </ProtectedRoute>
 );
 
-const RouteLoader = () => (
-  <div className="arena-shell arena-page-no-nav px-3 pt-4 sm:px-4 sm:pt-6">
-    <div className="mx-auto w-full max-w-2xl space-y-2.5">
-      <div className="h-5 w-36 animate-pulse rounded-sm bg-muted/70" />
-      <div className="rounded-md border border-glass-border bg-card/95 p-3">
-        <div className="h-16 animate-pulse rounded-sm bg-muted/70" />
-      </div>
-      <div className="rounded-md border border-glass-border bg-card/95 p-3">
-        <div className="h-12 animate-pulse rounded-sm bg-muted/70" />
-      </div>
-    </div>
-  </div>
-);
+const RouteLoader = () => <RouteSkeleton />;
 
 const RoutePerformanceMonitor = () => {
   const location = useLocation();

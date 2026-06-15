@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { UserAvatar } from "@/components/identity";
 import { useCurrentProfile } from "@/hooks/useCurrentProfile";
+import { prefetchOnIntent, prefetchRoute } from "@/lib/route-prefetch";
 
 const tabs = [
   { path: "/", icon: Home, label: "Home" },
@@ -26,6 +27,7 @@ const BottomNav = () => {
             <button
               key={tab.path}
               onClick={() => navigate(tab.path)}
+              {...prefetchOnIntent(() => prefetchRoute(tab.path))}
               className={cn(
                 "arena-focus relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-sm px-1 transition-colors",
                 isActive

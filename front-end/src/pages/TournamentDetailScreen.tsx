@@ -41,6 +41,11 @@ import {
 } from "@/api/tournaments";
 import { formatCurrency, getErrorMessage } from "@/lib/page-utils";
 import { CACHE_KEYS, readCache, writeAuthenticatedCache, writeCache } from "@/lib/offline-cache";
+import {
+  prefetchCreatorProfile,
+  prefetchOnIntent,
+  prefetchRoute,
+} from "@/lib/route-prefetch";
 import { createReport, ReportCategory } from "@/api/moderation";
 import { toast } from "@/components/ui/sonner";
 import { UserAvatar, UserIdentity } from "@/components/identity";
@@ -267,9 +272,12 @@ const TournamentDetailScreen = () => {
         ? "TOURNAMENT LIVE"
         : now < registrationStartMs
           ? "REGISTRATION OPENS SOON"
-          : now > registrationEndMs
-            ? "REGISTRATION CLOSED"
-            : `REGISTER NOW - ${entryFee === 0 ? "FREE" : formatCurrency(entryFee)}`;
+            : now > registrationEndMs
+              ? "REGISTRATION CLOSED"
+              : `REGISTER NOW - ${entryFee === 0 ? "FREE" : formatCurrency(entryFee)}`;
+  const slotSelectionPath = tournament
+    ? `/tournament/${id}/slots?type=${tournament.type}&slots=${tournament.maxPlayers}&teamSize=${tournament.teamSize || ""}&fee=${entryFee}&game=${tournament.game}&title=${encodeURIComponent(tournament.title)}`
+    : "";
 
   const reportablePlayers = (tournament?.results ?? [])
     .map((result) => result.player)
@@ -327,9 +335,7 @@ const TournamentDetailScreen = () => {
 
   const registerTournament = () => {
     if (!tournament || registered || !registrationIsOpen) return;
-    navigate(
-      `/tournament/${id}/slots?type=${tournament.type}&slots=${tournament.maxPlayers}&teamSize=${tournament.teamSize || ""}&fee=${entryFee}&game=${tournament.game}&title=${encodeURIComponent(tournament.title)}`
-    );
+    navigate(slotSelectionPath);
   };
 
   const submitReport = async () => {
@@ -429,13 +435,42 @@ const TournamentDetailScreen = () => {
       <main className="mx-auto w-full max-w-6xl space-y-4 px-4 pt-4 sm:px-5">
         {loading && (
           <div className="space-y-4">
-            <div className="h-[360px] animate-pulse rounded-xl border border-glass-border bg-card/70" />
+            <div className="b4a-skeleton h-[280px] rounded-xl sm:h-[340px]" />
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
               <div className="space-y-4">
-                <div className="h-48 animate-pulse rounded-xl border border-glass-border bg-card/60" />
-                <div className="h-56 animate-pulse rounded-xl border border-glass-border bg-card/60" />
+                <div className="rounded-xl border border-glass-border bg-card/60 p-4">
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    {[0, 1, 2, 3].map((item) => (
+                      <div key={item} className="space-y-2 border-t border-glass-border/60 py-3 first:border-t-0 sm:border-t-0">
+                        <div className="b4a-skeleton h-4 w-8 rounded-sm" />
+                        <div className="b4a-skeleton h-3 w-16 rounded-sm" />
+                        <div className="b4a-skeleton h-4 w-24 rounded-sm" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-glass-border bg-card/60 p-4">
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="b4a-skeleton h-9 w-9 rounded-full" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="b4a-skeleton h-4 w-40 max-w-full" />
+                      <div className="b4a-skeleton h-3 w-64 max-w-full" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="b4a-skeleton h-12 rounded-md" />
+                    <div className="b4a-skeleton h-12 rounded-md" />
+                  </div>
+                </div>
               </div>
-              <div className="h-72 animate-pulse rounded-xl border border-glass-border bg-card/60" />
+              <div className="rounded-xl border border-glass-border bg-card/60 p-4">
+                <div className="b4a-skeleton h-10 rounded-md" />
+                <div className="mt-3 space-y-2">
+                  <div className="b4a-skeleton h-9 rounded-md" />
+                  <div className="b4a-skeleton h-9 rounded-md" />
+                  <div className="b4a-skeleton h-9 rounded-md" />
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -553,6 +588,7 @@ const TournamentDetailScreen = () => {
                     variant={registered ? "green" : registrationIsOpen ? "purple" : "blue"}
                     disabled={!registrationIsOpen || registered}
                     onClick={registerTournament}
+                    {...prefetchOnIntent(() => prefetchRoute(slotSelectionPath))}
                   >
                     {registerButtonText}
                   </NeonButton>
@@ -561,6 +597,7 @@ const TournamentDetailScreen = () => {
                       <button
                         type="button"
                         onClick={openChat}
+                        {...prefetchOnIntent(() => prefetchRoute(tournament ? `/tournament/${tournament._id}/chat` : ""))}
                         className="arena-focus inline-flex h-10 items-center justify-center gap-2 rounded-sm border border-primary/30 bg-primary/10 font-heading text-xs font-bold text-primary"
                       >
                         <MessageCircle className="h-4 w-4" />
@@ -622,6 +659,7 @@ const TournamentDetailScreen = () => {
                       <button
                         type="button"
                         onClick={() => navigate(creatorProfilePath)}
+                        {...prefetchOnIntent(() => prefetchCreatorProfile(creator.id))}
                         className="arena-focus flex w-full items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-left transition-colors hover:border-primary/45 hover:bg-primary/15"
                       >
                         <span className="min-w-0">

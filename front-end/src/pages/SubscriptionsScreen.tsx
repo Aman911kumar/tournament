@@ -2,13 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight,
-  Crown,
-  Flame,
   Search,
-  Shield,
   SlidersHorizontal,
-  Sparkles,
-  Users,
 } from "lucide-react";
 import NeonButton from "@/components/NeonButton";
 import {
@@ -23,6 +18,7 @@ import {
 } from "@/components/design-system";
 import { CreatorChannel, followCreator, getCreators, getJoinedChannels, unfollowCreator } from "@/api/creators";
 import { CACHE_KEYS, readCache, writeCache } from "@/lib/offline-cache";
+import { prefetchCreatorProfile, prefetchOnIntent } from "@/lib/route-prefetch";
 import { toast } from "@/components/ui/sonner";
 import { getErrorToast } from "@/lib/page-utils";
 import { UserAvatar } from "@/components/identity";
@@ -58,12 +54,14 @@ const CreatorDiscoveryCard = ({
   loading,
   onOpen,
   onFollowToggle,
+  onPrefetch,
 }: {
   creator: CreatorChannel & { tournamentCount?: number };
   following: boolean;
   loading: boolean;
   onOpen: () => void;
   onFollowToggle: () => void;
+  onPrefetch?: () => void;
 }) => {
   const rating = getCreatorRating(creator);
   const tournamentCount = getTournamentCount(creator);
@@ -71,7 +69,12 @@ const CreatorDiscoveryCard = ({
 
   return (
     <Surface className="overflow-hidden p-0">
-      <button type="button" onClick={onOpen} className="arena-focus block w-full text-left">
+      <button
+        type="button"
+        onClick={onOpen}
+        {...prefetchOnIntent(onPrefetch)}
+        className="arena-focus block w-full text-left"
+      >
         <div className="relative h-24 bg-gradient-to-r from-primary/30 via-secondary/20 to-accent/20">
           {banner && (
             <img
@@ -246,9 +249,6 @@ const SubscriptionsScreen = () => {
     }
   };
 
-  const followingCount = followingIds.size;
-  const liveCreators = creators.filter((creator) => creator.isActive).length;
-  const verifiedCreators = creators.filter((creator) => !creator.virtual).length;
   const hasActiveFilters = activeFilter !== "All" || activeSort !== "Trending";
 
   return (
@@ -278,26 +278,6 @@ const SubscriptionsScreen = () => {
           <SlidersHorizontal className="h-4 w-4" />
           <span className="hidden min-[360px]:inline">Filters</span>
         </button>
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-        {[
-          { icon: Crown, label: `${creators.length} creators` },
-          { icon: Shield, label: `${verifiedCreators} verified` },
-          { icon: Flame, label: `${liveCreators} live` },
-          { icon: Users, label: `${followingCount} following` },
-        ].map((item) => {
-          const Icon = item.icon;
-          return (
-            <span
-              key={item.label}
-              className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md border border-glass-border bg-card/75 px-2.5 text-[11px] text-muted-foreground"
-            >
-              <Icon className="h-3.5 w-3.5 text-primary" />
-              {item.label}
-            </span>
-          );
-        })}
       </div>
 
       {showFilters && (
@@ -331,40 +311,6 @@ const SubscriptionsScreen = () => {
               </button>
             </div>
           )}
-        </Surface>
-      )}
-
-      {filteredCreators.length > 0 && (
-        <Surface className="p-3 sm:p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="font-heading text-sm font-black">Trending Creator</p>
-              <p className="text-xs text-muted-foreground">Best match for current filters</p>
-            </div>
-            <StatusPill tone="accent">Featured</StatusPill>
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate(`/creator/${filteredCreators[0]._id}`)}
-            className="arena-focus mt-3 flex w-full items-center gap-3 border-t border-glass-border/70 px-0 py-3 text-left transition-colors hover:text-primary"
-          >
-            <UserAvatar
-              user={{
-                _id: filteredCreators[0].owner?._id,
-                username: filteredCreators[0].name,
-                avatar: { url: filteredCreators[0].avatar?.url ?? filteredCreators[0].owner?.avatar?.url },
-                role: ["creator"],
-              }}
-              size="lg"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-heading text-sm font-black">{filteredCreators[0].name}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {formatCompactNumber(filteredCreators[0].memberCount)} followers - {getTournamentCount(filteredCreators[0])} tournaments
-              </p>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </button>
         </Surface>
       )}
 
@@ -408,26 +354,12 @@ const SubscriptionsScreen = () => {
             following={followingIds.has(creator._id)}
             loading={followLoadingId === creator._id}
             onOpen={() => navigate(`/creator/${creator._id}`)}
+            onPrefetch={() => prefetchCreatorProfile(creator._id)}
             onFollowToggle={() => handleFollowToggle(creator)}
           />
         ))}
       </div>
 
-      {!loading && filteredCreators.length > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-glass-border bg-card/55 px-3 py-2.5 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Follow creators to surface room alerts and new tournaments faster.
-          </span>
-          <button
-            type="button"
-            onClick={() => navigate("/channel-setup")}
-            className="arena-focus shrink-0 rounded-lg px-2 py-1 font-heading font-bold text-primary"
-          >
-            Create channel
-          </button>
-        </div>
-      )}
     </PageShell>
   );
 };

@@ -121,13 +121,15 @@ const NotificationsScreen = () => {
       toast.info("All caught up!", { description: "No unread notifications." });
       return;
     }
+    const previousNotifications = notifications;
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     try {
       await markAllNotificationsRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       toast.success("Marked all as read", {
         description: "All notifications have been cleared.",
       });
     } catch (err) {
+      setNotifications(previousNotifications);
       const errorToast = getErrorToast(err, {
         action: "Mark notifications read",
         fallback: "Update failed.",

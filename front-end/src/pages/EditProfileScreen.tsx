@@ -37,6 +37,7 @@ import {
   verifyPhone,
 } from "@/api/profile";
 import { ProfileHero } from "@/components/identity";
+import { SkeletonBlock, Surface } from "@/components/design-system";
 import {
   setCurrentProfileCache,
   useCurrentProfile,
@@ -584,12 +585,37 @@ const EditProfileScreen = () => {
 
         {loading && (
           <div className="space-y-4">
-            {[0, 1, 2].map((item) => (
-              <GlassCard key={item}>
-                <div className="mb-3 h-4 w-24 animate-pulse rounded bg-muted" />
-                <div className="h-10 w-full animate-pulse rounded bg-muted" />
-              </GlassCard>
-            ))}
+            <Surface className="overflow-hidden p-0">
+              <SkeletonBlock className="h-28 rounded-none sm:h-36" />
+              <div className="space-y-3 p-3">
+                <div className="flex items-end gap-3">
+                  <SkeletonBlock className="h-20 w-20 rounded-full" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <SkeletonBlock className="h-5 w-44 max-w-full" />
+                    <SkeletonBlock className="h-3 w-56 max-w-full" />
+                  </div>
+                </div>
+              </div>
+            </Surface>
+            <Surface className="space-y-3">
+              <SkeletonBlock className="h-4 w-24" />
+              <SkeletonBlock className="h-10 w-full" />
+            </Surface>
+            <div className="grid gap-3 lg:grid-cols-2">
+              {[0, 1].map((item) => (
+                <Surface key={item} className="space-y-3">
+                  <div className="flex gap-3">
+                    <SkeletonBlock className="h-9 w-9 rounded-md" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <SkeletonBlock className="h-4 w-32" />
+                      <SkeletonBlock className="h-3 w-4/5" />
+                    </div>
+                  </div>
+                  <SkeletonBlock className="h-10 w-full" />
+                  <SkeletonBlock className="h-9 w-28" />
+                </Surface>
+              ))}
+            </div>
           </div>
         )}
 

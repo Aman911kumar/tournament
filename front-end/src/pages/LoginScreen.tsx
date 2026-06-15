@@ -4,7 +4,6 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
   BellRing,
-  CheckCircle2,
   Crown,
   Eye,
   EyeOff,
@@ -56,7 +55,6 @@ const arenaStats = [
   { label: "Room alerts", value: "Instant", icon: BellRing },
 ];
 
-const signupRules = ["Email required", "Phone required", "6+ char password"];
 const LEGAL_LINKS = {
   terms: "/legal/terms",
   privacy: "/legal/privacy",
@@ -386,22 +384,6 @@ const LoginScreen = () => {
                 );
               })}
             </div>
-            <div className="rounded-lg border border-accent/25 bg-accent/10 p-4">
-              <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-lg border border-accent/30 bg-accent/15 text-accent">
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="font-heading text-sm font-bold text-accent">
-                    Secure login flow
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Phone, email, Google, and Facebook login stay connected to
-                    your existing backend.
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 
@@ -489,10 +471,6 @@ const LoginScreen = () => {
                   className="arena-scrollbar flex h-full min-h-0 flex-col overflow-y-auto pr-1"
                 >
                   <div className="mb-4 sm:mb-6">
-                    <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-secondary/30 bg-secondary/10 px-3 py-1 font-heading text-[10px] font-bold uppercase tracking-wide text-secondary sm:mb-3">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      {isSignup ? "New player setup" : "Welcome back"}
-                    </div>
                     <h2 className="font-heading text-xl font-bold min-[380px]:text-2xl">
                       {isSignup
                         ? "Create your arena profile"
@@ -500,24 +478,10 @@ const LoginScreen = () => {
                     </h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {isSignup
-                        ? "Email and phone are required so wallet, OTP, and tournament alerts work correctly."
+                        ? "Create your account, then join your first tournament."
                         : "Use your username, phone number, or email to continue."}
                     </p>
                   </div>
-
-                  {isSignup && (
-                    <div className="mb-4 flex flex-wrap gap-2 sm:mb-5">
-                      {signupRules.map((rule) => (
-                        <span
-                          key={rule}
-                          className="inline-flex items-center gap-1 rounded-full border border-accent/25 bg-accent/10 px-2.5 py-1 font-heading text-[10px] font-bold text-accent"
-                        >
-                          <CheckCircle2 className="h-3 w-3" />
-                          {rule}
-                        </span>
-                      ))}
-                    </div>
-                  )}
 
                   <form
                     onSubmit={handleSubmit}

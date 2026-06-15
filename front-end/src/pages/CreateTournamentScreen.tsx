@@ -197,7 +197,7 @@ const SectionTitle = ({
     </span>
     <div className="min-w-0">
       <h2 className="font-heading text-sm font-black leading-tight sm:text-base">{title}</h2>
-      {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+      {description && <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">{description}</p>}
     </div>
   </div>
 );
@@ -947,44 +947,50 @@ const CreateTournamentScreen = () => {
               </div>
             </div>
 
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <div>
-                <label className={labelClass}>
-                  <Hash className="h-3.5 w-3.5" />
-                  Room ID
-                </label>
-                <input
-                  value={form.roomId}
-                  onChange={(event) => update("roomId", event.target.value)}
-                  placeholder="Optional"
-                  className={inputClass}
-                />
+            <details className="group mt-3 rounded-xl border border-glass-border bg-background/25">
+              <summary className="arena-focus flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 px-3 font-heading text-xs font-bold text-muted-foreground">
+                Advanced room details
+                <span className="text-[10px] uppercase group-open:text-primary">Optional</span>
+              </summary>
+              <div className="grid gap-3 border-t border-glass-border p-3 md:grid-cols-3">
+                <div>
+                  <label className={labelClass}>
+                    <Hash className="h-3.5 w-3.5" />
+                    Room ID
+                  </label>
+                  <input
+                    value={form.roomId}
+                    onChange={(event) => update("roomId", event.target.value)}
+                    placeholder="Optional"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>
+                    <Lock className="h-3.5 w-3.5" />
+                    Room Pass
+                  </label>
+                  <input
+                    value={form.roomPass}
+                    onChange={(event) => update("roomPass", event.target.value)}
+                    placeholder="Optional"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>
+                    <KeyRound className="h-3.5 w-3.5" />
+                    Join Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={form.roomJoinTime}
+                    onChange={(event) => update("roomJoinTime", event.target.value)}
+                    className={inputClass}
+                  />
+                </div>
               </div>
-              <div>
-                <label className={labelClass}>
-                  <Lock className="h-3.5 w-3.5" />
-                  Room Pass
-                </label>
-                <input
-                  value={form.roomPass}
-                  onChange={(event) => update("roomPass", event.target.value)}
-                  placeholder="Optional"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>
-                  <KeyRound className="h-3.5 w-3.5" />
-                  Join Time
-                </label>
-                <input
-                  type="datetime-local"
-                  value={form.roomJoinTime}
-                  onChange={(event) => update("roomJoinTime", event.target.value)}
-                  className={inputClass}
-                />
-              </div>
-            </div>
+            </details>
           </Surface>
 
           <Surface className="p-3 sm:p-4">
@@ -1018,7 +1024,7 @@ const CreateTournamentScreen = () => {
           </Surface>
         </div>
 
-        <aside className="space-y-3 lg:sticky lg:top-4">
+        <aside className="hidden space-y-3 lg:sticky lg:top-4 lg:block">
           <Surface neon className="overflow-hidden p-0">
             <div className="relative p-3 sm:p-4">
               <div className="absolute inset-x-0 top-0 h-1 gradient-neon" />

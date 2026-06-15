@@ -118,17 +118,26 @@ export const Surface = ({
   interactive = false,
   neon = false,
   onClick,
+  onPointerEnter,
+  onFocus,
+  onTouchStart,
 }: {
   children: ReactNode;
   className?: string;
   interactive?: boolean;
   neon?: boolean;
   onClick?: () => void;
+  onPointerEnter?: () => void;
+  onFocus?: () => void;
+  onTouchStart?: () => void;
 }) => {
   const clickable = interactive || Boolean(onClick);
   return (
     <div
       onClick={onClick}
+      onPointerEnter={onPointerEnter}
+      onFocus={onFocus}
+      onTouchStart={onTouchStart}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
       onKeyDown={(event) => {
@@ -244,6 +253,75 @@ export const SkeletonBlock = ({ className }: { className?: string }) => (
     )}
     aria-hidden="true"
   />
+);
+
+export const TournamentCardSkeleton = ({ compact = false }: { compact?: boolean }) => (
+  <Surface className="overflow-hidden p-0">
+    <SkeletonBlock className={compact ? "h-20 rounded-b-none" : "h-28 rounded-b-none"} />
+    <div className="space-y-3 p-3">
+      <div className="space-y-2">
+        <SkeletonBlock className="h-4 w-3/4" />
+        <SkeletonBlock className="h-3 w-1/2" />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <SkeletonBlock className="h-12" />
+        <SkeletonBlock className="h-12" />
+        <SkeletonBlock className="h-12" />
+      </div>
+      <SkeletonBlock className="h-2 w-full rounded-full" />
+      <div className="flex items-center justify-between gap-3">
+        <SkeletonBlock className="h-3 w-24" />
+        <SkeletonBlock className="h-7 w-20" />
+      </div>
+    </div>
+  </Surface>
+);
+
+export const FeedSkeleton = ({
+  count = 3,
+  variant = "tournament",
+}: {
+  count?: number;
+  variant?: "tournament" | "compact" | "list";
+}) => (
+  <>
+    {Array.from({ length: count }, (_, index) =>
+      variant === "tournament" || variant === "compact" ? (
+        <TournamentCardSkeleton key={index} compact={variant === "compact"} />
+      ) : (
+        <Surface key={index}>
+          <div className="flex gap-3">
+            <SkeletonBlock className="h-10 w-10 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <SkeletonBlock className="h-3.5 w-2/3" />
+              <SkeletonBlock className="h-3 w-5/6" />
+              <SkeletonBlock className="h-2.5 w-24" />
+            </div>
+          </div>
+        </Surface>
+      ),
+    )}
+  </>
+);
+
+export const RouteSkeleton = ({ bottomNav = true }: { bottomNav?: boolean }) => (
+  <PageShell
+    wide
+    bottomNavPadding={bottomNav}
+    contentClassName="max-w-6xl space-y-3 pb-4 sm:space-y-4"
+  >
+    <div className="flex items-center justify-between gap-3 border-b border-glass-border pb-3">
+      <div className="min-w-0 flex-1 space-y-2">
+        <SkeletonBlock className="h-5 w-40 max-w-full" />
+        <SkeletonBlock className="h-3 w-56 max-w-full" />
+      </div>
+      <SkeletonBlock className="h-9 w-9 shrink-0 rounded-md" />
+    </div>
+    <SkeletonBlock className="h-28 rounded-md sm:h-36" />
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <FeedSkeleton count={6} variant="compact" />
+    </div>
+  </PageShell>
 );
 
 export const FormField = ({
