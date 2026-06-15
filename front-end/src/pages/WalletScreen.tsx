@@ -53,6 +53,16 @@ interface WalletSummary {
   playerMonthlyChange: number;
 }
 
+type WalletActivityFilter = "all" | "wallet" | "player" | "creator" | "payments";
+
+const walletActivityFilters: Array<{ label: string; value: WalletActivityFilter }> = [
+  { label: "All", value: "all" },
+  { label: "Wallet", value: "wallet" },
+  { label: "Player", value: "player" },
+  { label: "Creator", value: "creator" },
+  { label: "Payments", value: "payments" },
+];
+
 const statusStyles: Record<
   string,
   { text: string; bg: string; iconBg: string; icon: string; amount: string }
@@ -252,12 +262,7 @@ const TransactionRow = ({
 
 const WalletScreen = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<"all" | "player" | "creator">(
-    "all",
-  );
-  const [historyView, setHistoryView] = useState<"wallet" | "payments">(
-    "wallet",
-  );
+  const [activityFilter, setActivityFilter] = useState<WalletActivityFilter>("all");
   const [balance, setBalance] = useState(0);
   const [creatorEarnings, setCreatorEarnings] = useState(0);
   const [playerEarnings, setPlayerEarnings] = useState(0);
@@ -379,25 +384,25 @@ const WalletScreen = () => {
     };
   }, [loadWallet]);
 
-  const filtered = useMemo(() => {
-    if (activeTab === "all") return transactions;
-    if (activeTab === "creator")
-      return transactions.filter((t) => t.label.includes("Creator"));
-    return transactions.filter((t) => !t.label.includes("Creator"));
-  }, [activeTab, transactions]);
-
-  const walletTransactions = useMemo(
-    () => filtered.filter((transaction) => transaction.kind !== "PAYMENT"),
-    [filtered],
-  );
-
-  const paymentTransactions = useMemo(
-    () =>
-      activeTab === "creator"
-        ? []
-        : filtered.filter((transaction) => transaction.kind === "PAYMENT"),
-    [activeTab, filtered],
-  );
+  const activityTransactions = useMemo(() => {
+    if (activityFilter === "wallet") {
+      return transactions.filter((transaction) => transaction.kind !== "PAYMENT");
+    }
+    if (activityFilter === "payments") {
+      return transactions.filter((transaction) => transaction.kind === "PAYMENT");
+    }
+    if (activityFilter === "creator") {
+      return transactions.filter(
+        (transaction) => transaction.kind !== "PAYMENT" && transaction.label.includes("Creator"),
+      );
+    }
+    if (activityFilter === "player") {
+      return transactions.filter(
+        (transaction) => transaction.kind !== "PAYMENT" && !transaction.label.includes("Creator"),
+      );
+    }
+    return transactions;
+  }, [activityFilter, transactions]);
 
   const pendingCount = useMemo(
     () =>
@@ -424,12 +429,6 @@ const WalletScreen = () => {
   );
 
   const rewardTotal = playerEarnings + Math.max(creatorEarnings, 0);
-
-  useEffect(() => {
-    if (activeTab === "creator" && historyView === "payments") {
-      setHistoryView("wallet");
-    }
-  }, [activeTab, historyView]);
 
   return (
     <div className="arena-shell min-h-[100dvh] overflow-x-hidden pb-[calc(5.75rem_+_env(safe-area-inset-bottom))] sm:pb-24">
@@ -720,59 +719,34 @@ const WalletScreen = () => {
           <div className="mb-3 flex flex-col gap-2 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <div>
               <h2 className="flex items-center gap-2 font-heading text-sm font-black sm:text-base">
-                {historyView === "wallet" ? (
-                  <History className="h-4 w-4 text-primary" />
-                ) : (
+                {activityFilter === "payments" ? (
                   <Receipt className="h-4 w-4 text-secondary" />
+                ) : (
+                  <History className="h-4 w-4 text-primary" />
                 )}
-                {historyView === "wallet"
-                  ? "Wallet Ledger"
-                  : "Payment Activity"}
+                Recent Activity
               </h2>
-              <p className="b4a-soft-copy mt-0.5 line-clamp-1 text-[11px] text-muted-foreground sm:mt-1 sm:text-xs">
-                Clear status, amount direction, and source for every money
-                movement.
-              </p>
             </div>
-            <div className="flex flex-wrap gap-1.5 sm:gap-2">
-              {(["all", "player", "creator"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={`arena-focus rounded-full px-2.5 py-1 font-heading text-[10px] font-bold capitalize transition-colors sm:px-3 sm:py-1.5 ${
-                    activeTab === tab
-                      ? "bg-primary text-primary-foreground"
-                      : "border border-glass-border bg-card/60 text-muted-foreground"
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-              <div className="grid grid-cols-2 rounded-full border border-glass-border bg-card/60 p-0.5 sm:p-1">
-                <button
-                  type="button"
-                  onClick={() => setHistoryView("wallet")}
-                  className={`rounded-full px-2.5 py-1 font-heading text-[10px] transition-colors sm:px-3 ${
-                    historyView === "wallet"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  Wallet
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHistoryView("payments")}
-                  disabled={activeTab === "creator"}
-                  className={`rounded-full px-2.5 py-1 font-heading text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:px-3 ${
-                    historyView === "payments"
-                      ? "bg-secondary text-secondary-foreground"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  Payments
-                </button>
+            <div className="-mx-0.5 max-w-full overflow-x-auto px-0.5 pb-1">
+              <div className="inline-flex min-w-max items-center gap-1.5">
+                {walletActivityFilters.map((filter) => {
+                  const active = activityFilter === filter.value;
+                  return (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      onClick={() => setActivityFilter(filter.value)}
+                      aria-pressed={active}
+                      className={`arena-focus h-8 shrink-0 rounded-md border px-3 font-heading text-[10px] font-bold leading-none tracking-[0.01em] transition-colors ${
+                        active
+                          ? "border-primary bg-primary text-[#07131a] shadow-[0_0_0_1px_hsl(var(--primary)/0.18)]"
+                          : "border-glass-border/70 bg-card/70 text-slate-300 hover:border-primary/35 hover:bg-primary/8 hover:text-foreground"
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -786,58 +760,38 @@ const WalletScreen = () => {
           )}
 
           <div className="space-y-2">
-            {historyView === "wallet" &&
-              !loading &&
-              walletTransactions.length === 0 && (
-                <GlassCard className="py-6 text-center sm:py-8">
-                  <Wallet className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-                  <p className="font-heading text-sm">
-                    No wallet transactions found
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {error
-                      ? "Connect once to save wallet data for offline use."
-                      : "Wallet credits and debits will appear here."}
-                  </p>
-                </GlassCard>
-              )}
-
-            {historyView === "wallet" &&
-              walletTransactions.map((transaction, index) => (
-                <TransactionRow
-                  key={transaction.id}
-                  transaction={transaction}
-                  index={index}
-                  onClick={() =>
-                    navigate(`/wallet/transaction/${transaction.id}`)
-                  }
-                />
-              ))}
-
-            {historyView === "payments" &&
-              !loading &&
-              paymentTransactions.length === 0 && (
-                <GlassCard className="py-6 text-center sm:py-8">
+            {!loading && activityTransactions.length === 0 && (
+              <GlassCard className="py-6 text-center sm:py-8">
+                {activityFilter === "payments" ? (
                   <CreditCard className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-                  <p className="font-heading text-sm">
-                    No payment activity found
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Razorpay checkout updates and payout processing will appear
-                    here.
-                  </p>
-                </GlassCard>
-              )}
+                ) : (
+                  <Wallet className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                )}
+                <p className="font-heading text-sm">
+                  No activity found
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {error
+                    ? "Connect once to save wallet data for offline use."
+                    : "Wallet and payment activity will appear here."}
+                </p>
+              </GlassCard>
+            )}
 
-            {historyView === "payments" &&
-              paymentTransactions.map((transaction, index) => (
-                <TransactionRow
-                  key={transaction.id}
-                  transaction={transaction}
-                  index={index}
-                  onClick={() => navigate(`/wallet/payment/${transaction.id}`)}
-                />
-              ))}
+            {activityTransactions.map((transaction, index) => (
+              <TransactionRow
+                key={transaction.id}
+                transaction={transaction}
+                index={index}
+                onClick={() =>
+                  navigate(
+                    transaction.kind === "PAYMENT"
+                      ? `/wallet/payment/${transaction.id}`
+                      : `/wallet/transaction/${transaction.id}`,
+                  )
+                }
+              />
+            ))}
           </div>
 
           {!loading && !error && hasMore && (
