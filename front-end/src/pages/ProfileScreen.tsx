@@ -4,7 +4,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   BarChart3,
-  BadgeCheck,
   ChevronRight,
   Crown,
   Edit,
@@ -12,17 +11,13 @@ import {
   HelpCircle,
   Lock,
   LogOut,
-  MailCheck,
-  Phone,
   RefreshCcw,
   Settings,
   ShieldCheck,
-  Sparkles,
   Trophy,
   UserMinus,
   UserPlus,
   Users,
-  Wallet,
 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { logout } from "@/api/auth";
@@ -52,7 +47,6 @@ import {
   PageHeader,
   PageShell,
   SkeletonBlock,
-  StatusPill,
   Surface,
 } from "@/components/design-system";
 import { cn } from "@/lib/utils";
@@ -195,97 +189,6 @@ const MenuSection = ({
     <Surface className="overflow-hidden border-[#1B2532] bg-[#101620]/80 p-0">{children}</Surface>
   </section>
 );
-
-const QuickActionCard = ({
-  icon: Icon,
-  label,
-  description,
-  tone = "primary",
-  onClick,
-}: {
-  icon: typeof Edit;
-  label: string;
-  description: string;
-  tone?: MenuTone;
-  onClick: () => void;
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="arena-focus group flex min-w-0 items-center gap-2 border border-[#1B2532] bg-[#101620]/80 p-2 text-left transition-colors hover:border-primary/25 hover:bg-[#121A26] sm:min-h-[72px]"
-  >
-    <span
-      className={cn(
-        "arena-icon-cell grid shrink-0 place-items-center rounded-md border transition-colors group-hover:border-primary/45 sm:mb-3 sm:h-9 sm:w-9",
-        toneClasses[tone],
-      )}
-    >
-      <Icon className="h-4 w-4" />
-    </span>
-    <span className="min-w-0 flex-1">
-      <span className="arena-fluid-title block font-heading font-black uppercase tracking-[0.04em]">
-        {label}
-      </span>
-      <span className="b4a-soft-copy arena-fluid-copy mt-0.5 line-clamp-2 text-muted-foreground sm:mt-1">
-        {description}
-      </span>
-    </span>
-  </button>
-);
-
-const ReadinessItem = ({
-  icon: Icon,
-  label,
-  value,
-  complete,
-  onClick,
-}: {
-  icon: typeof BadgeCheck;
-  label: string;
-  value: string;
-  complete: boolean;
-  onClick?: () => void;
-}) => {
-  const content = (
-    <>
-      <span
-        className={cn(
-          "grid h-9 w-9 shrink-0 place-items-center rounded-md border",
-          complete
-            ? "border-accent/30 bg-accent/10 text-accent"
-            : "border-[hsl(var(--warning)/0.30)] bg-[hsl(var(--warning)/0.10)] text-[hsl(var(--warning))]",
-        )}
-      >
-        <Icon className="h-4 w-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate font-heading text-xs font-bold">{label}</span>
-        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{value}</span>
-      </span>
-      <StatusPill tone={complete ? "accent" : "muted"}>
-        {complete ? "Ready" : "Needs setup"}
-      </StatusPill>
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className="arena-focus flex w-full items-center gap-3 border-b border-[#1B2532] bg-transparent px-2.5 py-2 text-left transition-colors last:border-b-0 hover:bg-primary/[0.04]"
-      >
-        {content}
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-3 border-b border-[#1B2532] bg-transparent px-2.5 py-2 last:border-b-0">
-      {content}
-    </div>
-  );
-};
 
 const formatDateLabel = (value?: string | null) => {
   if (!value) return "Not available";
@@ -458,36 +361,6 @@ const ProfileScreen = () => {
       profile?.legalAgreements?.termsAcceptedAt,
   );
   const readinessScore = [emailVerified, phoneVerified, passwordReady, onboardingReady].filter(Boolean).length;
-  const quickActions = [
-    {
-      icon: Wallet,
-      label: "Wallet",
-      description: "Balance, rewards, transfers",
-      tone: "accent" as const,
-      route: "/wallet",
-    },
-    {
-      icon: Edit,
-      label: "Edit",
-      description: "Identity and visuals",
-      tone: "primary" as const,
-      route: "/edit-profile",
-    },
-    {
-      icon: Trophy,
-      label: "Events",
-      description: "Joined tournaments",
-      tone: "secondary" as const,
-      route: "/my-tournaments",
-    },
-    {
-      icon: Gamepad2,
-      label: "Game IDs",
-      description: "Linked accounts",
-      tone: "primary" as const,
-      route: "/game-accounts",
-    },
-  ];
   const battleRecordItems = profile
     ? [
         { label: "Last login", value: formatDateLabel(profile.lastLoginAt) },
@@ -563,71 +436,27 @@ const ProfileScreen = () => {
 
       {profile && (
         <>
-          <section className="arena-auto-grid grid gap-1.5 min-[430px]:grid-cols-4 sm:gap-2">
-            {quickActions.map((item) => (
-              <QuickActionCard
-                key={item.label}
-                icon={item.icon}
-                label={item.label}
-                description={item.description}
-                tone={item.tone}
-                onClick={() => navigate(item.route)}
-              />
-            ))}
-          </section>
-
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
             <div className="space-y-3">
-              <Surface className="border-[#1B2532] bg-[#101620] p-3 sm:p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              {readinessScore < 4 && (
+                <Surface className="flex flex-col gap-2 border-primary/20 bg-primary/8 p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <div className="inline-flex items-center gap-1.5 rounded-sm border border-primary/25 bg-primary/10 px-2.5 py-1 font-heading text-[10px] font-bold uppercase tracking-[0.08em] text-primary">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      Identity readiness
-                    </div>
-                    <h2 className="mt-3 font-display text-lg font-black uppercase tracking-tight">
-                      {readinessScore}/4 systems ready
-                    </h2>
-                    <p className="b4a-soft-copy mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
-                      Complete verification and profile setup to keep tournaments, payouts, and account recovery smooth.
+                    <p className="font-heading text-xs font-bold text-primary">
+                      Profile setup {readinessScore}/4 ready
+                    </p>
+                    <p className="b4a-soft-copy mt-0.5 text-[11px] text-muted-foreground">
+                      Finish phone, password, or agreement setup when you have a minute.
                     </p>
                   </div>
-                  <StatusPill tone={isCreator ? "secondary" : "primary"}>
-                    {isCreator ? "Creator profile" : "Player profile"}
-                  </StatusPill>
-                </div>
-
-                <div className="mt-4 grid gap-2 md:grid-cols-2">
-                  <ReadinessItem
-                    icon={MailCheck}
-                    label="Email"
-                    value={emailVerified ? "Verified for alerts and recovery" : "Verify from account settings"}
-                    complete={emailVerified}
+                  <button
+                    type="button"
                     onClick={() => navigate("/edit-profile")}
-                  />
-                  <ReadinessItem
-                    icon={Phone}
-                    label="Phone"
-                    value={phoneVerified ? getDisplayPhoneNumber(profile.phone_number) || "Verified" : "Add or verify phone"}
-                    complete={phoneVerified}
-                    onClick={() => navigate("/edit-profile")}
-                  />
-                  <ReadinessItem
-                    icon={Lock}
-                    label="Password"
-                    value={passwordReady ? "Login protection enabled" : "Set password for backup login"}
-                    complete={passwordReady}
-                    onClick={() => navigate("/change-password")}
-                  />
-                  <ReadinessItem
-                    icon={BadgeCheck}
-                    label="Agreement"
-                    value={onboardingReady ? "Terms and onboarding complete" : "Complete profile onboarding"}
-                    complete={onboardingReady}
-                    onClick={() => navigate("/onboarding")}
-                  />
-                </div>
-              </Surface>
+                    className="arena-focus min-h-8 shrink-0 rounded-sm bg-primary px-3 font-heading text-[10px] font-bold text-primary-foreground"
+                  >
+                    Fix setup
+                  </button>
+                </Surface>
+              )}
 
               <MenuSection title={isCreator ? "Creator Studio" : "Creator Access"}>
                 {!isCreator && (

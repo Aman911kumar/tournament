@@ -6,15 +6,15 @@
 
 @layer base {
   :root {
-    --background: 216 28% 7%;
-    --foreground: 220 14% 90%;
-    --text-secondary: 211 18% 78%;
+    --background: 215 28% 7%;
+    --foreground: 0 0% 92%;
+    --text-secondary: 0 0% 81%;
 
-    --card: 216 18% 11%;
-    --card-foreground: 220 14% 90%;
+    --card: 215 22% 11%;
+    --card-foreground: 0 0% 92%;
 
-    --popover: 218 16% 13%;
-    --popover-foreground: 220 14% 90%;
+    --popover: 220 20% 12%;
+    --popover-foreground: 0 0% 92%;
 
     --primary: 195 100% 50%;
     --primary-foreground: 216 28% 7%;
@@ -22,8 +22,8 @@
     --secondary: 271 76% 53%;
     --secondary-foreground: 220 14% 90%;
 
-    --muted: 217 14% 16%;
-    --muted-foreground: 211 15% 66%;
+    --muted: 220 14% 15%;
+    --muted-foreground: 220 9% 68%;
 
     --accent: 150 100% 50%;
     --accent-foreground: 216 28% 7%;
@@ -33,20 +33,20 @@
     --destructive: 0 100% 65%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 208 14% 27%;
-    --input: 216 28% 7%;
+    --border: 0 0% 100% / 0.06;
+    --input: 0 0% 100% / 0.08;
     --ring: 195 100% 60%;
 
-    --radius: 0.125rem;
+    --radius: 0.25rem;
     --radius-card: 0.25rem;
-    --radius-panel: 0.375rem;
+    --radius-panel: 0.3125rem;
     --ui-font-scale: 1;
     --ui-control-scale: 1;
-    --ui-density-gap: 0.5rem;
-    --ui-surface-padding: 0.625rem;
-    --ui-section-gap: 0.75rem;
-    --ui-page-inline: 0.75rem;
-    --ui-touch-target: 2.5rem;
+    --ui-density-gap: 0.45rem;
+    --ui-surface-padding: 0.55rem;
+    --ui-section-gap: 0.65rem;
+    --ui-page-inline: 0.65rem;
+    --ui-touch-target: 2.35rem;
     --ui-motion-duration: 150ms;
     --ui-shadow-strength: 0;
     --ui-card-shadow: none;
@@ -62,8 +62,8 @@
     --neon-green: 150 100% 50%;
     --neon-pink: 330 90% 60%;
 
-    --glass-bg: 216 18% 11%;
-    --glass-border: 215 28% 25% / 0.74;
+    --glass-bg: 215 22% 11%;
+    --glass-border: 0 0% 100% / 0.06;
 
     --sidebar-background: 230 25% 7%;
     --sidebar-foreground: 220 20% 95%;
@@ -71,7 +71,7 @@
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 230 15% 18%;
     --sidebar-accent-foreground: 220 20% 95%;
-    --sidebar-border: 230 15% 20%;
+    --sidebar-border: 0 0% 100% / 0.06;
     --sidebar-ring: 270 95% 65%;
   }
 }
@@ -641,6 +641,38 @@
     opacity: 0.52;
     pointer-events: none;
   }
+
+  .b4a-density-compact {
+    gap: var(--ui-density-gap);
+  }
+
+  .b4a-layout-flow {
+    display: grid;
+    gap: var(--ui-section-gap);
+  }
+
+  .b4a-action-row {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .b4a-action-row > :where(button, a, [role="button"]) {
+    min-height: var(--ui-touch-target);
+    flex: 1 1 max-content;
+  }
+
+  .b4a-mobile-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .b4a-mobile-scroll::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @media (min-width: 640px) {
@@ -719,6 +751,136 @@
     background-color: hsl(var(--muted) / 0.72) !important;
   }
 
+  #root :where(.border-white, .border-white\/5, .border-white\/10, .border-white\/20, .border-slate-700, .border-slate-800, .border-gray-700, .border-gray-800) {
+    border-color: hsl(var(--glass-border)) !important;
+  }
+
+  #root :where(.ring-white, .ring-white\/10, .ring-white\/20) {
+    --tw-ring-color: hsl(var(--glass-border)) !important;
+  }
+
+  .arena-shell :where(.text-5xl, .text-6xl, .text-7xl) {
+    font-size: clamp(1.45rem, 8.5vw, 3rem) !important;
+    line-height: 1.05 !important;
+    letter-spacing: 0 !important;
+  }
+
+  .arena-shell :where(.text-3xl, .text-4xl) {
+    font-size: clamp(1.2rem, 6vw, 2rem) !important;
+    line-height: 1.08 !important;
+    letter-spacing: 0 !important;
+  }
+
+  .arena-shell :where(.text-xl, .text-2xl) {
+    font-size: clamp(1rem, 4.8vw, 1.35rem) !important;
+    line-height: 1.15 !important;
+  }
+
+  .arena-shell :where(.tracking-widest, .tracking-\[0\.2em\], .tracking-\[0\.18em\], .tracking-\[0\.16em\]) {
+    letter-spacing: 0.08em !important;
+  }
+
+  .arena-shell :where(button, a[role="button"], [role="button"]) {
+    max-width: 100%;
+  }
+
+  .arena-shell :where(button, a, [role="button"], input, select, textarea) {
+    border-color: hsl(var(--glass-border));
+  }
+
+  .arena-shell :where(input, select, textarea) {
+    border-radius: var(--radius);
+    background-color: hsl(var(--background) / 0.86);
+  }
+
+  .arena-shell :where(input, select) {
+    min-height: var(--ui-touch-target);
+  }
+
+  .arena-shell :where(textarea) {
+    min-height: calc(var(--ui-touch-target) * 1.7);
+  }
+
+  .arena-shell :where(img) {
+    background-color: hsl(var(--muted) / 0.42);
+  }
+
+  .arena-shell :where(img.object-cover):not([data-preserve-position="true"]) {
+    object-position: center center;
+  }
+
+  .arena-shell :where(.glass, .arena-auto-box, .arena-mobile-panel, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl) {
+    border-color: hsl(var(--glass-border));
+  }
+
+  .arena-shell
+    :where(.glass, .arena-auto-box, .arena-mobile-panel, .wallet-panel, .wallet-hero, .rounded-md[class*="border"], .rounded-lg[class*="border"], .rounded-xl[class*="border"], .rounded-2xl[class*="border"])
+    :where(.glass, .arena-auto-box, .arena-mobile-panel, .rounded-md[class*="border"], .rounded-lg[class*="border"], .rounded-xl[class*="border"], .rounded-2xl[class*="border"])
+    :not(:has(input, textarea, select, img, video, canvas, [data-keep-card="true"])) {
+    border-inline: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding-inline: 0 !important;
+  }
+
+  .arena-shell
+    :where(.glass, .arena-auto-box, .arena-mobile-panel, .wallet-panel, .wallet-hero, .rounded-md[class*="border"], .rounded-lg[class*="border"], .rounded-xl[class*="border"], .rounded-2xl[class*="border"])
+    :where(.glass, .arena-auto-box, .arena-mobile-panel, .rounded-md[class*="border"], .rounded-lg[class*="border"], .rounded-xl[class*="border"], .rounded-2xl[class*="border"])
+    + :where(.glass, .arena-auto-box, .arena-mobile-panel, .rounded-md[class*="border"], .rounded-lg[class*="border"], .rounded-xl[class*="border"], .rounded-2xl[class*="border"]) {
+    margin-top: 0 !important;
+  }
+
+  .arena-shell :where(.gap-10, .gap-12, .gap-14, .gap-16) {
+    gap: calc(var(--ui-section-gap) * 1.25) !important;
+  }
+
+  .arena-shell :where(.gap-5, .gap-6, .gap-7, .gap-8) {
+    gap: clamp(0.55rem, 1.15cqw, 0.9rem) !important;
+  }
+
+  .arena-shell :where(.space-y-5 > :not([hidden]) ~ :not([hidden]), .space-y-6 > :not([hidden]) ~ :not([hidden]), .space-y-7 > :not([hidden]) ~ :not([hidden]), .space-y-8 > :not([hidden]) ~ :not([hidden])) {
+    --tw-space-y-reverse: 0;
+    margin-top: clamp(0.55rem, 1.15cqw, 0.9rem) !important;
+    margin-bottom: 0 !important;
+  }
+
+  .arena-shell :where(.m-5, .m-6, .m-7, .m-8) {
+    margin: clamp(0.55rem, 1.15cqw, 0.9rem) !important;
+  }
+
+  .arena-shell :where(.mx-5, .mx-6, .mx-7, .mx-8) {
+    margin-inline: clamp(0.55rem, 1.15cqw, 0.9rem) !important;
+  }
+
+  .arena-shell :where(.my-5, .my-6, .my-7, .my-8) {
+    margin-block: clamp(0.55rem, 1.15cqw, 0.9rem) !important;
+  }
+
+  .arena-shell :where(.p-5, .p-6, .p-7, .p-8) {
+    padding: clamp(0.6rem, 1.25cqw, 0.95rem) !important;
+  }
+
+  .arena-shell :where(.px-5, .px-6, .px-7, .px-8) {
+    padding-inline: clamp(0.6rem, 1.25cqw, 0.95rem) !important;
+  }
+
+  .arena-shell :where(.py-5, .py-6, .py-7, .py-8) {
+    padding-block: clamp(0.6rem, 1.25cqw, 0.95rem) !important;
+  }
+
+  .arena-shell :where(.p-10, .p-12, .p-14, .p-16) {
+    padding: calc(var(--ui-surface-padding) * 1.4) !important;
+  }
+
+  .arena-shell :where(.px-10, .px-12, .px-14, .px-16) {
+    padding-inline: calc(var(--ui-surface-padding) * 1.4) !important;
+  }
+
+  .arena-shell :where(.py-10, .py-12, .py-14, .py-16) {
+    padding-block: calc(var(--ui-surface-padding) * 1.4) !important;
+  }
+
   #root
     :where(
       .animate-pulse.bg-muted,
@@ -784,6 +946,41 @@
     animation: none !important;
     transform: none !important;
     opacity: 0.45;
+  }
+
+  .arena-shell :where(.wallet-flow-hero, .wallet-flow-panel, .wallet-panel, .tournament-section) {
+    border: 1px solid hsl(var(--glass-border)) !important;
+    border-radius: var(--radius-panel) !important;
+    background-color: hsl(var(--card) / 0.92) !important;
+    box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.045) !important;
+    padding: clamp(0.6rem, 1.25cqw, 0.95rem) !important;
+  }
+
+  .arena-shell :where(.wallet-flow-hero, .wallet-flow-panel, .wallet-panel, .tournament-section) :where(.wallet-flow-hero, .wallet-flow-panel, .wallet-panel, .tournament-section) {
+    border-inline: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding-inline: 0 !important;
+  }
+
+  .arena-shell :where(.glass, .arena-auto-box, .wallet-flow-panel, .wallet-panel, .tournament-section) > :where(.glass, .arena-auto-box, .wallet-flow-panel, .wallet-panel, .tournament-section):not([data-keep-card="true"]) {
+    border-inline: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .arena-shell :where(.glass, .arena-auto-box, .wallet-flow-panel, .wallet-panel, .tournament-section) > :where(.glass, .arena-auto-box, .wallet-flow-panel, .wallet-panel, .tournament-section):not([data-keep-card="true"]) + :where(.glass, .arena-auto-box, .wallet-flow-panel, .wallet-panel, .tournament-section):not([data-keep-card="true"]) {
+    border-top: 1px solid hsl(var(--glass-border)) !important;
+  }
+
+  .arena-shell :where(.arena-section-copy, .arena-card-text, .b4a-soft-copy) {
+    max-width: 68ch;
+  }
+
+  .arena-shell :where(.text-muted-foreground) {
+    color: hsl(var(--muted-foreground));
   }
 
   .arena-shell
@@ -1043,6 +1240,35 @@
 
   .arena-shell .grid-cols-4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .arena-shell :where(.grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5) {
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(100%, var(--ui-auto-card-min)), 1fr)
+    );
+  }
+
+  .arena-shell :where(.gap-6, .gap-7, .gap-8, .gap-10, .gap-12) {
+    gap: var(--ui-section-gap) !important;
+  }
+
+  .arena-shell :where(.p-6, .p-7, .p-8, .p-10, .p-12) {
+    padding: var(--ui-surface-padding) !important;
+  }
+
+  .arena-shell :where(.px-6, .px-7, .px-8, .px-10, .px-12) {
+    padding-inline: var(--ui-surface-padding) !important;
+  }
+
+  .arena-shell :where(.py-6, .py-7, .py-8, .py-10, .py-12) {
+    padding-block: var(--ui-surface-padding) !important;
+  }
+
+  .arena-shell :where(.space-y-6 > :not([hidden]) ~ :not([hidden]), .space-y-7 > :not([hidden]) ~ :not([hidden]), .space-y-8 > :not([hidden]) ~ :not([hidden]), .space-y-10 > :not([hidden]) ~ :not([hidden])) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(var(--ui-section-gap) * calc(1 - var(--tw-space-y-reverse))) !important;
+    margin-bottom: calc(var(--ui-section-gap) * var(--tw-space-y-reverse)) !important;
   }
 
   .arena-shell :where(.b4a-soft-copy, .arena-section-copy, .arena-card-text) {

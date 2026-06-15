@@ -253,24 +253,6 @@ const Index = () => {
     }, {});
   }, [trendingTournaments]);
 
-  const activityFeed = useMemo(() => {
-    const tournamentItems = trendingTournaments.slice(0, 4).map((tournament) => ({
-      icon: tournament.status === "running" ? Radio : Trophy,
-      title: tournament.status === "running" ? "Live room active" : "Tournament opened",
-      description: `${tournament.title} - ${gameLabels[tournament.game] ?? tournament.game}`,
-      tone: tournament.status === "running" ? "text-accent" : "text-primary",
-    }));
-
-    const creatorItems = recommendedCreators.slice(0, 2).map((creator) => ({
-      icon: Crown,
-      title: "Creator trending",
-      description: `${creator.name} has ${formatCompactNumber(creator.memberCount)} followers`,
-      tone: "text-secondary",
-    }));
-
-    return [...tournamentItems, ...creatorItems].slice(0, 5);
-  }, [recommendedCreators, trendingTournaments]);
-
   return (
     <PageShell wide contentClassName="max-w-7xl space-y-5 pb-4 sm:space-y-6">
       <PageHeader
@@ -291,7 +273,7 @@ const Index = () => {
         }
       />
 
-      <section className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+      <section className="grid gap-3">
         <Surface neon className="relative overflow-hidden p-0">
           <div className="absolute inset-0 opacity-70">
             {featuredTournament && (
@@ -324,54 +306,7 @@ const Index = () => {
                 <Sparkles className="h-4 w-4" />
                 Create
               </NeonButton>
-              <NeonButton variant="blue" className="min-h-11 text-xs" onClick={() => navigate("/subscriptions")}>
-                <Crown className="h-4 w-4" />
-                Discover Creators
-              </NeonButton>
             </div>
-
-            <div className="mt-6 grid grid-cols-3 gap-2 max-w-xl">
-              <div className="rounded-xl border border-glass-border bg-background/55 p-2.5">
-                <p className="font-heading text-lg font-black text-accent">{liveTournaments.length}</p>
-                <p className="text-[10px] text-muted-foreground">Live</p>
-              </div>
-              <div className="rounded-xl border border-glass-border bg-background/55 p-2.5">
-                <p className="font-heading text-lg font-black text-secondary">{formatCompactNumber(livePlayers)}</p>
-                <p className="text-[10px] text-muted-foreground">Players</p>
-              </div>
-              <div className="rounded-xl border border-glass-border bg-background/55 p-2.5">
-                <p className="font-heading text-lg font-black text-primary">{recommendedCreators.length}</p>
-                <p className="text-[10px] text-muted-foreground">Creators</p>
-              </div>
-            </div>
-          </div>
-        </Surface>
-
-        <Surface className="p-3 sm:p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="font-heading text-sm font-black">Live Activity</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Platform pulse</p>
-            </div>
-            <StatusPill tone="accent">Realtime</StatusPill>
-          </div>
-          <div className="mt-4 space-y-2">
-            {loading && !activityFeed.length
-              ? [0, 1, 2, 3].map((item) => <SkeletonBlock key={item} className="h-12" />)
-              : activityFeed.map((item, index) => {
-                const Icon = item.icon;
-                return (
-                  <div key={`${item.title}-${index}`} className="flex items-center gap-3 rounded-xl border border-glass-border bg-background/35 p-2.5">
-                    <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-muted/55", item.tone)}>
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate font-heading text-xs font-bold">{item.title}</p>
-                      <p className="truncate text-[11px] text-muted-foreground">{item.description}</p>
-                    </div>
-                  </div>
-                );
-              })}
           </div>
         </Surface>
       </section>

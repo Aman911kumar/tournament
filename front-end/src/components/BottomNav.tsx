@@ -18,8 +18,8 @@ const BottomNav = () => {
   const { profile } = useCurrentProfile();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-glass-border bg-[#10151D] pb-[env(safe-area-inset-bottom)]">
-      <div className="mx-auto grid h-14 max-w-[520px] grid-cols-5 px-1 min-[380px]:h-16">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-glass-border bg-[#0D1117] pb-[env(safe-area-inset-bottom)]">
+      <div className="mx-auto grid h-[3.25rem] max-w-[520px] grid-cols-5 px-1 min-[380px]:h-14">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;
           return (
@@ -27,25 +27,25 @@ const BottomNav = () => {
               key={tab.path}
               onClick={() => navigate(tab.path)}
               className={cn(
-                "arena-focus relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-sm px-1 transition-colors min-[380px]:gap-1",
+                "arena-focus relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-sm px-1 transition-colors",
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground hover:bg-[#161B22] hover:text-foreground",
               )}
             >
               {isActive && (
-                <span className="absolute left-1/2 top-0 h-0.5 w-7 -translate-x-1/2 bg-primary min-[380px]:w-8" />
+                <span className="absolute left-1/2 top-0 h-0.5 w-7 -translate-x-1/2 bg-primary" />
               )}
               {tab.path === "/profile" && profile ? (
                 <UserAvatar
                   user={profile}
                   size="xs"
-                  className="ring-1 ring-primary/20 transition-transform"
+                  className="ring-1 ring-primary/25 transition-transform"
                 />
               ) : (
-                <tab.icon className="h-[18px] w-[18px] transition-colors min-[380px]:h-5 min-[380px]:w-5" />
+                <tab.icon className="h-[18px] w-[18px] transition-colors" />
               )}
-              <span className="max-w-full truncate font-heading text-[8px] font-bold uppercase leading-none tracking-[0.04em] transition-colors min-[380px]:text-[10px] min-[380px]:tracking-[0.06em]">
+              <span className="max-w-full truncate font-heading text-[8px] font-bold uppercase leading-none tracking-[0.04em] transition-colors min-[380px]:text-[9px]">
                 {tab.label}
               </span>
             </button>

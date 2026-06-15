@@ -5,11 +5,11 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "arena-focus inline-flex min-w-0 select-none items-center justify-center gap-2 whitespace-normal text-center rounded-sm font-heading text-xs font-bold uppercase leading-tight tracking-[0.08em] ring-offset-background transition-[color,background-color,border-color,transform] active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "arena-focus inline-flex min-w-0 select-none items-center justify-center gap-1.5 whitespace-normal text-center rounded-sm font-heading text-[11px] font-bold uppercase leading-tight tracking-[0.06em] ring-offset-background transition-[color,background-color,border-color,transform] active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "border border-primary bg-primary text-primary-foreground hover:bg-[hsl(195_100%_62%)]",
+        default: "border border-primary/80 bg-primary text-primary-foreground hover:bg-[hsl(195_100%_62%)]",
         destructive: "border border-destructive/35 bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline: "border border-glass-border bg-background/80 text-foreground hover:border-primary/55 hover:bg-primary/10 hover:text-primary",
         secondary: "border border-secondary/30 bg-secondary text-secondary-foreground hover:bg-secondary/85",
@@ -20,12 +20,12 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        xs: "min-h-8 rounded-sm px-2.5 py-1 text-[10px]",
-        default: "min-h-10 px-4 py-2",
-        sm: "min-h-9 rounded-sm px-3 py-1.5 text-[10px]",
-        lg: "min-h-11 rounded-sm px-4 py-2 sm:px-5",
-        icon: "h-10 w-10",
-        "icon-sm": "h-9 w-9 rounded-sm",
+        xs: "min-h-7 rounded-sm px-2 py-1 text-[10px]",
+        default: "min-h-9 px-3 py-1.5",
+        sm: "min-h-8 rounded-sm px-2.5 py-1 text-[10px]",
+        lg: "min-h-10 rounded-sm px-3.5 py-2 sm:px-4",
+        icon: "h-9 w-9",
+        "icon-sm": "h-8 w-8 rounded-sm",
       },
     },
     defaultVariants: {

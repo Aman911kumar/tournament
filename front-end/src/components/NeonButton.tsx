@@ -36,7 +36,7 @@ const NeonButton = ({
     disabled={disabled}
     onClick={!disabled ? onClick : undefined}
     className={cn(
-      "arena-focus inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 py-2 text-center font-heading text-sm font-bold leading-tight transition-colors active:scale-[0.99] motion-reduce:transition-none",
+      "arena-focus inline-flex min-h-9 items-center justify-center gap-1.5 rounded-sm border px-3 py-1.5 text-center font-heading text-xs font-bold leading-tight transition-colors active:scale-[0.99] motion-reduce:transition-none",
       glowMap[variant],
       full && "w-full",
       disabled && "pointer-events-none cursor-not-allowed opacity-50",

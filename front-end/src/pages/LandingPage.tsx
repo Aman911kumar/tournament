@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Trophy,
   Wallet,
@@ -16,7 +16,6 @@ import {
   ChevronRight,
   Star,
   Zap,
-  Flame,
   CheckCircle2,
   Menu,
   X,
@@ -266,14 +265,7 @@ const Navbar = () => {
   );
 };
 /* ---------- Hero ---------- */
-const HeroStats = [
-  { k: "1.2M+", v: "Active Players" },
-  { k: "48K+", v: "Tournaments" },
-  { k: "Rs 12Cr+", v: "Prize Awarded" },
-  { k: "99.9%", v: "Uptime" },
-];
 const Hero = () => {
-  const reduce = useReducedMotion();
   return (
     <section className="relative pt-28 md:pt-36 pb-14 md:pb-20 px-3 sm:px-5 md:px-6 max-w-6xl mx-auto">
       <div aria-hidden className="absolute inset-0 -z-10 overflow-hidden rounded-lg">
@@ -309,89 +301,21 @@ const Hero = () => {
           real cash prizes and rise through a community built for winners.
         </p>
         <div className="mt-7 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <a
-            href="#download"
+          <JoinTournamentLink
             className="group inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-heading font-semibold uppercase tracking-wider text-primary-foreground neon-glow-purple transition-transform active:scale-[0.97]"
           >
-            <Download className="w-4 h-4" />
-            Download APK
+            <Trophy className="w-4 h-4" />
+            Join Tournament
             <ChevronRight className="w-4 h-4 -mr-1 transition-transform group-hover:translate-x-0.5" />
-          </a>
-          <JoinTournamentLink
+          </JoinTournamentLink>
+          <a
+            href="#download"
             className="inline-flex items-center gap-2 rounded-lg border border-glass-border bg-card/60 px-5 py-3 text-sm font-heading font-semibold uppercase tracking-wider text-foreground hover:bg-card/80 transition-colors"
           >
-            <Trophy className="w-4 h-4 text-accent" />
-            Join Tournament
-          </JoinTournamentLink>
+            <Download className="w-4 h-4 text-accent" />
+            Download APK
+          </a>
         </div>
-        {/* Stats row */}
-        <motion.div
-          variants={stagger}
-          initial="hidden"
-          animate="show"
-          className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3 max-w-4xl mx-auto"
-        >
-          {HeroStats.map((s) => (
-            <motion.div
-              key={s.v}
-              variants={fadeUp}
-              className="relative rounded-lg border border-glass-border bg-card/60 p-3 md:p-4 overflow-hidden"
-            >
-              <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-primary/70 to-transparent" />
-              <p className="font-display text-xl md:text-3xl font-extrabold">{s.k}</p>
-              <p className="text-[11px] md:text-xs text-muted-foreground font-heading uppercase tracking-wider mt-1">
-                {s.v}
-              </p>
-            </motion.div>
-          ))}
-        </motion.div>
-        {/* Floating glow card */}
-        {!reduce && (
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.7 }}
-            className="hidden md:block absolute left-6 top-44 w-56 rounded-lg border border-glass-border bg-card/80 p-3"
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
-                <Flame className="w-4 h-4 text-accent" />
-              </div>
-              <div className="text-left">
-                <p className="text-[11px] font-heading uppercase tracking-wider text-muted-foreground">Live now</p>
-                <p className="text-xs font-heading font-bold">BGMI - Ranked Cup</p>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground">Prize</span>
-              <span className="font-heading font-bold text-accent">Rs 50,000</span>
-            </div>
-          </motion.div>
-        )}
-        {!reduce && (
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.45, duration: 0.7 }}
-            className="hidden md:block absolute right-6 top-56 w-56 rounded-lg border border-glass-border bg-card/80 p-3"
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
-                <Crown className="w-4 h-4 text-primary" />
-              </div>
-              <div className="text-left">
-                <p className="text-[11px] font-heading uppercase tracking-wider text-muted-foreground">Top creator</p>
-                <p className="text-xs font-heading font-bold">@GamingGuru</p>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground">Rating</span>
-              <span className="font-heading font-bold text-secondary inline-flex items-center gap-1">
-                <Star className="w-3 h-3 fill-secondary" /> 4.9
-              </span>
-            </div>
-          </motion.div>
-        )}
       </motion.div>
     </section>
   );
@@ -996,13 +920,8 @@ const Landing = () => {
       <main>
         <Hero />
         <TournamentsSection />
-        <FeaturesSection />
         <CreatorSection />
-        <RealtimeSection />
         <DownloadSection />
-        <CommunitySection />
-        <LeaderboardSection />
-        <FaqSection />
       </main>
       <Footer />
     </div>

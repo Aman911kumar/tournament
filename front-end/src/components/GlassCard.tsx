@@ -30,7 +30,7 @@ const GlassCard = ({
         if (event.key === "Enter" || event.key === " ") onClick();
       }}
       className={cn(
-        "glass min-w-0 rounded-lg p-3 transition-colors motion-reduce:transition-none",
+        "glass min-w-0 rounded-md p-[var(--ui-surface-padding)] transition-colors motion-reduce:transition-none",
         neon && "neon-border",
         interactive &&
           "arena-focus active:scale-[0.99] hover:border-primary/45 hover:bg-card",

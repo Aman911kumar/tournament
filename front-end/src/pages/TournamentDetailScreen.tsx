@@ -457,7 +457,7 @@ const TournamentDetailScreen = () => {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.24, ease: "easeOut" }}
-              className="relative min-h-[360px] overflow-hidden rounded-xl border border-glass-border bg-card"
+              className="relative min-h-[280px] overflow-hidden rounded-xl border border-glass-border bg-card"
             >
               <div
                 className="absolute inset-0 bg-cover opacity-55"
@@ -470,7 +470,7 @@ const TournamentDetailScreen = () => {
               <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(5_8_18/0.24),rgb(5_8_18/0.92)_78%)]" />
               <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/70 to-transparent" />
 
-              <div className="relative flex min-h-[360px] flex-col justify-between p-4 sm:p-6">
+              <div className="relative flex min-h-[280px] flex-col justify-between p-4 sm:p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 font-heading text-[11px] font-bold ${statusMeta.tone}`}>
                     <span className={`h-2 w-2 rounded-full ${statusMeta.dot} ${tournament.status === "running" ? "status-pulse" : ""}`} />
@@ -480,21 +480,13 @@ const TournamentDetailScreen = () => {
                     <Gamepad2 className="h-3.5 w-3.5 text-cyan-200" />
                     {gameLabels[tournament.game] ?? tournament.game}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-black/28 px-3 py-1 font-heading text-[11px] text-white">
-                    <Eye className="h-3.5 w-3.5 text-primary" />
-                    {Number(tournament.views || 0).toLocaleString("en-IN")} views
-                  </span>
                 </div>
 
-                <div className="max-w-3xl pt-12">
-                  <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-3 py-1 font-heading text-[11px] font-bold text-primary">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Premium Battle Room
-                  </p>
+                <div className="max-w-3xl pt-8">
                   <h2 className="font-heading text-3xl font-black leading-tight text-white sm:text-5xl">
                     {tournament.title}
                   </h2>
-                  <p className="mt-3 max-w-2xl text-sm leading-6 text-white/72">
+                  <p className="mt-2 line-clamp-2 max-w-2xl text-sm leading-6 text-white/72">
                     {tournament.description || `${teamLabel} ${modeLabel} tournament hosted on Battle4Arena.`}
                   </p>
 
@@ -525,7 +517,7 @@ const TournamentDetailScreen = () => {
                   </div>
                 </div>
 
-                <div className="mt-6 grid gap-2 min-[420px]:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-5 grid gap-2 min-[420px]:grid-cols-2 lg:grid-cols-4">
                   {[
                     { icon: Trophy, label: "Prize Pool", value: usesPositionPrize ? formatCurrency(prize) : "Kill based", tone: "text-accent" },
                     { icon: Users, label: "Slots Left", value: `${slotsLeft}/${tournament.maxPlayers}`, tone: "text-cyan-200" },
@@ -564,61 +556,49 @@ const TournamentDetailScreen = () => {
                   >
                     {registerButtonText}
                   </NeonButton>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={openChat}
-                      className="arena-focus inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 font-heading text-xs font-bold text-primary"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                      Chat
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openChat}
-                      className="arena-focus inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-emerald-400/30 bg-emerald-400/10 font-heading text-xs font-bold text-emerald-200"
-                    >
-                      <Radio className="h-4 w-4" />
-                      Voice
-                    </button>
-                    <button
-                      type="button"
-                      onClick={shareTournament}
-                      className="arena-focus inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-glass-border bg-card/70 font-heading text-xs font-bold text-muted-foreground"
-                    >
-                      <Share2 className="h-4 w-4" />
-                      Share
-                    </button>
-                    <button
-                      type="button"
-                      onClick={scrollToRules}
-                      className="arena-focus inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-glass-border bg-card/70 font-heading text-xs font-bold text-muted-foreground"
-                    >
-                      <Shield className="h-4 w-4" />
-                      Rules
-                    </button>
-                  </div>
-                </section>
-
-                <section className="tournament-section rounded-xl p-4">
-                  <div className="flex items-center gap-2">
-                    <MessageCircle className="h-4 w-4 text-primary" />
-                    <h3 className="font-heading text-sm font-bold">Communication Hub</h3>
-                  </div>
-                  <div className="mt-3 space-y-2 text-xs">
-                    <div className="detail-tile rounded-lg p-3">
-                      <p className="flex items-center gap-2 font-heading font-bold">
-                        <span className="h-2 w-2 rounded-full bg-emerald-300" />
-                        Live chat and squad voice
-                      </p>
-                      <p className="mt-1 text-muted-foreground">
-                        {registered ? "Room chat is unlocked for joined players." : "Join first to access private room comms."}
-                      </p>
-                    </div>
-                    <div className="detail-tile rounded-lg p-3">
-                      <p className="font-heading font-bold">Realtime alerts</p>
-                      <p className="mt-1 text-muted-foreground">Room updates, announcements, and match notices appear in the live room.</p>
-                    </div>
+                  <div className="mt-3 flex flex-col gap-2">
+                    {registered && (
+                      <button
+                        type="button"
+                        onClick={openChat}
+                        className="arena-focus inline-flex h-10 items-center justify-center gap-2 rounded-sm border border-primary/30 bg-primary/10 font-heading text-xs font-bold text-primary"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        Open Chat & Voice
+                      </button>
+                    )}
+                    <details className="group rounded-sm border border-glass-border bg-card/70">
+                      <summary className="arena-focus flex min-h-9 cursor-pointer list-none items-center justify-between gap-3 px-3 font-heading text-xs font-bold text-muted-foreground">
+                        More actions
+                        <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                      </summary>
+                      <div className="grid gap-1 border-t border-glass-border/70 p-1.5">
+                        <button
+                          type="button"
+                          onClick={shareTournament}
+                          className="arena-focus flex min-h-8 items-center gap-2 rounded-sm px-2 text-left font-heading text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                        >
+                          <Share2 className="h-3.5 w-3.5" />
+                          Share
+                        </button>
+                        <button
+                          type="button"
+                          onClick={scrollToRules}
+                          className="arena-focus flex min-h-8 items-center gap-2 rounded-sm px-2 text-left font-heading text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                        >
+                          <Shield className="h-3.5 w-3.5" />
+                          Rules
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReportOpen(true)}
+                          className="arena-focus flex min-h-8 items-center gap-2 rounded-sm px-2 text-left font-heading text-[11px] text-destructive hover:bg-destructive/10"
+                        >
+                          <Flag className="h-3.5 w-3.5" />
+                          Report issue
+                        </button>
+                      </div>
+                    </details>
                   </div>
                 </section>
 
@@ -656,23 +636,6 @@ const TournamentDetailScreen = () => {
                   )}
                 </section>
 
-                <section className="tournament-section rounded-xl p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="flex items-center gap-2 font-heading text-sm font-bold text-destructive">
-                        <Flag className="h-4 w-4" />
-                        Report Match Issue
-                      </h3>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        Cheating, room issues, fake results, abuse, or payout disputes.
-                      </p>
-                    </div>
-                    <NeonButton variant="danger" className="min-h-9 shrink-0 px-3 text-xs" onClick={() => setReportOpen(true)}>
-                      <Flag className="h-3.5 w-3.5" />
-                      Report
-                    </NeonButton>
-                  </div>
-                </section>
               </aside>
 
               <div className="space-y-4">

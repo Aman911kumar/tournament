@@ -6,7 +6,6 @@ import {
   Radio,
   RefreshCcw,
   SlidersHorizontal,
-  Sparkles,
   Trophy,
   WalletCards,
 } from "lucide-react";
@@ -578,21 +577,6 @@ const TournamentsScreen = () => {
         </NeonButton>
       )}
 
-      {!loading && !error && filtered.length > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-glass-border bg-card/55 px-3 py-2.5 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Results update from tournament and creator notifications.
-          </span>
-          <button
-            type="button"
-            onClick={() => navigate("/create-tournament")}
-            className="arena-focus shrink-0 rounded-lg px-2 py-1 font-heading font-bold text-primary"
-          >
-            Create
-          </button>
-        </div>
-      )}
     </PageShell>
   );
 };

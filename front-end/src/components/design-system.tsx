@@ -80,7 +80,7 @@ export const PageHeader = ({
 }) => (
   <header
     className={cn(
-      "flex items-center justify-between gap-2 border-b border-glass-border pb-2 pt-3 sm:gap-3 sm:pb-3 sm:pt-4",
+        "flex items-center justify-between gap-2 border-b border-glass-border pb-2 pt-2.5 sm:gap-3 sm:pb-2.5 sm:pt-3",
       className,
     )}
   >
@@ -136,7 +136,7 @@ export const Surface = ({
         if (event.key === "Enter" || event.key === " ") onClick();
       }}
       className={cn(
-        "arena-auto-box min-w-0 rounded-md border border-glass-border bg-card/95 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.08)]",
+        "arena-auto-box min-w-0 rounded-md border border-glass-border bg-card/92 shadow-[inset_0_1px_0_hsl(var(--foreground)/0.045)]",
         !hasPaddingOverride(className) && "p-[var(--ui-surface-padding)]",
         neon && "neon-border",
         clickable &&
@@ -167,28 +167,28 @@ export const MetricCard = ({
   <Surface
     onClick={onClick}
     interactive={Boolean(onClick)}
-    className="min-h-[72px] sm:min-h-[84px]"
+    className="min-h-[62px] sm:min-h-[72px]"
   >
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
         <p className="font-heading text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
           {label}
         </p>
-        <p className="mt-1.5 truncate font-display text-lg font-extrabold leading-tight sm:text-xl">
+        <p className="mt-1 truncate font-display text-base font-extrabold leading-tight sm:text-lg">
           {value}
         </p>
       </div>
       <span
         className={cn(
-          "grid h-8 w-8 shrink-0 place-items-center rounded-md border sm:h-9 sm:w-9",
+          "grid h-7 w-7 shrink-0 place-items-center rounded-md border sm:h-8 sm:w-8",
           toneClasses[tone],
         )}
       >
-        <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+        <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
       </span>
     </div>
     {note && (
-      <p className="b4a-soft-copy mt-3 truncate text-xs text-muted-foreground">{note}</p>
+      <p className="b4a-soft-copy mt-2 truncate text-[11px] text-muted-foreground">{note}</p>
     )}
   </Surface>
 );
@@ -224,15 +224,15 @@ export const EmptyState = ({
   description?: ReactNode;
   action?: ReactNode;
 }) => (
-  <Surface className="py-7 text-center sm:py-8">
-    <Icon className="mx-auto mb-3 h-8 w-8 text-primary" />
+  <Surface className="py-5 text-center sm:py-6">
+    <Icon className="mx-auto mb-2 h-7 w-7 text-primary" />
     <p className="font-display text-sm font-extrabold uppercase tracking-tight">{title}</p>
     {description && (
       <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
         {description}
       </p>
     )}
-    {action && <div className="mt-4">{action}</div>}
+    {action && <div className="mt-3">{action}</div>}
   </Surface>
 );
 
@@ -259,7 +259,7 @@ export const FormField = ({
   hint?: ReactNode;
   className?: string;
 }) => (
-  <label className={cn("block space-y-1.5", className)}>
+  <label className={cn("block space-y-1", className)}>
     <span className="flex items-center gap-1.5 font-heading text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
       {Icon && <Icon className="h-3.5 w-3.5" />}
       {label}
@@ -284,7 +284,7 @@ export const SegmentedControl = <T extends string>({
 }) => (
   <div
     className={cn(
-      "flex gap-1 overflow-x-auto rounded-md border border-glass-border bg-card/95 p-1 scrollbar-hide",
+      "flex gap-1 overflow-x-auto rounded-md border border-glass-border bg-card/92 p-1 scrollbar-hide",
       className,
     )}
     role="tablist"
@@ -298,7 +298,7 @@ export const SegmentedControl = <T extends string>({
           type="button"
           onClick={() => onChange(option.value)}
           className={cn(
-            "arena-focus inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 font-heading text-xs font-bold transition-colors",
+            "arena-focus inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-sm px-2.5 py-1 font-heading text-[11px] font-bold transition-colors",
             active
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:bg-muted/65 hover:text-foreground",
@@ -321,7 +321,7 @@ export const ActionButton = ({
 }: ButtonProps) => (
   <Button
     variant={variant}
-    className={cn("min-h-10 rounded-md", className)}
+    className={cn("min-h-9 rounded-sm", className)}
     {...props}
   />
 );
@@ -339,7 +339,7 @@ export const SearchBox = ({
 }) => (
   <div
     className={cn(
-      "flex min-h-10 items-center gap-2 rounded-md border border-glass-border bg-background/80 px-3 transition-colors focus-within:border-primary/60",
+      "flex min-h-9 items-center gap-2 rounded-sm border border-glass-border bg-background/80 px-2.5 transition-colors focus-within:border-primary/60",
       className,
     )}
   >
@@ -371,7 +371,7 @@ export const CreatorCard = ({
   <button
     type="button"
     onClick={onClick}
-    className="arena-focus min-w-[132px] shrink-0 rounded-md border border-glass-border bg-card/95 p-3 text-left transition-colors hover:border-primary/55 hover:bg-card"
+    className="arena-focus min-w-[132px] shrink-0 rounded-md border border-glass-border bg-card/92 p-2.5 text-left transition-colors hover:border-primary/55 hover:bg-card"
   >
     <div className="flex items-center gap-3">
       <UserAvatar
@@ -385,7 +385,7 @@ export const CreatorCard = ({
         </p>
       </div>
     </div>
-    <div className="mt-3 flex items-center justify-between gap-2">
+    <div className="mt-2 flex items-center justify-between gap-2">
       <StatusPill tone={active ? "accent" : "muted"}>
         {active ? "Active" : "Creator"}
       </StatusPill>
@@ -422,10 +422,10 @@ export const TournamentCard = ({
   onCreatorClick?: () => void;
 }) => (
   <Surface interactive onClick={onClick} neon className="overflow-hidden p-0">
-    <div className="p-3 sm:p-4">
+    <div className="p-2.5 sm:p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate font-display text-base font-extrabold uppercase tracking-tight">{title}</p>
+          <p className="truncate font-display text-sm font-extrabold uppercase tracking-tight sm:text-base">{title}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{game}</p>
         </div>
         <StatusPill tone={joined ? "accent" : "secondary"}>{status}</StatusPill>
@@ -436,12 +436,12 @@ export const TournamentCard = ({
           event.stopPropagation();
           onCreatorClick?.();
         }}
-        className="arena-focus mt-3 inline-flex items-center gap-1.5 rounded-sm font-heading text-[10px] uppercase tracking-wide text-primary"
+        className="arena-focus mt-2 inline-flex items-center gap-1.5 rounded-sm font-heading text-[10px] uppercase tracking-wide text-primary"
       >
         <ShieldCheck className="h-3.5 w-3.5" />
         {creator}
       </button>
-      <div className="arena-data-grid mt-4 min-[380px]:grid-cols-3">
+      <div className="arena-data-grid mt-3 min-[380px]:grid-cols-3">
         <div className="arena-data-tile">
           <p className="font-heading text-[10px] uppercase tracking-wide text-muted-foreground">Prize</p>
           <p className="truncate font-heading text-xs font-bold text-accent">
@@ -460,7 +460,7 @@ export const TournamentCard = ({
         </div>
       </div>
     </div>
-    <div className="flex items-center justify-between gap-3 border-t border-glass-border/70 px-4 py-3">
+    <div className="flex items-center justify-between gap-3 border-t border-glass-border/70 px-3 py-2.5">
       <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
         <Users className="h-3.5 w-3.5" />
         {Math.max(maxSlots - slots, 0)} left

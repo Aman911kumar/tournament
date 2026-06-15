@@ -13,11 +13,9 @@ import {
 import { toast } from "@/components/ui/sonner";
 import {
   getNotifications,
-  getPushConfig,
   markAllNotificationsRead,
   markNotificationRead,
   NotificationItem,
-  savePushSubscription,
 } from "@/api/notifications";
 import { getErrorMessage, getErrorToast } from "@/lib/page-utils";
 import {
@@ -31,7 +29,6 @@ import {
   PageHeader,
   PageShell,
   SkeletonBlock,
-  StatusPill,
   Surface,
 } from "@/components/design-system";
 import { getNotificationSocket } from "@/lib/notification-socket";
@@ -65,27 +62,11 @@ const iconMap = {
   system: Megaphone,
 };
 
-const urlBase64ToUint8Array = (base64String: string) => {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = `${base64String}${padding}`
-    .replace(/-/g, "+")
-    .replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
-};
-
 const NotificationsScreen = () => {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pushLoading, setPushLoading] = useState(false);
-  const [pushSupported] = useState(
-    typeof window !== "undefined" &&
-      "serviceWorker" in navigator &&
-      "PushManager" in window &&
-      "Notification" in window,
-  );
 
   const loadNotifications = async () => {
     const cachedNotifications = readCache<NotificationItem[]>(
@@ -165,57 +146,6 @@ const NotificationsScreen = () => {
     }
   };
 
-  const enablePushNotifications = async () => {
-    if (!pushSupported) {
-      toast.error("Push not supported", {
-        description:
-          "Use Chrome/Edge or install the app on a supported mobile browser.",
-      });
-      return;
-    }
-
-    try {
-      setPushLoading(true);
-      const config = await getPushConfig();
-      if (!config?.enabled || !config.publicKey) {
-        toast.error("Push not configured", {
-          description: "Add VAPID keys on the backend to enable real browser notifications.",
-        });
-        return;
-      }
-
-      const permission = await window.Notification.requestPermission();
-      if (permission !== "granted") {
-        toast.error("Notifications blocked", {
-          description: "Allow notifications from browser settings to receive alerts.",
-        });
-        return;
-      }
-
-      const registration = await navigator.serviceWorker.register("/sw.js");
-      const existing = await registration.pushManager.getSubscription();
-      const subscription =
-        existing ||
-        (await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(config.publicKey),
-        }));
-
-      await savePushSubscription(subscription.toJSON());
-      toast.success("Push notifications enabled", {
-        description: "Money, room, and creator alerts can now reach this device.",
-      });
-    } catch (err) {
-      const errorToast = getErrorToast(err, {
-        action: "Enable push notifications",
-        fallback: "Could not enable push.",
-      });
-      toast.error(errorToast.title, { description: errorToast.description });
-    } finally {
-      setPushLoading(false);
-    }
-  };
-
   const handleOpenNotification = async (notification: NotificationItem) => {
     if (!notification.read) {
       setNotifications((prev) =>
@@ -257,28 +187,6 @@ const NotificationsScreen = () => {
           </button>
         }
       />
-
-      <Surface className="flex flex-col gap-3 bg-[#101620] sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <StatusPill tone="primary">Device alerts</StatusPill>
-            <StatusPill tone={pushSupported ? "accent" : "muted"}>
-              {pushSupported ? "Supported" : "Browser limited"}
-            </StatusPill>
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            Receive wallet, creator, and room alerts even when the app is closed.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={enablePushNotifications}
-          disabled={pushLoading}
-          className="arena-focus min-h-10 rounded-md border border-primary/40 bg-[#0D1117] px-4 font-heading text-xs font-bold text-primary transition-colors hover:bg-primary/10 disabled:opacity-60"
-        >
-          {pushLoading ? "Enabling..." : "Enable"}
-        </button>
-      </Surface>
 
       {loading &&
         [0, 1, 2].map((item) => (

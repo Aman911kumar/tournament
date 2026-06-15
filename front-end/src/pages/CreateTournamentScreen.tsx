@@ -530,40 +530,6 @@ const CreateTournamentScreen = () => {
         }
       />
 
-      <Surface className="overflow-hidden p-0">
-        <div className="relative p-3 sm:p-4">
-          <div className="absolute inset-x-0 top-0 h-px gradient-neon" />
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 font-heading text-[10px] font-bold text-primary">
-                <Sparkles className="h-3.5 w-3.5" />
-                ESPORTS BUILDER
-              </div>
-              <h1 className="mt-2 font-heading text-lg font-black leading-tight sm:text-2xl">
-                Build a valid tournament faster
-              </h1>
-              <p className="mt-1 max-w-2xl text-xs text-muted-foreground sm:text-sm">
-                Game, mode, team size, slots, scoring, and rules update together so creators cannot accidentally publish broken formats.
-              </p>
-            </div>
-            <div className="grid grid-cols-3 gap-2 lg:min-w-[360px]">
-              <div className="rounded-xl border border-glass-border bg-background/45 p-2 text-center">
-                <p className="font-heading text-lg font-black text-primary">{totalSlots || 0}</p>
-                <p className="text-[10px] text-muted-foreground">Slots</p>
-              </div>
-              <div className="rounded-xl border border-glass-border bg-background/45 p-2 text-center">
-                <p className="font-heading text-lg font-black text-secondary">{teamSize || 0}v</p>
-                <p className="text-[10px] text-muted-foreground">Team size</p>
-              </div>
-              <div className="rounded-xl border border-glass-border bg-background/45 p-2 text-center">
-                <p className="font-heading text-lg font-black text-accent">{formatCurrency(configuredPrizeTotal)}</p>
-                <p className="text-[10px] text-muted-foreground">Prize</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Surface>
-
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
         <div className="space-y-3">
           <Surface neon className="p-3 sm:p-4">

@@ -6,10 +6,6 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Banknote,
-  Bell,
-  CheckCircle2,
-  Clock3,
-  Coins,
   CreditCard,
   Crown,
   History,
@@ -690,7 +686,11 @@ const WalletScreen = () => {
                   key={action.title}
                   type="button"
                   onClick={() => navigate(action.route)}
-                  className="arena-focus wallet-action-card arena-fluid-card rounded-lg p-2 text-left sm:rounded-xl sm:p-3"
+                  className={`arena-focus wallet-action-card arena-fluid-card rounded-lg p-2 text-left sm:rounded-xl sm:p-3 ${
+                    action.title === "Add Money"
+                      ? "border-primary/55 bg-primary text-primary-foreground"
+                      : ""
+                  }`}
                 >
                   <span className="flex items-center gap-2 lg:gap-3">
                     <span
@@ -711,37 +711,6 @@ const WalletScreen = () => {
               ))}
             </div>
           </section>
-        </section>
-
-        <section className="grid grid-cols-2 gap-1.5 sm:gap-3 lg:grid-cols-4">
-          <WalletStat
-            icon={Coins}
-            label="Credits Tracked"
-            value={formatCurrency(creditTotal)}
-            note="Recent wallet inflow"
-            tone="text-emerald-200"
-          />
-          <WalletStat
-            icon={Banknote}
-            label="Debits Tracked"
-            value={formatCurrency(debitTotal)}
-            note="Entries, transfers, payouts"
-            tone="text-primary"
-          />
-          <WalletStat
-            icon={Clock3}
-            label="Pending"
-            value={`${pendingCount}`}
-            note="Processing activities"
-            tone="text-secondary"
-          />
-          <WalletStat
-            icon={Bell}
-            label="Updates"
-            value={transactions.length ? "Live" : "Ready"}
-            note="Refreshes on wallet alerts"
-            tone="text-accent"
-          />
         </section>
 
         <section className="wallet-panel rounded-md p-2.5 sm:p-5">
@@ -885,16 +854,6 @@ const WalletScreen = () => {
             </div>
           )}
 
-          <div className="mt-3 rounded-xl border border-accent/20 bg-accent/10 p-2.5 sm:mt-4 sm:p-3">
-            <p className="flex items-center gap-2 font-heading text-xs font-bold text-accent">
-              <CheckCircle2 className="h-4 w-4" />
-              Secure wallet note
-            </p>
-            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-              Deposits, withdrawals, transfers, and prize payouts are verified
-              by backend records. Keep transaction IDs for disputes.
-            </p>
-          </div>
         </section>
       </main>
     </div>
