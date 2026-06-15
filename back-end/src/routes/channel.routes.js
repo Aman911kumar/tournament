@@ -2,6 +2,7 @@ import express from "express";
 import {
     createChannel,
     getMyChannel,
+    getMyChannelMembers,
     listChannels,
     getChannelByIdentifier,
     getCreatorByUserId,
@@ -22,6 +23,7 @@ router.get("/", listChannels);
 router.post("/", protect, createChannel);
 
 router.get("/me", protect, getMyChannel);
+router.get("/me/members", protect, getMyChannelMembers);
 router.get("/joined", protect, getJoinedChannels);
 router.get("/feed/tournaments", protect, getJoinedChannelTournaments);
 router.get("/creator/:userId", optionalProtect, getCreatorByUserId);

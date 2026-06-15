@@ -19,6 +19,7 @@ const routeImporters: Array<{ test: (path: string) => boolean; importPage: Impor
   { test: (path) => path === "/edit-profile", importPage: () => import("@/pages/EditProfileScreen") },
   { test: (path) => /^\/creator\/[^/]+/.test(path), importPage: () => import("@/pages/CreatorProfileScreen") },
   { test: (path) => path === "/subscriptions", importPage: () => import("@/pages/SubscriptionsScreen") },
+  { test: (path) => path === "/community-management", importPage: () => import("@/pages/CommunityManagementScreen") },
   { test: (path) => path === "/notifications", importPage: () => import("@/pages/NotificationsScreen") },
   { test: (path) => path === "/create-tournament", importPage: () => import("@/pages/CreateTournamentScreen") },
   { test: (path) => path === "/channel-setup", importPage: () => import("@/pages/ChannelSetupScreen") },

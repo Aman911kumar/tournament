@@ -38,6 +38,22 @@ export interface CreatorChannel {
   virtual?: boolean;
 }
 
+export interface CreatorChannelMember {
+  subscriptionId: string;
+  joinedAt: string;
+  notificationsEnabled?: boolean;
+  user: CreatorUser & {
+    email?: string;
+    phone_number?: string;
+    emailVerified?: boolean;
+    phoneVerified?: boolean;
+    isActive?: boolean;
+    accountStatus?: "active" | "suspended" | "muted" | "banned";
+    lastLoginAt?: string | null;
+    createdAt?: string;
+  };
+}
+
 export interface CreatorProfileData {
   channel?: CreatorChannel | null;
   creator?: CreatorUser;
@@ -68,6 +84,7 @@ export const ENDPOINTS = {
   list: "/channels",
   create: "/channels",
   mine: "/channels/me",
+  members: "/channels/me/members",
   joined: "/channels/joined",
   joinedTournaments: "/channels/feed/tournaments",
   channelProfile: (id: string) => `/channels/${id}`,
@@ -116,6 +133,23 @@ export async function getCreatorProfile(id: string) {
 export async function getMyChannel() {
   const res = await apiFetch<ApiResponse<{ channel: CreatorChannel; tournamentCount: number }>>(ENDPOINTS.mine);
   return res.data;
+}
+
+export async function getMyChannelMembers(params: { limit?: number; skip?: number; search?: string } = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.limit) searchParams.set("limit", String(params.limit));
+  if (params.skip) searchParams.set("skip", String(params.skip));
+  if (params.search) searchParams.set("search", params.search);
+
+  const query = searchParams.toString();
+  const res = await apiFetch<ApiResponse<{
+    channel: CreatorChannel;
+    members: CreatorChannelMember[];
+    total: number;
+    limit: number;
+    skip: number;
+  }>>(`${ENDPOINTS.members}${query ? `?${query}` : ""}`);
+  return res.data ?? { channel: null as unknown as CreatorChannel, members: [], total: 0, limit: params.limit ?? 100, skip: params.skip ?? 0 };
 }
 
 export async function createChannel(payload: ChannelSetupPayload) {

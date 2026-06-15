@@ -58,7 +58,7 @@ const creatorMenu = [
   { icon: Crown, label: "Creator Dashboard", description: "Manage hub", route: "/creator-dashboard" },
   { icon: Settings, label: "Channel Setup", description: "Branding", route: "/channel-setup" },
   { icon: BarChart3, label: "Create Tournament", description: "Publish arena", route: "/create-tournament" },
-  { icon: Users, label: "My Subscribers", description: "Community", route: "/subscriptions" },
+  { icon: Users, label: "My Subscribers", description: "Community", route: "/community-management" },
 ];
 
 const getDisplayPhoneNumber = (phoneNumber?: string) => {

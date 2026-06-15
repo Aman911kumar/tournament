@@ -100,6 +100,9 @@ const NotificationsScreen = lazy(
 const SubscriptionsScreen = lazy(
   () => import("./pages/SubscriptionsScreen.tsx"),
 );
+const CommunityManagementScreen = lazy(
+  () => import("./pages/CommunityManagementScreen.tsx"),
+);
 const TournamentCommentsScreen = lazy(
   () => import("./pages/TournamentCommentsScreen.tsx"),
 );
@@ -317,6 +320,10 @@ const App = () => (
                 <Route
                   path="/subscriptions"
                   element={<SubscriptionsScreen />}
+                />
+                <Route
+                  path="/community-management"
+                  element={<CommunityManagementScreen />}
                 />
                 <Route path="/help" element={<HelpCenterScreen />} />
                 <Route path="/rules" element={<RulesScreen />} />

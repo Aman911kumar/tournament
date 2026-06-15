@@ -187,6 +187,103 @@ const getMyChannel = asyncHandler(async (req, res) => {
     );
 });
 
+const getMyChannelMembers = asyncHandler(async (req, res) => {
+    const { limit = 100, skip = 0, search = "" } = req.query;
+    const channel = await Channel.findOne({ owner: req.user._id })
+        .select("_id owner name handle memberCount")
+        .lean();
+
+    if (!channel) {
+        throw new ApiError(404, "Channel not found");
+    }
+
+    const parsedLimit = Math.min(Math.max(Number(limit) || 100, 1), 200);
+    const parsedSkip = Math.max(Number(skip) || 0, 0);
+    const trimmedSearch = String(search || "").trim();
+    const userMatch = trimmedSearch
+        ? {
+            $or: [
+                { "user.username": { $regex: trimmedSearch, $options: "i" } },
+                { "user.email": { $regex: trimmedSearch, $options: "i" } },
+                { "user.phone_number": { $regex: trimmedSearch, $options: "i" } }
+            ]
+        }
+        : {};
+
+    const basePipeline = [
+        { $match: { channel: channel._id } },
+        {
+            $lookup: {
+                from: "users",
+                localField: "user",
+                foreignField: "_id",
+                as: "user"
+            }
+        },
+        { $unwind: "$user" },
+        ...(trimmedSearch ? [{ $match: userMatch }] : [])
+    ];
+
+    const [rows, totals] = await Promise.all([
+        ChannelSubscription.aggregate([
+            ...basePipeline,
+            { $sort: { joinedAt: -1, createdAt: -1 } },
+            { $skip: parsedSkip },
+            { $limit: parsedLimit },
+            {
+                $project: {
+                    _id: 1,
+                    joinedAt: 1,
+                    notificationsEnabled: 1,
+                    createdAt: 1,
+                    updatedAt: 1,
+                    user: {
+                        _id: "$user._id",
+                        username: "$user.username",
+                        email: "$user.email",
+                        phone_number: "$user.phone_number",
+                        avatar: "$user.avatar",
+                        banner: "$user.banner",
+                        role: "$user.role",
+                        stats: "$user.stats",
+                        isActive: "$user.isActive",
+                        accountStatus: "$user.accountStatus",
+                        lastLoginAt: "$user.lastLoginAt",
+                        createdAt: "$user.createdAt",
+                        emailVerified: "$user.emailVerified",
+                        phoneVerified: "$user.phoneVerified"
+                    }
+                }
+            }
+        ]),
+        ChannelSubscription.aggregate([
+            ...basePipeline,
+            { $count: "total" }
+        ])
+    ]);
+
+    const members = rows.map((subscription) => ({
+        subscriptionId: subscription._id,
+        joinedAt: subscription.joinedAt || subscription.createdAt,
+        notificationsEnabled: subscription.notificationsEnabled,
+        user: subscription.user
+    }));
+
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                channel,
+                members,
+                total: Number(totals[0]?.total || 0),
+                limit: parsedLimit,
+                skip: parsedSkip
+            },
+            "Channel members fetched successfully"
+        )
+    );
+});
+
 const listChannels = asyncHandler(async (req, res) => {
     const { limit = 20, skip = 0, search } = req.query;
     const query = { isActive: true };
@@ -653,6 +750,7 @@ const getChannelTournaments = asyncHandler(async (req, res) => {
 export {
     createChannel,
     getMyChannel,
+    getMyChannelMembers,
     listChannels,
     getChannelByIdentifier,
     getCreatorByUserId,
