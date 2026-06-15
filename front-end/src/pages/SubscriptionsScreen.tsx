@@ -326,12 +326,12 @@ const SubscriptionsScreen = () => {
           <div className="grid gap-2.5 lg:grid-cols-2">
             <SegmentedControl
               value={activeFilter}
-              onChange={setActiveFilter}
+              onChange={(value) => setActiveFilter(value)}
               options={filterOptions.map((filter) => ({ label: filter, value: filter }))}
             />
             <SegmentedControl
               value={activeSort}
-              onChange={setActiveSort}
+              onChange={(value) => setActiveSort(value)}
               options={sortOptions.map((sort) => ({ label: sort, value: sort }))}
             />
           </div>

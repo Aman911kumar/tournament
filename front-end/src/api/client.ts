@@ -191,9 +191,12 @@ export const scheduleRealtimeWarmup = (reason = "app") => {
   const run = () => {
     void warmRealtimeBackend(reason);
   };
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+  };
 
-  if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(run, { timeout: 1500 });
+  if (typeof idleWindow.requestIdleCallback === "function") {
+    idleWindow.requestIdleCallback(run, { timeout: 1500 });
   } else {
     window.setTimeout(run, 750);
   }

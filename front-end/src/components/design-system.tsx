@@ -228,13 +228,15 @@ export const EmptyState = ({
   title,
   description,
   action,
+  className,
 }: {
   icon?: LucideIcon;
   title: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
+  className?: string;
 }) => (
-  <Surface className="py-5 text-center sm:py-6">
+  <Surface className={cn("py-5 text-center sm:py-6", className)}>
     <Icon className="mx-auto mb-2 h-7 w-7 text-primary" />
     <p className="font-display text-sm font-extrabold uppercase tracking-tight">{title}</p>
     {description && (

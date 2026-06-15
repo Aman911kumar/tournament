@@ -819,7 +819,7 @@ const CreatorProfileScreen = () => {
             <main className="min-w-0 space-y-3">
               <SegmentedControl
                 value={activeTab}
-                onChange={setActiveTab}
+                onChange={(value) => setActiveTab(value)}
                 options={[
                   { value: "tournaments", label: "Events" },
                   { value: "about", label: "About" },

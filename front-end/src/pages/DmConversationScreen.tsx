@@ -41,6 +41,13 @@ const makeClientRequestId = () =>
     ? crypto.randomUUID()
     : `dm-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+const getMessageTypeForAttachments = (attachments: DmAttachment[]): DmMessage["type"] => {
+  if (!attachments.length) return "text";
+  if (attachments[0].type === "image") return "image";
+  if (attachments[0].type === "voice") return "voice_note";
+  return "file";
+};
+
 const getSenderId = (message: DmMessage) =>
   typeof message.sender === "string" ? message.sender : message.sender?._id;
 
@@ -295,7 +302,7 @@ const DmConversationScreen = () => {
       sender: profile
         ? { _id: profile._id, username: profile.username, avatar: profile.avatar, role: profile.role }
         : "",
-      type: attachments.length ? attachments[0].type : "text",
+      type: getMessageTypeForAttachments(attachments),
       body: text || (attachments[0]?.name ?? "Attachment"),
       attachments,
       status: "active",

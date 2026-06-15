@@ -164,7 +164,7 @@ export async function getTournaments(filters: TournamentFilters = {}) {
   return res.tournaments;
 }
 
-export async function getTournamentPage(filters: TournamentFilters = {}) {
+export async function getTournamentPage(filters: TournamentFilters = {}): Promise<TournamentListData> {
   const params = new URLSearchParams();
   if (filters.search) params.set("search", filters.search);
   if (filters.page) params.set("page", String(filters.page));
@@ -203,11 +203,11 @@ export async function getTournamentById(id: string) {
   return res.data;
 }
 
-export async function createTournament(payload: Record<string, unknown>) {
+export async function createTournament(payload: object) {
   return apiFetch<ApiResponse<Tournament>>(ENDPOINTS.create, { method: "POST", body: JSON.stringify(payload) });
 }
 
-export async function updateTournament(id: string, payload: Record<string, unknown>) {
+export async function updateTournament(id: string, payload: object) {
   return apiFetch<ApiResponse<Tournament>>(ENDPOINTS.update(id), { method: "PUT", body: JSON.stringify(payload) });
 }
 

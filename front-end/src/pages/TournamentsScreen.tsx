@@ -214,7 +214,11 @@ const TournamentDiscoveryCard = ({
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                joined || canJoin ? onJoin() : onClick();
+                if (joined || canJoin) {
+                  onJoin();
+                } else {
+                  onClick();
+                }
               }}
               {...prefetchOnIntent(() => prefetchRoute(joined ? `/tournament/${tournament._id}/chat` : getSlotSelectionPath(tournament)))}
               className={`arena-focus inline-flex min-h-8 items-center gap-1 rounded-sm px-3 font-heading text-xs font-bold ${

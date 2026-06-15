@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Activity,
@@ -648,7 +648,7 @@ const CommunityManagementScreen = () => {
     ];
   }, [channel?.memberCount, communityData]);
 
-  const applyPeopleFilters = (members: CommunityMember[]) => {
+  const applyPeopleFilters = useCallback((members: CommunityMember[]) => {
     const query = search.trim().toLowerCase();
     let list = [...members];
 
@@ -677,16 +677,16 @@ const CommunityManagementScreen = () => {
     }
 
     return list;
-  };
+  }, [activeFilter, activeTab, enabledFilters, search]);
 
-  const visibleMembers = useMemo(() => applyPeopleFilters(communityData.members), [activeFilter, activeTab, communityData.members, enabledFilters, search]);
+  const visibleMembers = useMemo(() => applyPeopleFilters(communityData.members), [applyPeopleFilters, communityData.members]);
   const visibleModerators = useMemo(() => {
     let list = applyPeopleFilters(communityData.moderators);
     if (activeFilter !== "All") {
       list = list.filter((member) => member.permissions?.some((permission) => permission.includes(activeFilter)));
     }
     return list;
-  }, [activeFilter, communityData.moderators, enabledFilters, search]);
+  }, [activeFilter, applyPeopleFilters, communityData.moderators]);
 
   const toggleAdvancedFilter = (filter: string) => {
     setEnabledFilters((current) => {

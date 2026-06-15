@@ -433,7 +433,7 @@ const MyTournamentsScreen = () => {
         <Surface className="space-y-2 p-2.5 sm:p-3">
           <SegmentedControl
             value={activeFilter}
-            onChange={setActiveFilter}
+            onChange={(value) => setActiveFilter(value)}
             options={filterOptions.map((option) => ({
               value: option.value,
               label: (

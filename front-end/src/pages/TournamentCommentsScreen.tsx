@@ -1111,7 +1111,12 @@ const TournamentCommentsScreen = () => {
       const socket = getChatSocket();
       if (!socket?.connected)
         return reject(new Error("Socket is not connected"));
-      socket.emit(event as never, payload as never, (ack) => {
+      const emit = socket.emit.bind(socket) as (
+        eventName: typeof event,
+        data: Record<string, unknown>,
+        callback: (ack?: { ok?: boolean; data?: unknown; message?: string }) => void,
+      ) => void;
+      emit(event, payload, (ack) => {
         if (ack?.ok && ack.data) resolve(ack.data as ChatMessage);
         else reject(new Error(ack?.message || "Chat action failed"));
       });

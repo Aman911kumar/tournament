@@ -111,6 +111,11 @@ const typeIntoField = (
   }, delay);
 };
 
+type IdleWindow = Window & {
+  requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
 const TransferMoneyScreen = () => {
   const navigate = useNavigate();
   const [recipient, setRecipient] = useState("");
@@ -173,14 +178,15 @@ const TransferMoneyScreen = () => {
         });
     };
 
+    const idleWindow = window as IdleWindow;
     const idleId =
-      "requestIdleCallback" in window
-        ? window.requestIdleCallback(buildQr, { timeout: 1200 })
+      typeof idleWindow.requestIdleCallback === "function"
+        ? idleWindow.requestIdleCallback(buildQr, { timeout: 1200 })
         : window.setTimeout(buildQr, 250);
 
     return () => {
       cancelled = true;
-      if ("cancelIdleCallback" in window) window.cancelIdleCallback(idleId);
+      if (typeof idleWindow.cancelIdleCallback === "function") idleWindow.cancelIdleCallback(idleId);
       else window.clearTimeout(idleId);
     };
   }, [profile]);
